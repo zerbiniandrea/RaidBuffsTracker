@@ -448,141 +448,114 @@ local function CreateOptionsPanel()
 
     -- Buff checkboxes section
     local buffLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    buffLabel:SetPoint("TOPLEFT", 15, yOffset)
+    buffLabel:SetPoint("TOP", 0, yOffset)
     buffLabel:SetText("Tracked Buffs:")
-    yOffset = yOffset - 20
+    yOffset = yOffset - 22
 
     panel.buffCheckboxes = {}
+    local buffStartX = 30  -- Fixed left margin for alignment
+
     for _, buffData in ipairs(RaidBuffs) do
         local spellIDs, key, displayName, classProvider = unpack(buffData)
 
-        local row = CreateFrame("Frame", nil, panel)
-        row:SetSize(290, 24)
-        row:SetPoint("TOPLEFT", 15, yOffset)
-
-        -- Icon
-        local icon = row:CreateTexture(nil, "ARTWORK")
-        icon:SetSize(20, 20)
-        icon:SetPoint("LEFT", 0, 0)
-        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-        local texture = GetBuffTexture(spellIDs)
-        if texture then
-            icon:SetTexture(texture)
-        end
-
         -- Checkbox
-        local cb = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
+        local cb = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
         cb:SetSize(24, 24)
-        cb:SetPoint("LEFT", icon, "RIGHT", 5, 0)
+        cb:SetPoint("TOPLEFT", buffStartX, yOffset)
         cb:SetChecked(RaidBuffsTrackerDB.enabledBuffs[key])
         cb:SetScript("OnClick", function(self)
             RaidBuffsTrackerDB.enabledBuffs[key] = self:GetChecked()
             UpdateDisplay()
         end)
 
+        -- Icon
+        local icon = panel:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(20, 20)
+        icon:SetPoint("LEFT", cb, "RIGHT", 4, 0)
+        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        local texture = GetBuffTexture(spellIDs)
+        if texture then
+            icon:SetTexture(texture)
+        end
+
         -- Label
-        local label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        label:SetPoint("LEFT", cb, "RIGHT", 2, 0)
+        local label = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        label:SetPoint("LEFT", icon, "RIGHT", 6, 0)
         label:SetText(displayName .. " |cff888888(" .. classProvider .. ")|r")
 
         panel.buffCheckboxes[key] = cb
-        yOffset = yOffset - 26
+        yOffset = yOffset - 24
     end
 
-    yOffset = yOffset - 15
+    yOffset = yOffset - 20
+
+    -- Helper for inline sliders: Label [slider] value
+    local function CreateInlineSlider(yPos, labelText, minVal, maxVal, step, initVal, valueSuffix, onChange)
+        local labelWidth = 65
+        local sliderWidth = 140
+        local valueWidth = 40
+
+        local label = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        label:SetPoint("TOPLEFT", 25, yPos)
+        label:SetWidth(labelWidth)
+        label:SetJustifyH("RIGHT")
+        label:SetText(labelText)
+
+        local slider = CreateFrame("Slider", nil, panel, "OptionsSliderTemplate")
+        slider:SetPoint("LEFT", label, "RIGHT", 10, 0)
+        slider:SetSize(sliderWidth, 17)
+        slider:SetMinMaxValues(minVal, maxVal)
+        slider:SetValueStep(step)
+        slider:SetObeyStepOnDrag(true)
+        slider:SetValue(initVal)
+        slider.Low:SetText("")
+        slider.High:SetText("")
+        slider.Text:SetText("")
+
+        local value = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        value:SetPoint("LEFT", slider, "RIGHT", 10, 0)
+        value:SetWidth(valueWidth)
+        value:SetJustifyH("LEFT")
+        value:SetText(initVal .. (valueSuffix or ""))
+
+        slider:SetScript("OnValueChanged", function(self, val)
+            val = math.floor(val)
+            value:SetText(val .. (valueSuffix or ""))
+            onChange(val)
+        end)
+
+        return slider, value
+    end
 
     -- Icon Size slider
-    local sizeLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    sizeLabel:SetPoint("TOP", 0, yOffset)
-    sizeLabel:SetText("Icon Size:")
-
-    local sizeValue = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    sizeValue:SetPoint("LEFT", sizeLabel, "RIGHT", 5, 0)
-    sizeValue:SetText(RaidBuffsTrackerDB.iconSize)
-
-    yOffset = yOffset - 25
-
-    local sizeSlider = CreateFrame("Slider", nil, panel, "OptionsSliderTemplate")
-    sizeSlider:SetPoint("TOP", 0, yOffset)
-    sizeSlider:SetSize(200, 17)
-    sizeSlider:SetMinMaxValues(16, 64)
-    sizeSlider:SetValueStep(2)
-    sizeSlider:SetObeyStepOnDrag(true)
-    sizeSlider:SetValue(RaidBuffsTrackerDB.iconSize)
-    sizeSlider.Low:SetText("16")
-    sizeSlider.High:SetText("64")
-    sizeSlider.Text:SetText("")
-    sizeSlider:SetScript("OnValueChanged", function(self, value)
-        value = math.floor(value)
-        RaidBuffsTrackerDB.iconSize = value
-        sizeValue:SetText(value)
+    local sizeSlider, sizeValue = CreateInlineSlider(yOffset, "Icon Size:", 16, 64, 2, RaidBuffsTrackerDB.iconSize, "", function(val)
+        RaidBuffsTrackerDB.iconSize = val
         UpdateVisuals()
     end)
     panel.sizeSlider = sizeSlider
+    panel.sizeValue = sizeValue
 
-    yOffset = yOffset - 40
+    yOffset = yOffset - 28
 
     -- Spacing slider
-    local spacingLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    spacingLabel:SetPoint("TOP", 0, yOffset)
-    spacingLabel:SetText("Spacing:")
-
-    local spacingValue = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    spacingValue:SetPoint("LEFT", spacingLabel, "RIGHT", 5, 0)
-    spacingValue:SetText(string.format("%.0f%%", (RaidBuffsTrackerDB.spacing or 0.2) * 100))
-
-    yOffset = yOffset - 25
-
-    local spacingSlider = CreateFrame("Slider", nil, panel, "OptionsSliderTemplate")
-    spacingSlider:SetPoint("TOP", 0, yOffset)
-    spacingSlider:SetSize(200, 17)
-    spacingSlider:SetMinMaxValues(0, 50)
-    spacingSlider:SetValueStep(5)
-    spacingSlider:SetObeyStepOnDrag(true)
-    spacingSlider:SetValue((RaidBuffsTrackerDB.spacing or 0.2) * 100)
-    spacingSlider.Low:SetText("0%")
-    spacingSlider.High:SetText("50%")
-    spacingSlider.Text:SetText("")
-    spacingSlider:SetScript("OnValueChanged", function(self, value)
-        value = math.floor(value)
-        RaidBuffsTrackerDB.spacing = value / 100
-        spacingValue:SetText(value .. "%")
+    local spacingSlider, spacingValue = CreateInlineSlider(yOffset, "Spacing:", 0, 50, 5, math.floor((RaidBuffsTrackerDB.spacing or 0.2) * 100), "%", function(val)
+        RaidBuffsTrackerDB.spacing = val / 100
         UpdateDisplay()
     end)
     panel.spacingSlider = spacingSlider
+    panel.spacingValue = spacingValue
 
-    yOffset = yOffset - 40
+    yOffset = yOffset - 28
 
     -- Text Size slider
-    local textLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    textLabel:SetPoint("TOP", 0, yOffset)
-    textLabel:SetText("Text Size:")
-
-    local textValue = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    textValue:SetPoint("LEFT", textLabel, "RIGHT", 5, 0)
-    textValue:SetText(string.format("%.0f%%", (RaidBuffsTrackerDB.textScale or 0.32) * 100))
-
-    yOffset = yOffset - 25
-
-    local textSlider = CreateFrame("Slider", nil, panel, "OptionsSliderTemplate")
-    textSlider:SetPoint("TOP", 0, yOffset)
-    textSlider:SetSize(200, 17)
-    textSlider:SetMinMaxValues(20, 60)
-    textSlider:SetValueStep(2)
-    textSlider:SetObeyStepOnDrag(true)
-    textSlider:SetValue((RaidBuffsTrackerDB.textScale or 0.32) * 100)
-    textSlider.Low:SetText("20%")
-    textSlider.High:SetText("60%")
-    textSlider.Text:SetText("")
-    textSlider:SetScript("OnValueChanged", function(self, value)
-        value = math.floor(value)
-        RaidBuffsTrackerDB.textScale = value / 100
-        textValue:SetText(value .. "%")
+    local textSlider, textValue = CreateInlineSlider(yOffset, "Text Size:", 20, 60, 2, math.floor((RaidBuffsTrackerDB.textScale or 0.32) * 100), "%", function(val)
+        RaidBuffsTrackerDB.textScale = val / 100
         UpdateVisuals()
     end)
     panel.textSlider = textSlider
+    panel.textValue = textValue
 
-    yOffset = yOffset - 40
+    yOffset = yOffset - 30
 
     -- Helper to create centered checkbox with label
     local function CreateCenteredCheckbox(labelText, yPos, checked, onClick)
@@ -682,7 +655,15 @@ local function CreateOptionsPanel()
     end
     panel.growBtns = growBtns
 
-    yOffset = yOffset - 40
+    yOffset = yOffset - 35  -- 22px button height + 13px padding
+
+    -- Separator line
+    local separator = panel:CreateTexture(nil, "ARTWORK")
+    separator:SetSize(260, 1)
+    separator:SetPoint("TOP", 0, yOffset)
+    separator:SetColorTexture(0.5, 0.5, 0.5, 1)
+
+    yOffset = yOffset - 15
 
     -- Buttons row 1 (centered)
     local btnWidth = 135
@@ -706,10 +687,10 @@ local function CreateOptionsPanel()
     resetRatiosBtn:SetScript("OnClick", function()
         RaidBuffsTrackerDB.spacing = 0.2
         RaidBuffsTrackerDB.textScale = 0.32
-        spacingSlider:SetValue(20)
-        textSlider:SetValue(32)
-        spacingValue:SetText("20%")
-        textValue:SetText("32%")
+        panel.spacingSlider:SetValue(20)
+        panel.textSlider:SetValue(32)
+        panel.spacingValue:SetText("20%")
+        panel.textValue:SetText("32%")
         UpdateVisuals()
     end)
     resetRatiosBtn:SetScript("OnEnter", function(self)
