@@ -649,7 +649,7 @@ local function CreateOptionsPanel()
 
     local growBtns = {}
     local directions = {"LEFT", "CENTER", "RIGHT"}
-    local dirLabels = {"← Left", "Center", "Right →"}
+    local dirLabels = {"Left", "Center", "Right"}
 
     for i, dir in ipairs(directions) do
         local btn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
