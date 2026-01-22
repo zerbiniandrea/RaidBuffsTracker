@@ -48,7 +48,3 @@ Type `/rbt` to open the options panel where you can:
 ## Notes
 
 Due to WoW API limitations, the addon only works out of combat.
-
-## License
-
-MIT
