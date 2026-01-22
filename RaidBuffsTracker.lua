@@ -27,6 +27,7 @@ local defaults = {
     textScale = 0.32,   -- multiplier of iconSize
     showBuffReminder = true,
     showOnlyInGroup = true,
+    hideBuffsWithoutProvider = false,
     growDirection = "CENTER", -- "LEFT", "CENTER", "RIGHT"
 }
 
@@ -37,6 +38,38 @@ local updateTicker
 local inCombat = false
 local testMode = false
 local optionsPanel
+
+-- Get classes present in the group
+local function GetGroupClasses()
+    local classes = {}
+    local inRaid = IsInRaid()
+    local groupSize = GetNumGroupMembers()
+
+    if groupSize == 0 then
+        local _, class = UnitClass("player")
+        if class then classes[class] = true end
+        return classes
+    end
+
+    for i = 1, groupSize do
+        local unit
+        if inRaid then
+            unit = "raid" .. i
+        else
+            if i == 1 then
+                unit = "player"
+            else
+                unit = "party" .. (i - 1)
+            end
+        end
+
+        if UnitExists(unit) and UnitIsConnected(unit) then
+            local _, class = UnitClass(unit)
+            if class then classes[class] = true end
+        end
+    end
+    return classes
+end
 
 -- Check if unit has a specific buff (handles single spellID or table of spellIDs)
 local function UnitHasBuff(unit, spellIDs)
@@ -230,13 +263,26 @@ UpdateDisplay = function()
         mainFrame:Hide()
         return
     end
+
+    local presentClasses = nil
+    if db.hideBuffsWithoutProvider then
+        presentClasses = GetGroupClasses()
+    end
+
     local anyVisible = false
 
     for _, buffData in ipairs(RaidBuffs) do
-        local spellIDs, key = unpack(buffData)
+        local spellIDs, key, _, classProvider = unpack(buffData)
         local frame = buffFrames[key]
 
-        if frame and db.enabledBuffs[key] then
+        local showBuff = true
+        if presentClasses then
+            if not presentClasses[classProvider] then
+                showBuff = false
+            end
+        end
+
+        if frame and db.enabledBuffs[key] and showBuff then
             local missing, total = CountMissingBuff(spellIDs)
             if missing > 0 then
                 local buffed = total - missing
@@ -585,6 +631,15 @@ local function CreateOptionsPanel()
     end)
     panel.groupCheckbox = groupCb
 
+    yOffset = yOffset - 30
+
+    -- Hide if provider missing checkbox
+    local providerCb = CreateCenteredCheckbox("Hide buffs for missing classes", yOffset, RaidBuffsTrackerDB.hideBuffsWithoutProvider, function(self)
+        RaidBuffsTrackerDB.hideBuffsWithoutProvider = self:GetChecked()
+        UpdateDisplay()
+    end)
+    panel.providerCheckbox = providerCb
+
     yOffset = yOffset - 35
 
     -- Grow direction label
@@ -730,6 +785,9 @@ local function ToggleOptions()
         optionsPanel.lockCheckbox:SetChecked(db.locked)
         optionsPanel.reminderCheckbox:SetChecked(db.showBuffReminder ~= false)
         optionsPanel.groupCheckbox:SetChecked(db.showOnlyInGroup ~= false)
+        if optionsPanel.providerCheckbox then
+            optionsPanel.providerCheckbox:SetChecked(db.hideBuffsWithoutProvider)
+        end
         for _, btn in ipairs(optionsPanel.growBtns) do
             btn:SetEnabled(btn.direction ~= db.growDirection)
         end
