@@ -26,6 +26,7 @@ local defaults = {
     spacing = 0.2,      -- multiplier of iconSize
     textScale = 0.32,   -- multiplier of iconSize
     showBuffReminder = true,
+    showOnlyInGroup = true,
 }
 
 -- Locals
@@ -214,6 +215,12 @@ UpdateDisplay = function()
     end
 
     local db = RaidBuffsTrackerDB
+
+    -- Hide if not in group and setting is enabled
+    if db.showOnlyInGroup and GetNumGroupMembers() == 0 then
+        mainFrame:Hide()
+        return
+    end
     local anyVisible = false
 
     for _, buffData in ipairs(RaidBuffs) do
@@ -521,6 +528,23 @@ local function CreateOptionsPanel()
     reminderLabel:SetPoint("LEFT", reminderCb, "RIGHT", 2, 0)
     reminderLabel:SetText("Show \"BUFF!\" reminder")
 
+    yOffset = yOffset - 30
+
+    -- Show only in group checkbox
+    local groupCb = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
+    groupCb:SetSize(24, 24)
+    groupCb:SetPoint("TOP", -55, yOffset)
+    groupCb:SetChecked(RaidBuffsTrackerDB.showOnlyInGroup ~= false)
+    groupCb:SetScript("OnClick", function(self)
+        RaidBuffsTrackerDB.showOnlyInGroup = self:GetChecked()
+        UpdateDisplay()
+    end)
+    panel.groupCheckbox = groupCb
+
+    local groupLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    groupLabel:SetPoint("LEFT", groupCb, "RIGHT", 2, 0)
+    groupLabel:SetText("Show only in group/raid")
+
     yOffset = yOffset - 45
 
     -- Buttons row 1 (centered)
@@ -623,6 +647,7 @@ local function ToggleOptions()
         optionsPanel.textSlider:SetValue((db.textScale or 0.32) * 100)
         optionsPanel.lockCheckbox:SetChecked(db.locked)
         optionsPanel.reminderCheckbox:SetChecked(db.showBuffReminder ~= false)
+        optionsPanel.groupCheckbox:SetChecked(db.showOnlyInGroup ~= false)
         if testMode then
             optionsPanel.testBtn:SetText("Stop Test")
         else
