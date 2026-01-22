@@ -1,0 +1,10 @@
+## Interface: 120000
+## Title: RaidBuffsTracker
+## Notes: Shows missing raid buffs with count overlay
+## Author: zerbi
+## Version: 1.0.0
+## SavedVariables: RaidBuffsTrackerDB
+## X-Curse-Project-ID: 1441094
+## X-Wago-ID: qGYZZjNg
+
+RaidBuffsTracker.lua
