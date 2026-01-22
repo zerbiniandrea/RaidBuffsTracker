@@ -10,6 +10,20 @@ local RaidBuffs = {
     {{381748, 364342}, "bronze", "Blessing of the Bronze", "EVOKER"},
 }
 
+-- Classes that benefit from each buff (BETA: class-level only, not spec-aware)
+-- nil = everyone benefits, otherwise only listed classes are counted
+local BuffBeneficiaries = {
+    intellect = {
+        MAGE=true, WARLOCK=true, PRIEST=true, DRUID=true,
+        SHAMAN=true, MONK=true, EVOKER=true, PALADIN=true, DEMONHUNTER=true
+    },
+    attackPower = {
+        WARRIOR=true, ROGUE=true, HUNTER=true, DEATHKNIGHT=true,
+        PALADIN=true, MONK=true, DRUID=true, DEMONHUNTER=true, SHAMAN=true
+    },
+    -- stamina, versatility, skyfury, bronze = everyone benefits (nil)
+}
+
 -- Default settings
 local defaults = {
     position = {point = "CENTER", x = 0, y = 0},
@@ -29,6 +43,7 @@ local defaults = {
     showOnlyInGroup = true,
     hideBuffsWithoutProvider = false,
     showOnlyPlayerClassBuff = false,
+    filterByClassBenefit = false,
     growDirection = "CENTER", -- "LEFT", "CENTER", "RIGHT"
 }
 
@@ -102,13 +117,21 @@ local function GetBuffTexture(spellIDs)
 end
 
 -- Count group members missing a buff (returns missing, total)
-local function CountMissingBuff(spellIDs)
+-- buffKey is optional, used for class benefit filtering
+local function CountMissingBuff(spellIDs, buffKey)
     local missing = 0
     local total = 0
     local inRaid = IsInRaid()
     local groupSize = GetNumGroupMembers()
+    local db = RaidBuffsTrackerDB
+    local beneficiaries = db.filterByClassBenefit and buffKey and BuffBeneficiaries[buffKey] or nil
 
     if groupSize == 0 then
+        -- Solo: check if player benefits
+        local _, playerClass = UnitClass("player")
+        if beneficiaries and not beneficiaries[playerClass] then
+            return 0, 0 -- player doesn't benefit, skip
+        end
         total = 1
         if not UnitHasBuff("player", spellIDs) then
             missing = 1
@@ -129,9 +152,13 @@ local function CountMissingBuff(spellIDs)
         end
 
         if UnitExists(unit) and not UnitIsDeadOrGhost(unit) and UnitIsConnected(unit) then
-            total = total + 1
-            if not UnitHasBuff(unit, spellIDs) then
-                missing = missing + 1
+            -- Check if unit's class benefits from this buff
+            local _, unitClass = UnitClass(unit)
+            if not beneficiaries or beneficiaries[unitClass] then
+                total = total + 1
+                if not UnitHasBuff(unit, spellIDs) then
+                    missing = missing + 1
+                end
             end
         end
     end
@@ -289,7 +316,7 @@ UpdateDisplay = function()
         end
 
         if frame and db.enabledBuffs[key] and showBuff then
-            local missing, total = CountMissingBuff(spellIDs)
+            local missing, total = CountMissingBuff(spellIDs, key)
             if missing > 0 then
                 local buffed = total - missing
                 frame.count:SetText(buffed .. "/" .. total)
@@ -633,6 +660,15 @@ local function CreateOptionsPanel()
     end)
     panel.playerClassCheckbox = playerClassCb
 
+    yOffset = yOffset - 30
+
+    -- Filter by class benefit checkbox (BETA)
+    local classBenefitCb = CreateCenteredCheckbox("Only count benefiting classes |cffff8000(BETA)|r", yOffset, RaidBuffsTrackerDB.filterByClassBenefit, function(self)
+        RaidBuffsTrackerDB.filterByClassBenefit = self:GetChecked()
+        UpdateDisplay()
+    end)
+    panel.classBenefitCheckbox = classBenefitCb
+
     yOffset = yOffset - 35
 
     -- Grow direction label
@@ -791,6 +827,9 @@ local function ToggleOptions()
         end
         if optionsPanel.playerClassCheckbox then
             optionsPanel.playerClassCheckbox:SetChecked(db.showOnlyPlayerClassBuff)
+        end
+        if optionsPanel.classBenefitCheckbox then
+            optionsPanel.classBenefitCheckbox:SetChecked(db.filterByClassBenefit)
         end
         for _, btn in ipairs(optionsPanel.growBtns) do
             btn:SetEnabled(btn.direction ~= db.growDirection)
