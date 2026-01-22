@@ -497,53 +497,51 @@ local function CreateOptionsPanel()
 
     yOffset = yOffset - 40
 
-    -- Lock checkbox (centered)
-    local lockCb = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
-    lockCb:SetSize(24, 24)
-    lockCb:SetPoint("TOP", -40, yOffset)
-    lockCb:SetChecked(RaidBuffsTrackerDB.locked)
-    lockCb:SetScript("OnClick", function(self)
+    -- Helper to create centered checkbox with label
+    local function CreateCenteredCheckbox(labelText, yPos, checked, onClick)
+        local row = CreateFrame("Frame", nil, panel)
+        row:SetSize(280, 24)
+        row:SetPoint("TOP", 0, yPos)
+
+        local cb = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
+        cb:SetSize(24, 24)
+        cb:SetChecked(checked)
+        cb:SetScript("OnClick", onClick)
+
+        local label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        label:SetPoint("LEFT", cb, "RIGHT", 2, 0)
+        label:SetText(labelText)
+
+        -- Center the checkbox + label within the row
+        local totalWidth = 24 + 2 + label:GetStringWidth()
+        cb:SetPoint("LEFT", row, "CENTER", -totalWidth / 2, 0)
+
+        return cb
+    end
+
+    -- Lock checkbox
+    local lockCb = CreateCenteredCheckbox("Lock Position", yOffset, RaidBuffsTrackerDB.locked, function(self)
         RaidBuffsTrackerDB.locked = self:GetChecked()
     end)
     panel.lockCheckbox = lockCb
 
-    local lockLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    lockLabel:SetPoint("LEFT", lockCb, "RIGHT", 2, 0)
-    lockLabel:SetText("Lock Position")
-
     yOffset = yOffset - 30
 
     -- Show Buff Reminder checkbox
-    local reminderCb = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
-    reminderCb:SetSize(24, 24)
-    reminderCb:SetPoint("TOP", -55, yOffset)
-    reminderCb:SetChecked(RaidBuffsTrackerDB.showBuffReminder ~= false)
-    reminderCb:SetScript("OnClick", function(self)
+    local reminderCb = CreateCenteredCheckbox("Show \"BUFF!\" reminder", yOffset, RaidBuffsTrackerDB.showBuffReminder ~= false, function(self)
         RaidBuffsTrackerDB.showBuffReminder = self:GetChecked()
         UpdateVisuals()
     end)
     panel.reminderCheckbox = reminderCb
 
-    local reminderLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    reminderLabel:SetPoint("LEFT", reminderCb, "RIGHT", 2, 0)
-    reminderLabel:SetText("Show \"BUFF!\" reminder")
-
     yOffset = yOffset - 30
 
     -- Show only in group checkbox
-    local groupCb = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
-    groupCb:SetSize(24, 24)
-    groupCb:SetPoint("TOP", -55, yOffset)
-    groupCb:SetChecked(RaidBuffsTrackerDB.showOnlyInGroup ~= false)
-    groupCb:SetScript("OnClick", function(self)
+    local groupCb = CreateCenteredCheckbox("Show only in group/raid", yOffset, RaidBuffsTrackerDB.showOnlyInGroup ~= false, function(self)
         RaidBuffsTrackerDB.showOnlyInGroup = self:GetChecked()
         UpdateDisplay()
     end)
     panel.groupCheckbox = groupCb
-
-    local groupLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    groupLabel:SetPoint("LEFT", groupCb, "RIGHT", 2, 0)
-    groupLabel:SetText("Show only in group/raid")
 
     yOffset = yOffset - 45
 
