@@ -40,8 +40,6 @@ read_globals = {
 	"UnitIsUnit",
 
 	-- WoW UI globals
-	"ActionButton_HideOverlayGlow",
-	"ActionButton_ShowOverlayGlow",
 	"GameTooltip",
 	"STANDARD_TEXT_FONT",
 }

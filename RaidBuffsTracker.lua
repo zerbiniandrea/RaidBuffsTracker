@@ -371,19 +371,10 @@ end
 -- Forward declarations
 local UpdateDisplay, PositionBuffFrames, UpdateAnchor
 
--- Show/hide expiration glow on a buff frame
-local function SetExpirationGlow(frame, show)
-    if show then
-        if not frame.glowShowing then
-            ActionButton_ShowOverlayGlow(frame)
-            frame.glowShowing = true
-        end
-    else
-        if frame.glowShowing then
-            ActionButton_HideOverlayGlow(frame)
-            frame.glowShowing = false
-        end
-    end
+-- Show/hide expiration glow on a buff frame (temporarily disabled)
+local function SetExpirationGlow(frame, _)
+    -- TODO: Implement glow using LibCustomGlow or similar
+    frame.glowShowing = false
 end
 
 -- Create icon frame for a buff
@@ -1269,6 +1260,12 @@ local function CreateOptionsPanel()
     -- Expiration Warning header
     _, rightY = CreateSectionHeader(panel, "Expiration Warning", rightColX, rightY)
 
+    -- Work in progress notice
+    local wipNotice = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    wipNotice:SetPoint("TOPLEFT", rightColX, rightY)
+    wipNotice:SetText("|cffff4444(Work in progress)|r")
+    rightY = rightY - 14
+
     local glowCb
     glowCb, rightY = CreateCheckbox(
         rightColX,
@@ -1280,6 +1277,7 @@ local function CreateOptionsPanel()
             UpdateDisplay()
         end
     )
+    glowCb:Disable()
     panel.glowCheckbox = glowCb
 
     local thresholdSlider, thresholdValue
@@ -1297,6 +1295,7 @@ local function CreateOptionsPanel()
             UpdateDisplay()
         end
     )
+    thresholdSlider:Disable()
     panel.thresholdSlider = thresholdSlider
     panel.thresholdValue = thresholdValue
 
