@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="images/logo.png" alt="RaidBuffsTracker" width="200">
+  <img width="200" alt="image" src="https://github.com/user-attachments/assets/1a8775c7-d9ff-41c6-8bab-6f26d75dceab" />
 </p>
 
 <h1 align="center">RaidBuffsTracker</h1>
@@ -11,11 +11,11 @@
 ## Screenshots
 
 <p align="center">
-  <img src="images/screenshot-addon.png" alt="Addon Display">
+  <img width="642" height="176" alt="image" src="https://github.com/user-attachments/assets/b8f38780-19bb-4435-badf-705cc585d024" />
 </p>
 
 <p align="center">
-  <img src="images/screenshot-options.png" alt="Options Panel" width="300">
+  <img width="426" height="740" alt="image" src="https://github.com/user-attachments/assets/d06c09c3-a2d4-474e-a5fb-7d5857d60a07" />
 </p>
 
 ## Features
