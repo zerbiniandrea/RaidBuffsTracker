@@ -61,6 +61,8 @@ local defaults = {
     showOnlyPlayerClassBuff = false,
     filterByClassBenefit = false,
     growDirection = "CENTER", -- "LEFT", "CENTER", "RIGHT"
+    showExpirationGlow = false,
+    expirationThreshold = 5, -- minutes
 }
 
 -- Locals
@@ -104,6 +106,7 @@ local function GetGroupClasses()
 end
 
 -- Check if unit has a specific buff (handles single spellID or table of spellIDs)
+-- Returns: hasBuff, remainingTime (nil if no expiration or buff not found)
 local function UnitHasBuff(unit, spellIDs)
     if type(spellIDs) ~= "table" then
         spellIDs = {spellIDs}
@@ -115,11 +118,15 @@ local function UnitHasBuff(unit, spellIDs)
             auraData = C_UnitAuras.GetUnitAuraBySpellID(unit, id)
         end)
         if auraData then
-            return true
+            local remaining = nil
+            if auraData.expirationTime and auraData.expirationTime > 0 then
+                remaining = auraData.expirationTime - GetTime()
+            end
+            return true, remaining
         end
     end
 
-    return false
+    return false, nil
 end
 
 -- Get spell texture (handles table of spellIDs)
@@ -137,6 +144,7 @@ end
 local function CountMissingBuff(spellIDs, buffKey)
     local missing = 0
     local total = 0
+    local minRemaining = nil
     local inRaid = IsInRaid()
     local groupSize = GetNumGroupMembers()
     local db = RaidBuffsTrackerDB
@@ -146,13 +154,16 @@ local function CountMissingBuff(spellIDs, buffKey)
         -- Solo: check if player benefits
         local _, playerClass = UnitClass("player")
         if beneficiaries and not beneficiaries[playerClass] then
-            return 0, 0 -- player doesn't benefit, skip
+            return 0, 0, nil -- player doesn't benefit, skip
         end
         total = 1
-        if not UnitHasBuff("player", spellIDs) then
+        local hasBuff, remaining = UnitHasBuff("player", spellIDs)
+        if not hasBuff then
             missing = 1
+        elseif remaining then
+            minRemaining = remaining
         end
-        return missing, total
+        return missing, total, minRemaining
     end
 
     for i = 1, groupSize do
@@ -172,27 +183,35 @@ local function CountMissingBuff(spellIDs, buffKey)
             local _, unitClass = UnitClass(unit)
             if not beneficiaries or beneficiaries[unitClass] then
                 total = total + 1
-                if not UnitHasBuff(unit, spellIDs) then
+                local hasBuff, remaining = UnitHasBuff(unit, spellIDs)
+                if not hasBuff then
                     missing = missing + 1
+                elseif remaining then
+                    if not minRemaining or remaining < minRemaining then
+                        minRemaining = remaining
+                    end
                 end
             end
         end
     end
 
-    return missing, total
+    return missing, total, minRemaining
 end
 
--- Count group members with a presence buff (returns count of players with buff)
+-- Count group members with a presence buff (returns count, minRemaining)
 local function CountPresenceBuff(spellIDs)
     local found = 0
+    local minRemaining = nil
     local inRaid = IsInRaid()
     local groupSize = GetNumGroupMembers()
 
     if groupSize == 0 then
-        if UnitHasBuff("player", spellIDs) then
+        local hasBuff, remaining = UnitHasBuff("player", spellIDs)
+        if hasBuff then
             found = 1
+            minRemaining = remaining
         end
-        return found
+        return found, minRemaining
     end
 
     for i = 1, groupSize do
@@ -208,19 +227,26 @@ local function CountPresenceBuff(spellIDs)
         end
 
         if UnitExists(unit) and not UnitIsDeadOrGhost(unit) and UnitIsConnected(unit) then
-            if UnitHasBuff(unit, spellIDs) then
+            local hasBuff, remaining = UnitHasBuff(unit, spellIDs)
+            if hasBuff then
                 found = found + 1
+                if remaining then
+                    if not minRemaining or remaining < minRemaining then
+                        minRemaining = remaining
+                    end
+                end
             end
         end
     end
 
-    return found
+    return found, minRemaining
 end
 
--- Count buffs vs providers (returns buffCount, providerCount)
+-- Count buffs vs providers (returns buffCount, providerCount, minRemaining)
 local function CountProviderBuff(spellIDs, providerClass)
     local buffCount = 0
     local providerCount = 0
+    local minRemaining = nil
     local inRaid = IsInRaid()
     local groupSize = GetNumGroupMembers()
 
@@ -229,10 +255,12 @@ local function CountProviderBuff(spellIDs, providerClass)
         if playerClass == providerClass then
             providerCount = 1
         end
-        if UnitHasBuff("player", spellIDs) then
+        local hasBuff, remaining = UnitHasBuff("player", spellIDs)
+        if hasBuff then
             buffCount = 1
+            minRemaining = remaining
         end
-        return buffCount, providerCount
+        return buffCount, providerCount, minRemaining
     end
 
     for i = 1, groupSize do
@@ -252,17 +280,38 @@ local function CountProviderBuff(spellIDs, providerClass)
             if unitClass == providerClass then
                 providerCount = providerCount + 1
             end
-            if UnitHasBuff(unit, spellIDs) then
+            local hasBuff, remaining = UnitHasBuff(unit, spellIDs)
+            if hasBuff then
                 buffCount = buffCount + 1
+                if remaining then
+                    if not minRemaining or remaining < minRemaining then
+                        minRemaining = remaining
+                    end
+                end
             end
         end
     end
 
-    return buffCount, providerCount
+    return buffCount, providerCount, minRemaining
 end
 
 -- Forward declarations
 local UpdateDisplay, PositionBuffFrames, UpdateAnchor
+
+-- Show/hide expiration glow on a buff frame
+local function SetExpirationGlow(frame, show)
+    if show then
+        if not frame.glowShowing then
+            ActionButton_ShowOverlayGlow(frame)
+            frame.glowShowing = true
+        end
+    else
+        if frame.glowShowing then
+            ActionButton_HideOverlayGlow(frame)
+            frame.glowShowing = false
+        end
+    end
+end
 
 -- Create icon frame for a buff
 local function CreateBuffFrame(buffData, index)
@@ -412,17 +461,27 @@ UpdateDisplay = function()
         end
 
         if frame and db.enabledBuffs[key] and showBuff then
-            local missing, total = CountMissingBuff(spellIDs, key)
+            local missing, total, minRemaining = CountMissingBuff(spellIDs, key)
+            local expiringSoon = db.showExpirationGlow and minRemaining and minRemaining < (db.expirationThreshold * 60)
             if missing > 0 then
                 local buffed = total - missing
                 frame.count:SetText(buffed .. "/" .. total)
                 frame:Show()
                 anyVisible = true
+                SetExpirationGlow(frame, expiringSoon)
+            elseif expiringSoon then
+                -- Everyone has buff but expiring soon - show with glow
+                frame.count:SetText(total .. "/" .. total)
+                frame:Show()
+                anyVisible = true
+                SetExpirationGlow(frame, true)
             else
                 frame:Hide()
+                SetExpirationGlow(frame, false)
             end
         elseif frame then
             frame:Hide()
+            SetExpirationGlow(frame, false)
         end
     end
 
@@ -442,18 +501,28 @@ UpdateDisplay = function()
         end
 
         if frame and db.enabledBuffs[key] and showBuff then
-            local count = CountPresenceBuff(spellIDs)
+            local count, minRemaining = CountPresenceBuff(spellIDs)
+            local expiringSoon = db.showExpirationGlow and minRemaining and minRemaining < (db.expirationThreshold * 60)
             if count == 0 then
                 -- Nobody has it - show as missing
                 frame.count:SetText("")
                 frame:Show()
                 anyVisible = true
+                SetExpirationGlow(frame, false)
+            elseif expiringSoon then
+                -- Has buff but expiring soon - show with glow
+                frame.count:SetText("")
+                frame:Show()
+                anyVisible = true
+                SetExpirationGlow(frame, true)
             else
-                -- At least 1 person has it - all good
+                -- At least 1 person has it and not expiring - all good
                 frame:Hide()
+                SetExpirationGlow(frame, false)
             end
         elseif frame then
             frame:Hide()
+            SetExpirationGlow(frame, false)
         end
     end
 
@@ -473,18 +542,28 @@ UpdateDisplay = function()
         end
 
         if frame and db.enabledBuffs[key] and showBuff then
-            local buffCount, providerCount = CountProviderBuff(spellIDs, classProvider)
+            local buffCount, providerCount, minRemaining = CountProviderBuff(spellIDs, classProvider)
+            local expiringSoon = db.showExpirationGlow and minRemaining and minRemaining < (db.expirationThreshold * 60)
             if buffCount < providerCount then
                 -- Not all providers have applied their buff
                 frame.count:SetText(buffCount .. "/" .. providerCount)
                 frame:Show()
                 anyVisible = true
+                SetExpirationGlow(frame, expiringSoon)
+            elseif expiringSoon then
+                -- All applied but expiring soon - show with glow
+                frame.count:SetText(buffCount .. "/" .. providerCount)
+                frame:Show()
+                anyVisible = true
+                SetExpirationGlow(frame, true)
             else
                 -- All providers have applied their buff
                 frame:Hide()
+                SetExpirationGlow(frame, false)
             end
         elseif frame then
             frame:Hide()
+            SetExpirationGlow(frame, false)
         end
     end
 
@@ -867,6 +946,55 @@ local function CreateOptionsPanel()
     end)
     panel.classBenefitCheckbox = classBenefitCb
 
+    yOffset = yOffset - 30
+
+    -- Expiration glow checkbox
+    local glowCb = CreateCenteredCheckbox("Show glow when expiring soon", yOffset, RaidBuffsTrackerDB.showExpirationGlow, function(self)
+        RaidBuffsTrackerDB.showExpirationGlow = self:GetChecked()
+        UpdateDisplay()
+    end)
+    panel.glowCheckbox = glowCb
+
+    yOffset = yOffset - 28
+
+    -- Expiration threshold slider (reuse CreateInlineSlider pattern)
+    local thresholdLabelWidth = 100
+    local thresholdSliderWidth = 120
+    local thresholdValueWidth = 50
+
+    local thresholdLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    thresholdLabel:SetPoint("TOPLEFT", 20, yOffset)
+    thresholdLabel:SetWidth(thresholdLabelWidth)
+    thresholdLabel:SetJustifyH("RIGHT")
+    thresholdLabel:SetText("Threshold:")
+
+    local thresholdSlider = CreateFrame("Slider", nil, panel, "OptionsSliderTemplate")
+    thresholdSlider:SetPoint("LEFT", thresholdLabel, "RIGHT", 10, 0)
+    thresholdSlider:SetSize(thresholdSliderWidth, 17)
+    thresholdSlider:SetMinMaxValues(1, 15)
+    thresholdSlider:SetValueStep(1)
+    thresholdSlider:SetObeyStepOnDrag(true)
+    thresholdSlider:SetValue(RaidBuffsTrackerDB.expirationThreshold or 5)
+    thresholdSlider.Low:SetText("")
+    thresholdSlider.High:SetText("")
+    thresholdSlider.Text:SetText("")
+
+    local thresholdValue = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    thresholdValue:SetPoint("LEFT", thresholdSlider, "RIGHT", 10, 0)
+    thresholdValue:SetWidth(thresholdValueWidth)
+    thresholdValue:SetJustifyH("LEFT")
+    thresholdValue:SetText((RaidBuffsTrackerDB.expirationThreshold or 5) .. " min")
+
+    thresholdSlider:SetScript("OnValueChanged", function(self, val)
+        val = math.floor(val)
+        thresholdValue:SetText(val .. " min")
+        RaidBuffsTrackerDB.expirationThreshold = val
+        UpdateDisplay()
+    end)
+
+    panel.thresholdSlider = thresholdSlider
+    panel.thresholdValue = thresholdValue
+
     yOffset = yOffset - 35
 
     -- Grow direction label
@@ -1058,6 +1186,13 @@ local function ToggleOptions()
         end
         if optionsPanel.classBenefitCheckbox then
             optionsPanel.classBenefitCheckbox:SetChecked(db.filterByClassBenefit)
+        end
+        if optionsPanel.glowCheckbox then
+            optionsPanel.glowCheckbox:SetChecked(db.showExpirationGlow)
+        end
+        if optionsPanel.thresholdSlider then
+            optionsPanel.thresholdSlider:SetValue(db.expirationThreshold or 5)
+            optionsPanel.thresholdValue:SetText((db.expirationThreshold or 5) .. " min")
         end
         for _, btn in ipairs(optionsPanel.growBtns) do
             btn:SetEnabled(btn.direction ~= db.growDirection)
