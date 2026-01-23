@@ -43,4 +43,10 @@ read_globals = {
 	-- WoW UI globals
 	"GameTooltip",
 	"STANDARD_TEXT_FONT",
+	"UIDropDownMenu_AddButton",
+	"UIDropDownMenu_CreateInfo",
+	"UIDropDownMenu_Initialize",
+	"UIDropDownMenu_SetSelectedValue",
+	"UIDropDownMenu_SetText",
+	"UIDropDownMenu_SetWidth",
 }

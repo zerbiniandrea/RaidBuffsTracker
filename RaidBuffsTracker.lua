@@ -99,6 +99,7 @@ local defaults = {
     growDirection = "CENTER", -- "LEFT", "CENTER", "RIGHT"
     showExpirationGlow = true,
     expirationThreshold = 15, -- minutes
+    glowStyle = 1, -- 1=Orange, 2=Gold, 3=Yellow, 4=White, 5=Red
     optionsPanelScale = 1.2, -- base scale (displayed as 100%)
 }
 
@@ -122,6 +123,16 @@ local function GetFontSize(scale)
     local db = RaidBuffsTrackerDB
     local baseSize = db.iconSize * (db.textScale or defaults.textScale)
     return math.floor(baseSize * (scale or 1))
+end
+
+-- Format remaining time in seconds to a short string (e.g., "5m" or "30s")
+local function FormatRemainingTime(seconds)
+    local mins = math.floor(seconds / 60)
+    if mins > 0 then
+        return mins .. "m"
+    else
+        return math.floor(seconds) .. "s"
+    end
 end
 
 -- Get classes present in the group
@@ -375,14 +386,143 @@ local function ShowTestModePersonalBuffs(db)
 end
 
 -- Forward declarations
-local UpdateDisplay, PositionBuffFrames, UpdateAnchor
+local UpdateDisplay, PositionBuffFrames, UpdateAnchor, ShowGlowDemo
 
--- Show/hide expiration glow on a buff frame (temporarily disabled)
--- Returns false since glow is disabled, used to skip "expiring soon" display logic
-local function SetExpirationGlow(frame, _)
-    -- TODO: Implement glow using LibCustomGlow or similar
-    frame.glowShowing = false
-    return false
+-- Glow style definitions
+local GlowStyles = {
+    {
+        name = "Orange",
+        setup = function(frame)
+            local glow = frame:CreateTexture(nil, "OVERLAY")
+            glow:SetPoint("TOPLEFT", -4, 4)
+            glow:SetPoint("BOTTOMRIGHT", 4, -4)
+            glow:SetAtlas("bags-glow-orange")
+            glow:SetAlpha(0.8)
+            frame.glowTexture = glow
+            local ag = glow:CreateAnimationGroup()
+            ag:SetLooping("BOUNCE")
+            local fade = ag:CreateAnimation("Alpha")
+            fade:SetFromAlpha(0.8)
+            fade:SetToAlpha(0.3)
+            fade:SetDuration(0.5)
+            frame.glowAnim = ag
+        end,
+    },
+    {
+        name = "Gold",
+        setup = function(frame)
+            local glow = frame:CreateTexture(nil, "OVERLAY")
+            glow:SetPoint("TOPLEFT", -3, 3)
+            glow:SetPoint("BOTTOMRIGHT", 3, -3)
+            glow:SetAtlas("loottoast-itemborder-gold")
+            frame.glowTexture = glow
+            local ag = glow:CreateAnimationGroup()
+            ag:SetLooping("BOUNCE")
+            local fade = ag:CreateAnimation("Alpha")
+            fade:SetFromAlpha(1)
+            fade:SetToAlpha(0.4)
+            fade:SetDuration(0.6)
+            frame.glowAnim = ag
+        end,
+    },
+    {
+        name = "Yellow",
+        setup = function(frame)
+            local glow = frame:CreateTexture(nil, "OVERLAY")
+            glow:SetPoint("TOPLEFT", -6, 6)
+            glow:SetPoint("BOTTOMRIGHT", 6, -6)
+            glow:SetAtlas("bags-glow-white")
+            glow:SetVertexColor(1, 0.8, 0)
+            frame.glowTexture = glow
+            local ag = glow:CreateAnimationGroup()
+            ag:SetLooping("BOUNCE")
+            local fade = ag:CreateAnimation("Alpha")
+            fade:SetFromAlpha(0.9)
+            fade:SetToAlpha(0.2)
+            fade:SetDuration(0.5)
+            frame.glowAnim = ag
+        end,
+    },
+    {
+        name = "White",
+        setup = function(frame)
+            local glow = frame:CreateTexture(nil, "OVERLAY")
+            glow:SetPoint("TOPLEFT", -6, 6)
+            glow:SetPoint("BOTTOMRIGHT", 6, -6)
+            glow:SetAtlas("bags-glow-white")
+            frame.glowTexture = glow
+            local ag = glow:CreateAnimationGroup()
+            ag:SetLooping("BOUNCE")
+            local fade = ag:CreateAnimation("Alpha")
+            fade:SetFromAlpha(0.9)
+            fade:SetToAlpha(0.2)
+            fade:SetDuration(0.5)
+            frame.glowAnim = ag
+        end,
+    },
+    {
+        name = "Red",
+        setup = function(frame)
+            local glow = frame:CreateTexture(nil, "OVERLAY")
+            glow:SetPoint("TOPLEFT", -5, 5)
+            glow:SetPoint("BOTTOMRIGHT", 5, -5)
+            glow:SetAtlas("bags-glow-white")
+            glow:SetVertexColor(1, 0.2, 0.2)
+            frame.glowTexture = glow
+            local ag = glow:CreateAnimationGroup()
+            ag:SetLooping("BOUNCE")
+            local fade = ag:CreateAnimation("Alpha")
+            fade:SetFromAlpha(1)
+            fade:SetToAlpha(0.1)
+            fade:SetDuration(0.3)
+            frame.glowAnim = ag
+        end,
+    },
+}
+
+-- Show/hide expiration glow on a buff frame
+local function SetExpirationGlow(frame, show)
+    local db = RaidBuffsTrackerDB
+    local styleIndex = db.glowStyle or 1
+
+    if show then
+        if not frame.glowShowing or frame.currentGlowStyle ~= styleIndex then
+            -- Clean up old glow if style changed
+            if frame.glowAnim then
+                frame.glowAnim:Stop()
+            end
+            if frame.glowTexture then
+                frame.glowTexture:Hide()
+                frame.glowTexture:SetParent(nil)
+                frame.glowTexture = nil
+            end
+            frame.glowAnim = nil
+
+            -- Setup new glow style
+            local style = GlowStyles[styleIndex]
+            if style then
+                style.setup(frame)
+                frame.currentGlowStyle = styleIndex
+                if frame.glowTexture then
+                    frame.glowTexture:Show()
+                end
+                if frame.glowAnim then
+                    frame.glowAnim:Play()
+                end
+            end
+            frame.glowShowing = true
+        end
+    else
+        if frame.glowShowing then
+            if frame.glowAnim then
+                frame.glowAnim:Stop()
+            end
+            if frame.glowTexture then
+                frame.glowTexture:Hide()
+            end
+            frame.glowShowing = false
+        end
+    end
 end
 
 -- Create icon frame for a buff
@@ -544,11 +684,7 @@ UpdateDisplay = function()
 
         if frame and db.enabledBuffs[key] and showBuff then
             local missing, total, minRemaining = CountMissingBuff(spellIDs, key)
-            -- TODO: Re-enable when glow is implemented
-            local expiringSoon = false
-                and db.showExpirationGlow
-                and minRemaining
-                and minRemaining < (db.expirationThreshold * 60)
+            local expiringSoon = db.showExpirationGlow and minRemaining and minRemaining < (db.expirationThreshold * 60)
             if missing > 0 then
                 local buffed = total - missing
                 frame.count:SetText(buffed .. "/" .. total)
@@ -556,8 +692,8 @@ UpdateDisplay = function()
                 anyVisible = true
                 SetExpirationGlow(frame, expiringSoon)
             elseif expiringSoon then
-                -- Everyone has buff but expiring soon - show with glow
-                frame.count:SetText(total .. "/" .. total)
+                -- Everyone has buff but expiring soon - show remaining time with glow
+                frame.count:SetText(FormatRemainingTime(minRemaining))
                 frame:Show()
                 anyVisible = true
                 SetExpirationGlow(frame, true)
@@ -588,11 +724,7 @@ UpdateDisplay = function()
 
         if frame and db.enabledBuffs[key] and showBuff then
             local count, minRemaining = CountPresenceBuff(spellIDs)
-            -- TODO: Re-enable when glow is implemented
-            local expiringSoon = false
-                and db.showExpirationGlow
-                and minRemaining
-                and minRemaining < (db.expirationThreshold * 60)
+            local expiringSoon = db.showExpirationGlow and minRemaining and minRemaining < (db.expirationThreshold * 60)
             if count == 0 then
                 -- Nobody has it - show as missing
                 frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
@@ -601,9 +733,9 @@ UpdateDisplay = function()
                 anyVisible = true
                 SetExpirationGlow(frame, false)
             elseif expiringSoon then
-                -- Has buff but expiring soon - show with glow
+                -- Has buff but expiring soon - show remaining time with glow
                 frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(), "OUTLINE")
-                frame.count:SetText("")
+                frame.count:SetText(FormatRemainingTime(minRemaining))
                 frame:Show()
                 anyVisible = true
                 SetExpirationGlow(frame, true)
@@ -1319,24 +1451,34 @@ local function CreateOptionsPanel()
     -- Expiration Warning header
     _, rightY = CreateSectionHeader(panel, "Expiration Warning", rightColX, rightY)
 
-    -- Work in progress notice
-    local wipNotice = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    wipNotice:SetPoint("TOPLEFT", rightColX, rightY)
-    wipNotice:SetText("|cffff4444(Work in progress)|r")
-    rightY = rightY - 14
-
     local glowCb
     glowCb, rightY = CreateCheckbox(
         rightColX,
         rightY,
-        "Show glow when expiring",
+        "Show glow when expiring in:",
         RaidBuffsTrackerDB.showExpirationGlow,
         function(self)
             RaidBuffsTrackerDB.showExpirationGlow = self:GetChecked()
             UpdateDisplay()
         end
     )
-    glowCb:Disable()
+    glowCb:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText("Expiration Warning")
+        GameTooltip:AddLine("Shows a glow effect on buff icons when they are close to expiring.", 1, 1, 1, true)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine(
+            "The icon will be shown even when all players have the buff, as long as it's within the threshold.",
+            0.8,
+            0.8,
+            0.8,
+            true
+        )
+        GameTooltip:Show()
+    end)
+    glowCb:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
     panel.glowCheckbox = glowCb
 
     local thresholdSlider, thresholdValue
@@ -1345,7 +1487,7 @@ local function CreateOptionsPanel()
         rightY,
         "Threshold",
         1,
-        15,
+        120,
         1,
         RaidBuffsTrackerDB.expirationThreshold or 5,
         " min",
@@ -1354,9 +1496,49 @@ local function CreateOptionsPanel()
             UpdateDisplay()
         end
     )
-    thresholdSlider:Disable()
     panel.thresholdSlider = thresholdSlider
     panel.thresholdValue = thresholdValue
+
+    -- Glow style dropdown
+    local styleLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    styleLabel:SetPoint("TOPLEFT", rightColX, rightY)
+    styleLabel:SetText("Style:")
+
+    local styleDropdown = CreateFrame("Frame", "RaidBuffsTrackerStyleDropdown", panel, "UIDropDownMenuTemplate")
+    styleDropdown:SetPoint("LEFT", styleLabel, "RIGHT", -10, -2)
+    UIDropDownMenu_SetWidth(styleDropdown, 100)
+
+    local function StyleDropdown_Initialize(self, level)
+        for i, style in ipairs(GlowStyles) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = style.name
+            info.value = i
+            info.checked = (RaidBuffsTrackerDB.glowStyle or 1) == i
+            info.func = function()
+                RaidBuffsTrackerDB.glowStyle = i
+                UIDropDownMenu_SetSelectedValue(styleDropdown, i)
+                UIDropDownMenu_SetText(styleDropdown, style.name)
+                UpdateDisplay()
+            end
+            UIDropDownMenu_AddButton(info, level)
+        end
+    end
+
+    UIDropDownMenu_Initialize(styleDropdown, StyleDropdown_Initialize)
+    UIDropDownMenu_SetSelectedValue(styleDropdown, RaidBuffsTrackerDB.glowStyle or 1)
+    UIDropDownMenu_SetText(styleDropdown, GlowStyles[RaidBuffsTrackerDB.glowStyle or 1].name)
+    panel.styleDropdown = styleDropdown
+
+    -- Preview button
+    local previewBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    previewBtn:SetSize(80, 18)
+    previewBtn:SetPoint("LEFT", styleDropdown, "RIGHT", 0, 2)
+    previewBtn:SetText("Preview")
+    previewBtn:SetScript("OnClick", function()
+        ShowGlowDemo()
+    end)
+
+    rightY = rightY - 28
 
     -- ========== BOTTOM BUTTONS (spanning both columns) ==========
     local bottomY = math.min(leftY, rightY) - 20
@@ -1424,18 +1606,31 @@ local function CreateOptionsPanel()
         if testMode then
             testMode = false
             testBtn:SetText("Test")
+            -- Clear glows when exiting test mode
+            for _, frame in pairs(buffFrames) do
+                SetExpirationGlow(frame, false)
+            end
             UpdateDisplay()
         else
             testMode = true
             testBtn:SetText("Stop Test")
             local db = RaidBuffsTrackerDB
             local fakeTotal = math.random(10, 20)
+            local glowShown = false
             for _, buffData in ipairs(RaidBuffs) do
                 local _, key = unpack(buffData)
                 local frame = buffFrames[key]
                 if frame and db.enabledBuffs[key] then
-                    local fakeBuffed = fakeTotal - math.random(1, 5)
-                    frame.count:SetText(fakeBuffed .. "/" .. fakeTotal)
+                    -- Show glow on first buff if enabled, with expiring time
+                    if db.showExpirationGlow and not glowShown then
+                        local fakeRemaining = math.random(1, db.expirationThreshold or 15) * 60
+                        frame.count:SetText(FormatRemainingTime(fakeRemaining))
+                        SetExpirationGlow(frame, true)
+                        glowShown = true
+                    else
+                        local fakeBuffed = fakeTotal - math.random(1, 5)
+                        frame.count:SetText(fakeBuffed .. "/" .. fakeTotal)
+                    end
                     frame:Show()
                 end
             end
@@ -1528,6 +1723,10 @@ local function ToggleOptions()
             optionsPanel.thresholdSlider:SetValue(db.expirationThreshold or 5)
             optionsPanel.thresholdValue:SetText((db.expirationThreshold or 5) .. " min")
         end
+        if optionsPanel.styleDropdown then
+            UIDropDownMenu_SetSelectedValue(optionsPanel.styleDropdown, db.glowStyle or 1)
+            UIDropDownMenu_SetText(optionsPanel.styleDropdown, GlowStyles[db.glowStyle or 1].name)
+        end
         for _, btn in ipairs(optionsPanel.growBtns) do
             btn:SetEnabled(btn.direction ~= db.growDirection)
         end
@@ -1540,28 +1739,110 @@ local function ToggleOptions()
     end
 end
 
+-- Glow demo panel
+local glowDemoPanel
+ShowGlowDemo = function()
+    if glowDemoPanel then
+        glowDemoPanel:SetShown(not glowDemoPanel:IsShown())
+        return
+    end
+
+    local ICON_SIZE = 64
+    local SPACING = 20
+
+    local panel = CreateFrame("Frame", "RaidBuffsTrackerGlowDemo", UIParent, "BackdropTemplate")
+    local numStyles = #GlowStyles
+    panel:SetSize(numStyles * (ICON_SIZE + SPACING) + SPACING, ICON_SIZE + 70)
+    panel:SetPoint("CENTER")
+    panel:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 2,
+    })
+    panel:SetBackdropColor(0.12, 0.08, 0.18, 0.98)
+    panel:SetBackdropBorderColor(0.6, 0.4, 0.8, 1)
+    panel:SetMovable(true)
+    panel:EnableMouse(true)
+    panel:RegisterForDrag("LeftButton")
+    panel:SetScript("OnDragStart", panel.StartMoving)
+    panel:SetScript("OnDragStop", panel.StopMovingOrSizing)
+    panel:SetFrameStrata("TOOLTIP")
+
+    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("TOP", 0, -8)
+    title:SetText("Glow Styles Preview")
+
+    local closeBtn = CreateFrame("Button", nil, panel, "UIPanelCloseButton")
+    closeBtn:SetPoint("TOPRIGHT", -2, -2)
+
+    -- Create demo icons using GlowStyles
+    for i, style in ipairs(GlowStyles) do
+        local iconFrame = CreateFrame("Frame", nil, panel)
+        iconFrame:SetSize(ICON_SIZE, ICON_SIZE)
+        iconFrame:SetPoint("TOPLEFT", SPACING + (i - 1) * (ICON_SIZE + SPACING), -30)
+
+        local icon = iconFrame:CreateTexture(nil, "ARTWORK")
+        icon:SetAllPoints()
+        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        icon:SetTexture(GetBuffTexture(1459)) -- Arcane Intellect icon
+
+        local border = iconFrame:CreateTexture(nil, "BACKGROUND")
+        border:SetPoint("TOPLEFT", -2, 2)
+        border:SetPoint("BOTTOMRIGHT", 2, -2)
+        border:SetColorTexture(0, 0, 0, 1)
+
+        -- Setup and play glow animation
+        style.setup(iconFrame)
+        if iconFrame.glowAnim then
+            iconFrame.glowAnim:Play()
+        end
+
+        local label = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        label:SetPoint("TOP", iconFrame, "BOTTOM", 0, -4)
+        label:SetText(i .. ". " .. style.name)
+        label:SetWidth(ICON_SIZE + 10)
+    end
+
+    glowDemoPanel = panel
+end
+
 -- Slash command handler
 local function SlashHandler(msg)
     local cmd = msg:match("^(%S*)") or ""
     cmd = cmd:lower()
 
-    if cmd == "test" then
+    if cmd == "glowdemo" then
+        ShowGlowDemo()
+    elseif cmd == "test" then
         -- Quick test toggle from command line
         if testMode then
             testMode = false
             print("|cff00ff00RaidBuffsTracker|r - Test mode OFF")
+            -- Clear glows when exiting test mode
+            for _, frame in pairs(buffFrames) do
+                SetExpirationGlow(frame, false)
+            end
             UpdateDisplay()
         else
             testMode = true
             print("|cff00ff00RaidBuffsTracker|r - Test mode ON")
             local db = RaidBuffsTrackerDB
             local fakeTotal = math.random(10, 20)
+            local glowShown = false
             for _, buffData in ipairs(RaidBuffs) do
                 local _, key = unpack(buffData)
                 local frame = buffFrames[key]
                 if frame and db.enabledBuffs[key] then
-                    local fakeBuffed = fakeTotal - math.random(1, 5)
-                    frame.count:SetText(fakeBuffed .. "/" .. fakeTotal)
+                    -- Show glow on first buff if enabled, with expiring time
+                    if db.showExpirationGlow and not glowShown then
+                        local fakeRemaining = math.random(1, db.expirationThreshold or 15) * 60
+                        frame.count:SetText(FormatRemainingTime(fakeRemaining))
+                        SetExpirationGlow(frame, true)
+                        glowShown = true
+                    else
+                        local fakeBuffed = fakeTotal - math.random(1, 5)
+                        frame.count:SetText(fakeBuffed .. "/" .. fakeTotal)
+                    end
                     frame:Show()
                 end
             end
