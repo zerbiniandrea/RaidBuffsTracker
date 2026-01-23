@@ -10,6 +10,19 @@ local RaidBuffs = {
     {{381748, 364342}, "bronze", "Blessing of the Bronze", "EVOKER"},
 }
 
+-- Presence-based buffs: only need at least 1 person to have it active
+-- {spellID(s), settingKey, displayName, classProvider}
+local PresenceBuffs = {
+    {465, "devotionAura", "Devotion Aura", "PALADIN"},
+    {381637, "atrophicPoison", "Atrophic Poison", "ROGUE"},
+}
+
+-- Provider-count buffs: number of buffs should match number of providers
+-- {spellID(s), settingKey, displayName, classProvider}
+local ProviderCountBuffs = {
+    {369459, "sourceOfMagic", "Source of Magic", "EVOKER"},
+}
+
 -- Classes that benefit from each buff (BETA: class-level only, not spec-aware)
 -- nil = everyone benefits, otherwise only listed classes are counted
 local BuffBeneficiaries = {
@@ -35,6 +48,9 @@ local defaults = {
         versatility = true,
         skyfury = true,
         bronze = true,
+        devotionAura = true,
+        atrophicPoison = true,
+        sourceOfMagic = true,
     },
     iconSize = 32,
     spacing = 0.2,      -- multiplier of iconSize
@@ -164,6 +180,85 @@ local function CountMissingBuff(spellIDs, buffKey)
     end
 
     return missing, total
+end
+
+-- Count group members with a presence buff (returns count of players with buff)
+local function CountPresenceBuff(spellIDs)
+    local found = 0
+    local inRaid = IsInRaid()
+    local groupSize = GetNumGroupMembers()
+
+    if groupSize == 0 then
+        if UnitHasBuff("player", spellIDs) then
+            found = 1
+        end
+        return found
+    end
+
+    for i = 1, groupSize do
+        local unit
+        if inRaid then
+            unit = "raid" .. i
+        else
+            if i == 1 then
+                unit = "player"
+            else
+                unit = "party" .. (i - 1)
+            end
+        end
+
+        if UnitExists(unit) and not UnitIsDeadOrGhost(unit) and UnitIsConnected(unit) then
+            if UnitHasBuff(unit, spellIDs) then
+                found = found + 1
+            end
+        end
+    end
+
+    return found
+end
+
+-- Count buffs vs providers (returns buffCount, providerCount)
+local function CountProviderBuff(spellIDs, providerClass)
+    local buffCount = 0
+    local providerCount = 0
+    local inRaid = IsInRaid()
+    local groupSize = GetNumGroupMembers()
+
+    if groupSize == 0 then
+        local _, playerClass = UnitClass("player")
+        if playerClass == providerClass then
+            providerCount = 1
+        end
+        if UnitHasBuff("player", spellIDs) then
+            buffCount = 1
+        end
+        return buffCount, providerCount
+    end
+
+    for i = 1, groupSize do
+        local unit
+        if inRaid then
+            unit = "raid" .. i
+        else
+            if i == 1 then
+                unit = "player"
+            else
+                unit = "party" .. (i - 1)
+            end
+        end
+
+        if UnitExists(unit) and not UnitIsDeadOrGhost(unit) and UnitIsConnected(unit) then
+            local _, unitClass = UnitClass(unit)
+            if unitClass == providerClass then
+                providerCount = providerCount + 1
+            end
+            if UnitHasBuff(unit, spellIDs) then
+                buffCount = buffCount + 1
+            end
+        end
+    end
+
+    return buffCount, providerCount
 end
 
 -- Forward declarations
@@ -301,6 +396,7 @@ UpdateDisplay = function()
 
     local anyVisible = false
 
+    -- Process coverage buffs (need everyone to have them)
     for _, buffData in ipairs(RaidBuffs) do
         local spellIDs, key, _, classProvider = unpack(buffData)
         local frame = buffFrames[key]
@@ -323,6 +419,68 @@ UpdateDisplay = function()
                 frame:Show()
                 anyVisible = true
             else
+                frame:Hide()
+            end
+        elseif frame then
+            frame:Hide()
+        end
+    end
+
+    -- Process presence buffs (need at least 1 person to have them)
+    for _, buffData in ipairs(PresenceBuffs) do
+        local spellIDs, key, _, classProvider = unpack(buffData)
+        local frame = buffFrames[key]
+
+        local showBuff = true
+        -- Filter: only show player's class buff
+        if db.showOnlyPlayerClassBuff and classProvider ~= playerClass then
+            showBuff = false
+        end
+        -- Filter: hide buffs without provider in group
+        if showBuff and presentClasses and not presentClasses[classProvider] then
+            showBuff = false
+        end
+
+        if frame and db.enabledBuffs[key] and showBuff then
+            local count = CountPresenceBuff(spellIDs)
+            if count == 0 then
+                -- Nobody has it - show as missing
+                frame.count:SetText("")
+                frame:Show()
+                anyVisible = true
+            else
+                -- At least 1 person has it - all good
+                frame:Hide()
+            end
+        elseif frame then
+            frame:Hide()
+        end
+    end
+
+    -- Process provider-count buffs (number of buffs should match number of providers)
+    for _, buffData in ipairs(ProviderCountBuffs) do
+        local spellIDs, key, _, classProvider = unpack(buffData)
+        local frame = buffFrames[key]
+
+        local showBuff = true
+        -- Filter: only show player's class buff
+        if db.showOnlyPlayerClassBuff and classProvider ~= playerClass then
+            showBuff = false
+        end
+        -- Filter: hide buffs without provider in group
+        if showBuff and presentClasses and not presentClasses[classProvider] then
+            showBuff = false
+        end
+
+        if frame and db.enabledBuffs[key] and showBuff then
+            local buffCount, providerCount = CountProviderBuff(spellIDs, classProvider)
+            if buffCount < providerCount then
+                -- Not all providers have applied their buff
+                frame.count:SetText(buffCount .. "/" .. providerCount)
+                frame:Show()
+                anyVisible = true
+            else
+                -- All providers have applied their buff
                 frame:Hide()
             end
         elseif frame then
@@ -402,6 +560,18 @@ local function InitializeFrames()
     for i, buffData in ipairs(RaidBuffs) do
         local key = buffData[2]
         buffFrames[key] = CreateBuffFrame(buffData, i)
+    end
+
+    for i, buffData in ipairs(PresenceBuffs) do
+        local key = buffData[2]
+        buffFrames[key] = CreateBuffFrame(buffData, #RaidBuffs + i)
+        buffFrames[key].isPresenceBuff = true
+    end
+
+    for i, buffData in ipairs(ProviderCountBuffs) do
+        local key = buffData[2]
+        buffFrames[key] = CreateBuffFrame(buffData, #RaidBuffs + #PresenceBuffs + i)
+        buffFrames[key].isProviderCountBuff = true
     end
 
     mainFrame:Hide()
@@ -493,10 +663,8 @@ local function CreateOptionsPanel()
     panel.buffCheckboxes = {}
     local buffStartX = 30  -- Fixed left margin for alignment
 
-    for _, buffData in ipairs(RaidBuffs) do
-        local spellIDs, key, displayName, classProvider = unpack(buffData)
-
-        -- Checkbox
+    -- Helper to create buff checkbox row
+    local function CreateBuffCheckbox(spellIDs, key, displayName, classProvider, suffix)
         local cb = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
         cb:SetSize(24, 24)
         cb:SetPoint("TOPLEFT", buffStartX, yOffset)
@@ -506,7 +674,6 @@ local function CreateOptionsPanel()
             UpdateDisplay()
         end)
 
-        -- Icon
         local icon = panel:CreateTexture(nil, "ARTWORK")
         icon:SetSize(20, 20)
         icon:SetPoint("LEFT", cb, "RIGHT", 4, 0)
@@ -516,13 +683,44 @@ local function CreateOptionsPanel()
             icon:SetTexture(texture)
         end
 
-        -- Label
         local label = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         label:SetPoint("LEFT", icon, "RIGHT", 6, 0)
-        label:SetText(displayName .. " |cff888888(" .. classProvider .. ")|r")
+        label:SetText(displayName .. " |cff888888(" .. classProvider .. ")|r" .. (suffix or ""))
 
         panel.buffCheckboxes[key] = cb
         yOffset = yOffset - 24
+    end
+
+    -- Coverage buffs
+    for _, buffData in ipairs(RaidBuffs) do
+        local spellIDs, key, displayName, classProvider = unpack(buffData)
+        CreateBuffCheckbox(spellIDs, key, displayName, classProvider)
+    end
+
+    yOffset = yOffset - 10
+
+    -- Presence buffs section
+    local presenceLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    presenceLabel:SetPoint("TOP", 0, yOffset)
+    presenceLabel:SetText("Presence Buffs |cff888888(need at least 1)|r:")
+    yOffset = yOffset - 22
+
+    for _, buffData in ipairs(PresenceBuffs) do
+        local spellIDs, key, displayName, classProvider = unpack(buffData)
+        CreateBuffCheckbox(spellIDs, key, displayName, classProvider)
+    end
+
+    yOffset = yOffset - 10
+
+    -- Provider-count buffs section
+    local providerCountLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    providerCountLabel:SetPoint("TOP", 0, yOffset)
+    providerCountLabel:SetText("Provider Buffs |cff888888(1 per provider)|r:")
+    yOffset = yOffset - 22
+
+    for _, buffData in ipairs(ProviderCountBuffs) do
+        local spellIDs, key, displayName, classProvider = unpack(buffData)
+        CreateBuffCheckbox(spellIDs, key, displayName, classProvider)
     end
 
     yOffset = yOffset - 20
@@ -787,6 +985,24 @@ local function CreateOptionsPanel()
                     frame:Show()
                 end
             end
+            for _, buffData in ipairs(PresenceBuffs) do
+                local _, key = unpack(buffData)
+                local frame = buffFrames[key]
+                if frame and db.enabledBuffs[key] then
+                    frame.count:SetText("")
+                    frame:Show()
+                end
+            end
+            for _, buffData in ipairs(ProviderCountBuffs) do
+                local _, key = unpack(buffData)
+                local frame = buffFrames[key]
+                if frame and db.enabledBuffs[key] then
+                    local fakeProviders = math.random(1, 3)
+                    local fakeBuffed = math.random(0, fakeProviders - 1)
+                    frame.count:SetText(fakeBuffed .. "/" .. fakeProviders)
+                    frame:Show()
+                end
+            end
             mainFrame:Show()
             PositionBuffFrames()
         end
@@ -811,6 +1027,18 @@ local function ToggleOptions()
         -- Refresh values
         local db = RaidBuffsTrackerDB
         for _, buffData in ipairs(RaidBuffs) do
+            local key = buffData[2]
+            if optionsPanel.buffCheckboxes[key] then
+                optionsPanel.buffCheckboxes[key]:SetChecked(db.enabledBuffs[key])
+            end
+        end
+        for _, buffData in ipairs(PresenceBuffs) do
+            local key = buffData[2]
+            if optionsPanel.buffCheckboxes[key] then
+                optionsPanel.buffCheckboxes[key]:SetChecked(db.enabledBuffs[key])
+            end
+        end
+        for _, buffData in ipairs(ProviderCountBuffs) do
             local key = buffData[2]
             if optionsPanel.buffCheckboxes[key] then
                 optionsPanel.buffCheckboxes[key]:SetChecked(db.enabledBuffs[key])
@@ -868,6 +1096,24 @@ local function SlashHandler(msg)
                     frame:Show()
                 end
             end
+            for _, buffData in ipairs(PresenceBuffs) do
+                local _, key = unpack(buffData)
+                local frame = buffFrames[key]
+                if frame and db.enabledBuffs[key] then
+                    frame.count:SetText("")
+                    frame:Show()
+                end
+            end
+            for _, buffData in ipairs(ProviderCountBuffs) do
+                local _, key = unpack(buffData)
+                local frame = buffFrames[key]
+                if frame and db.enabledBuffs[key] then
+                    local fakeProviders = math.random(1, 3)
+                    local fakeBuffed = math.random(0, fakeProviders - 1)
+                    frame.count:SetText(fakeBuffed .. "/" .. fakeProviders)
+                    frame:Show()
+                end
+            end
             mainFrame:Show()
             PositionBuffFrames()
         end
@@ -903,6 +1149,18 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
             end
         end
         for _, buffData in ipairs(RaidBuffs) do
+            local key = buffData[2]
+            if RaidBuffsTrackerDB.enabledBuffs[key] == nil then
+                RaidBuffsTrackerDB.enabledBuffs[key] = true
+            end
+        end
+        for _, buffData in ipairs(PresenceBuffs) do
+            local key = buffData[2]
+            if RaidBuffsTrackerDB.enabledBuffs[key] == nil then
+                RaidBuffsTrackerDB.enabledBuffs[key] = true
+            end
+        end
+        for _, buffData in ipairs(ProviderCountBuffs) do
             local key = buffData[2]
             if RaidBuffsTrackerDB.enabledBuffs[key] == nil then
                 RaidBuffsTrackerDB.enabledBuffs[key] = true
