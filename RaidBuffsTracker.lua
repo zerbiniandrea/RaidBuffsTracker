@@ -109,6 +109,7 @@ local buffFrames = {}
 local updateTicker
 local inCombat = false
 local testMode = false
+local testModeData = nil -- Stores seeded fake values for consistent test display
 local optionsPanel
 local MISSING_TEXT_SCALE = 0.6 -- scale for "NO X" warning text
 
@@ -360,33 +361,8 @@ local function ShouldShowPersonalBuff(spellIDs, requiredClass, beneficiaryRole)
     return not IsPlayerBuffActive(spellID, beneficiaryRole)
 end
 
--- Show personal buffs in test mode (shared by M+ button and slash command)
-local function ShowTestModePersonalBuffs(db)
-    local seenGroups = {}
-    for _, buffData in ipairs(PersonalBuffs) do
-        local _, key, _, _, _, missingText, groupId = unpack(buffData)
-        local settingKey = GetBuffSettingKey(buffData)
-        local frame = buffFrames[key]
-        if frame and db.enabledBuffs[settingKey] then
-            if groupId and seenGroups[groupId] then
-                frame:Hide()
-            else
-                if groupId then
-                    seenGroups[groupId] = true
-                    local groupInfo = BuffGroups[groupId]
-                    frame.count:SetText(groupInfo and groupInfo.missingText or "")
-                else
-                    frame.count:SetText(missingText or "")
-                end
-                frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
-                frame:Show()
-            end
-        end
-    end
-end
-
 -- Forward declarations
-local UpdateDisplay, PositionBuffFrames, UpdateAnchor, ShowGlowDemo
+local UpdateDisplay, PositionBuffFrames, UpdateAnchor, ShowGlowDemo, ToggleTestMode, RefreshTestDisplay
 
 -- Glow style definitions
 local GlowStyles = {
@@ -574,6 +550,14 @@ local function CreateBuffFrame(buffData, _)
         end
     end
 
+    -- "TEST" text (shown above icon in test mode)
+    frame.testText = frame:CreateFontString(nil, "OVERLAY")
+    frame.testText:SetPoint("BOTTOM", frame, "TOP", 0, 8)
+    frame.testText:SetFont(STANDARD_TEXT_FONT, GetFontSize(0.6), "OUTLINE")
+    frame.testText:SetTextColor(1, 0.8, 0, 1)
+    frame.testText:SetText("TEST")
+    frame.testText:Hide()
+
     -- Dragging
     frame:EnableMouse(true)
     frame:RegisterForDrag("LeftButton")
@@ -624,6 +608,124 @@ PositionBuffFrames = function()
             local startX = -totalWidth / 2 + iconSize / 2
             frame:SetPoint("CENTER", mainFrame, "CENTER", startX + (i - 1) * (iconSize + spacing), 0)
         end
+    end
+end
+
+-- Refresh the test mode display (used when settings change while in test mode)
+-- Uses seeded values from testModeData for consistent display
+RefreshTestDisplay = function()
+    if not testModeData then
+        return
+    end
+
+    local db = RaidBuffsTrackerDB
+
+    -- Hide all frames, clear glows, and hide test labels first
+    for _, frame in pairs(buffFrames) do
+        frame:Hide()
+        SetExpirationGlow(frame, false)
+        if frame.testText then
+            frame.testText:Hide()
+        end
+    end
+
+    local glowShown = false
+
+    -- Show ALL raid buffs (ignore enabledBuffs)
+    for i, buffData in ipairs(RaidBuffs) do
+        local _, key = unpack(buffData)
+        local frame = buffFrames[key]
+        if frame then
+            frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(), "OUTLINE")
+            if db.showExpirationGlow and not glowShown then
+                frame.count:SetText(FormatRemainingTime(testModeData.fakeRemaining))
+                SetExpirationGlow(frame, true)
+                glowShown = true
+            else
+                local fakeBuffed = testModeData.fakeTotal - testModeData.fakeMissing[i]
+                frame.count:SetText(fakeBuffed .. "/" .. testModeData.fakeTotal)
+            end
+            if frame.testText then
+                frame.testText:SetFont(STANDARD_TEXT_FONT, GetFontSize(0.6), "OUTLINE")
+                frame.testText:Show()
+            end
+            frame:Show()
+        end
+    end
+
+    -- Show ALL presence buffs
+    for _, buffData in ipairs(PresenceBuffs) do
+        local _, key, _, _, missingText = unpack(buffData)
+        local frame = buffFrames[key]
+        if frame then
+            frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
+            frame.count:SetText(missingText or "")
+            if frame.testText then
+                frame.testText:SetFont(STANDARD_TEXT_FONT, GetFontSize(0.6), "OUTLINE")
+                frame.testText:Show()
+            end
+            frame:Show()
+        end
+    end
+
+    -- Show ALL personal buffs (one per group)
+    local seenGroups = {}
+    for _, buffData in ipairs(PersonalBuffs) do
+        local _, key, _, _, _, missingText, groupId = unpack(buffData)
+        local frame = buffFrames[key]
+        if frame then
+            if groupId and seenGroups[groupId] then
+                frame:Hide()
+            else
+                if groupId then
+                    seenGroups[groupId] = true
+                    local groupInfo = BuffGroups[groupId]
+                    frame.count:SetText(groupInfo and groupInfo.missingText or "")
+                else
+                    frame.count:SetText(missingText or "")
+                end
+                frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
+                if frame.testText then
+                    frame.testText:SetFont(STANDARD_TEXT_FONT, GetFontSize(0.6), "OUTLINE")
+                    frame.testText:Show()
+                end
+                frame:Show()
+            end
+        end
+    end
+
+    mainFrame:Show()
+    PositionBuffFrames()
+end
+
+-- Toggle test mode - returns true if test mode is now ON, false if OFF
+ToggleTestMode = function()
+    if testMode then
+        testMode = false
+        testModeData = nil
+        -- Clear all glows and hide test labels
+        for _, frame in pairs(buffFrames) do
+            SetExpirationGlow(frame, false)
+            if frame.testText then
+                frame.testText:Hide()
+            end
+        end
+        UpdateDisplay()
+        return false
+    else
+        testMode = true
+        -- Seed fake values for consistent display during test mode
+        local db = RaidBuffsTrackerDB
+        testModeData = {
+            fakeTotal = math.random(10, 20),
+            fakeRemaining = math.random(1, db.expirationThreshold or 15) * 60,
+            fakeMissing = {},
+        }
+        for i = 1, #RaidBuffs do
+            testModeData.fakeMissing[i] = math.random(1, 5)
+        end
+        RefreshTestDisplay()
+        return true
     end
 end
 
@@ -930,7 +1032,11 @@ local function UpdateVisuals()
             end
         end
     end
-    UpdateDisplay()
+    if testMode then
+        RefreshTestDisplay()
+    else
+        UpdateDisplay()
+    end
 end
 
 -- ============================================================================
@@ -1281,9 +1387,6 @@ local function CreateOptionsPanel()
         function(val)
             RaidBuffsTrackerDB.textScale = val / 100
             UpdateVisuals()
-            if testMode then
-                PositionBuffFrames()
-            end
         end
     )
     panel.textSlider = textSlider
@@ -1425,7 +1528,7 @@ local function CreateOptionsPanel()
     playerClassCb, rightY = CreateCheckbox(
         rightColX,
         rightY,
-        "Show only my class buff",
+        "Show only my class buffs",
         RaidBuffsTrackerDB.showOnlyPlayerClassBuff,
         function(self)
             RaidBuffsTrackerDB.showOnlyPlayerClassBuff = self:GetChecked()
@@ -1468,7 +1571,11 @@ local function CreateOptionsPanel()
             if panel.SetGlowControlsEnabled then
                 panel.SetGlowControlsEnabled(self:GetChecked())
             end
-            UpdateDisplay()
+            if testMode then
+                RefreshTestDisplay()
+            else
+                UpdateDisplay()
+            end
         end
     )
     glowCb:SetScript("OnEnter", function(self)
@@ -1502,7 +1609,11 @@ local function CreateOptionsPanel()
         " min",
         function(val)
             RaidBuffsTrackerDB.expirationThreshold = val
-            UpdateDisplay()
+            if testMode then
+                RefreshTestDisplay()
+            else
+                UpdateDisplay()
+            end
         end
     )
     panel.thresholdSlider = thresholdSlider
@@ -1528,7 +1639,11 @@ local function CreateOptionsPanel()
                 RaidBuffsTrackerDB.glowStyle = i
                 UIDropDownMenu_SetSelectedValue(styleDropdown, i)
                 UIDropDownMenu_SetText(styleDropdown, style.name)
-                UpdateDisplay()
+                if testMode then
+                    RefreshTestDisplay()
+                else
+                    UpdateDisplay()
+                end
             end
             UIDropDownMenu_AddButton(info, level)
         end
@@ -1630,50 +1745,8 @@ local function CreateOptionsPanel()
     testBtn:SetText("Test")
     panel.testBtn = testBtn
     testBtn:SetScript("OnClick", function()
-        if testMode then
-            testMode = false
-            testBtn:SetText("Test")
-            -- Clear glows when exiting test mode
-            for _, frame in pairs(buffFrames) do
-                SetExpirationGlow(frame, false)
-            end
-            UpdateDisplay()
-        else
-            testMode = true
-            testBtn:SetText("Stop Test")
-            local db = RaidBuffsTrackerDB
-            local fakeTotal = math.random(10, 20)
-            local glowShown = false
-            for _, buffData in ipairs(RaidBuffs) do
-                local _, key = unpack(buffData)
-                local frame = buffFrames[key]
-                if frame and db.enabledBuffs[key] then
-                    -- Show glow on first buff if enabled, with expiring time
-                    if db.showExpirationGlow and not glowShown then
-                        local fakeRemaining = math.random(1, db.expirationThreshold or 15) * 60
-                        frame.count:SetText(FormatRemainingTime(fakeRemaining))
-                        SetExpirationGlow(frame, true)
-                        glowShown = true
-                    else
-                        local fakeBuffed = fakeTotal - math.random(1, 5)
-                        frame.count:SetText(fakeBuffed .. "/" .. fakeTotal)
-                    end
-                    frame:Show()
-                end
-            end
-            for _, buffData in ipairs(PresenceBuffs) do
-                local _, key, _, _, missingText = unpack(buffData)
-                local frame = buffFrames[key]
-                if frame and db.enabledBuffs[key] then
-                    frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
-                    frame.count:SetText(missingText or "")
-                    frame:Show()
-                end
-            end
-            ShowTestModePersonalBuffs(db)
-            mainFrame:Show()
-            PositionBuffFrames()
-        end
+        local isOn = ToggleTestMode()
+        testBtn:SetText(isOn and "Stop Test" or "Test")
     end)
 
     bottomY = bottomY - 30
@@ -1843,52 +1916,6 @@ local function SlashHandler(msg)
 
     if cmd == "glowdemo" then
         ShowGlowDemo()
-    elseif cmd == "test" then
-        -- Quick test toggle from command line
-        if testMode then
-            testMode = false
-            print("|cff00ff00RaidBuffsTracker|r - Test mode OFF")
-            -- Clear glows when exiting test mode
-            for _, frame in pairs(buffFrames) do
-                SetExpirationGlow(frame, false)
-            end
-            UpdateDisplay()
-        else
-            testMode = true
-            print("|cff00ff00RaidBuffsTracker|r - Test mode ON")
-            local db = RaidBuffsTrackerDB
-            local fakeTotal = math.random(10, 20)
-            local glowShown = false
-            for _, buffData in ipairs(RaidBuffs) do
-                local _, key = unpack(buffData)
-                local frame = buffFrames[key]
-                if frame and db.enabledBuffs[key] then
-                    -- Show glow on first buff if enabled, with expiring time
-                    if db.showExpirationGlow and not glowShown then
-                        local fakeRemaining = math.random(1, db.expirationThreshold or 15) * 60
-                        frame.count:SetText(FormatRemainingTime(fakeRemaining))
-                        SetExpirationGlow(frame, true)
-                        glowShown = true
-                    else
-                        local fakeBuffed = fakeTotal - math.random(1, 5)
-                        frame.count:SetText(fakeBuffed .. "/" .. fakeTotal)
-                    end
-                    frame:Show()
-                end
-            end
-            for _, buffData in ipairs(PresenceBuffs) do
-                local _, key, _, _, missingText = unpack(buffData)
-                local frame = buffFrames[key]
-                if frame and db.enabledBuffs[key] then
-                    frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
-                    frame.count:SetText(missingText or "")
-                    frame:Show()
-                end
-            end
-            ShowTestModePersonalBuffs(db)
-            mainFrame:Show()
-            PositionBuffFrames()
-        end
     else
         ToggleOptions()
     end
