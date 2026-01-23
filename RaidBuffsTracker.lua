@@ -18,11 +18,25 @@ local PresenceBuffs = {
 }
 
 -- Personal buffs: only tracks if the player should cast their buff
--- {spellID(s), settingKey, displayName, requiredClass, beneficiaryRole}
+-- {spellID, settingKey, displayName, requiredClass, beneficiaryRole, missingText, groupId}
 -- Only shows if player is the required class, has the spell talented, and a beneficiary needs it
+-- groupId is optional - buffs with same groupId share a single setting and show one icon
 local PersonalBuffs = {
-    { 369459, "sourceOfMagic", "Source of Magic", "EVOKER", "HEALER" },
+    { 369459, "sourceOfMagic", "Source of Magic", "EVOKER", "HEALER", "NO\nSOURCE", nil },
+    { 156910, "beaconOfFaith", "Beacon of Faith", "PALADIN", nil, "NO\nFAITH", "beacons" },
+    { 53563, "beaconOfLight", "Beacon of Light", "PALADIN", nil, "NO\nLIGHT", "beacons" },
 }
+
+-- Display names and text for grouped buffs
+local BuffGroups = {
+    beacons = { displayName = "Beacons", missingText = "NO\nBEACONS" },
+}
+
+-- Get the effective setting key for a buff (groupId if present, otherwise individual key)
+local function GetBuffSettingKey(buffData)
+    local _, key, _, _, _, _, groupId = unpack(buffData)
+    return groupId or key
+end
 
 -- Classes that benefit from each buff (BETA: class-level only, not spec-aware)
 -- nil = everyone benefits, otherwise only listed classes are counted
@@ -66,6 +80,7 @@ local defaults = {
         devotionAura = true,
         atrophicPoison = true,
         sourceOfMagic = true,
+        beacons = true,
     },
     iconSize = 64,
     spacing = 0.2, -- multiplier of iconSize (reset ratios default)
@@ -276,24 +291,13 @@ local function CountPresenceBuff(spellIDs)
     return found, minRemaining
 end
 
--- Check if player should cast their personal buff (returns true if a beneficiary needs it)
--- Returns nil if player can't provide this buff
-local function ShouldShowPersonalBuff(spellIDs, requiredClass, beneficiaryRole)
-    -- Check if player is the required class and has the spell
-    local _, playerClass = UnitClass("player")
-    if playerClass ~= requiredClass then
-        return nil
-    end
-
-    local spellID = type(spellIDs) == "table" and spellIDs[1] or spellIDs
-    if not IsPlayerSpell(spellID) then
-        return nil
-    end
-
+-- Check if player's buff is active on anyone in the group
+-- Returns true if the buff (from player) exists on someone, false otherwise
+-- If role is specified, only checks units with that role
+local function IsPlayerBuffActive(spellID, role)
     local inRaid = IsInRaid()
     local groupSize = GetNumGroupMembers()
 
-    -- Solo: no beneficiaries (can't cast on self)
     if groupSize == 0 then
         return false
     end
@@ -311,21 +315,57 @@ local function ShouldShowPersonalBuff(spellIDs, requiredClass, beneficiaryRole)
         end
 
         if IsValidGroupMember(unit) then
-            -- Skip self (can't cast on self)
-            if not UnitIsUnit(unit, "player") then
-                local role = UnitGroupRolesAssigned(unit)
-                if role == beneficiaryRole then
-                    local hasBuff, _, sourceUnit = UnitHasBuff(unit, spellIDs)
-                    -- Check if missing buff OR has buff but not from player
-                    if not hasBuff or (sourceUnit and not UnitIsUnit(sourceUnit, "player")) then
-                        return true
-                    end
+            if not role or UnitGroupRolesAssigned(unit) == role then
+                local hasBuff, _, sourceUnit = UnitHasBuff(unit, spellID)
+                if hasBuff and sourceUnit and UnitIsUnit(sourceUnit, "player") then
+                    return true
                 end
             end
         end
     end
 
     return false
+end
+
+-- Check if player should cast their personal buff (returns true if a beneficiary needs it)
+-- Returns nil if player can't provide this buff
+local function ShouldShowPersonalBuff(spellIDs, requiredClass, beneficiaryRole)
+    local _, playerClass = UnitClass("player")
+    if playerClass ~= requiredClass then
+        return nil
+    end
+
+    local spellID = type(spellIDs) == "table" and spellIDs[1] or spellIDs
+    if not IsPlayerSpell(spellID) then
+        return nil
+    end
+
+    return not IsPlayerBuffActive(spellID, beneficiaryRole)
+end
+
+-- Show personal buffs in test mode (shared by M+ button and slash command)
+local function ShowTestModePersonalBuffs(db)
+    local seenGroups = {}
+    for _, buffData in ipairs(PersonalBuffs) do
+        local _, key, _, _, _, missingText, groupId = unpack(buffData)
+        local settingKey = GetBuffSettingKey(buffData)
+        local frame = buffFrames[key]
+        if frame and db.enabledBuffs[settingKey] then
+            if groupId and seenGroups[groupId] then
+                frame:Hide()
+            else
+                if groupId then
+                    seenGroups[groupId] = true
+                    local groupInfo = BuffGroups[groupId]
+                    frame.count:SetText(groupInfo and groupInfo.missingText or "")
+                else
+                    frame.count:SetText(missingText or "")
+                end
+                frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
+                frame:Show()
+            end
+        end
+    end
 end
 
 -- Forward declarations
@@ -565,18 +605,27 @@ UpdateDisplay = function()
     end
 
     -- Process personal buffs (player's own buff responsibility)
+    local visibleGroups = {} -- Track visible buffs by groupId for merging
     for _, buffData in ipairs(PersonalBuffs) do
-        local spellIDs, key, _, requiredClass, beneficiaryRole = unpack(buffData)
+        local spellIDs, key, _, requiredClass, beneficiaryRole, missingText, groupId = unpack(buffData)
         local frame = buffFrames[key]
+        local settingKey = GetBuffSettingKey(buffData)
 
-        if frame and db.enabledBuffs[key] then
+        if frame and db.enabledBuffs[settingKey] then
             local shouldShow = ShouldShowPersonalBuff(spellIDs, requiredClass, beneficiaryRole)
             if shouldShow then
+                frame.icon:SetAllPoints()
+                frame.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
                 frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
-                frame.count:SetText("NO\nSOURCE")
+                frame.count:SetText(missingText or "")
                 frame:Show()
                 anyVisible = true
                 SetExpirationGlow(frame, false)
+                -- Track for group merging
+                if groupId then
+                    visibleGroups[groupId] = visibleGroups[groupId] or {}
+                    table.insert(visibleGroups[groupId], { frame = frame, spellID = spellIDs })
+                end
             else
                 frame:Hide()
                 SetExpirationGlow(frame, false)
@@ -584,6 +633,19 @@ UpdateDisplay = function()
         elseif frame then
             frame:Hide()
             SetExpirationGlow(frame, false)
+        end
+    end
+
+    -- Merge grouped buffs that are both visible (show first icon with group text)
+    for groupId, group in pairs(visibleGroups) do
+        if #group >= 2 then
+            local primary = group[1]
+            local groupInfo = BuffGroups[groupId]
+            primary.frame.count:SetText(groupInfo and groupInfo.missingText or "")
+            -- Hide other frames in the group
+            for i = 2, #group do
+                group[i].frame:Hide()
+            end
         end
     end
 
@@ -999,9 +1061,18 @@ local function CreateOptionsPanel()
     personalNote:SetText("(your buff only)")
     leftY = leftY - 14
 
+    local seenGroups = {}
     for _, buffData in ipairs(PersonalBuffs) do
-        local spellIDs, key, displayName = unpack(buffData)
-        leftY = CreateBuffCheckbox(leftColX, leftY, spellIDs, key, displayName)
+        local spellIDs, key, displayName, _, _, _, groupId = unpack(buffData)
+        if groupId then
+            if not seenGroups[groupId] then
+                seenGroups[groupId] = true
+                local groupInfo = BuffGroups[groupId]
+                leftY = CreateBuffCheckbox(leftColX, leftY, spellIDs, groupId, groupInfo.displayName)
+            end
+        else
+            leftY = CreateBuffCheckbox(leftColX, leftY, spellIDs, key, displayName)
+        end
     end
 
     -- ========== RIGHT COLUMN: SETTINGS ==========
@@ -1319,15 +1390,7 @@ local function CreateOptionsPanel()
                     frame:Show()
                 end
             end
-            for _, buffData in ipairs(PersonalBuffs) do
-                local _, key = unpack(buffData)
-                local frame = buffFrames[key]
-                if frame and db.enabledBuffs[key] then
-                    frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
-                    frame.count:SetText("NO\nSOURCE")
-                    frame:Show()
-                end
-            end
+            ShowTestModePersonalBuffs(db)
             mainFrame:Show()
             PositionBuffFrames()
         end
@@ -1364,10 +1427,21 @@ local function ToggleOptions()
                 optionsPanel.buffCheckboxes[key]:SetChecked(db.enabledBuffs[key])
             end
         end
+        local seenSyncGroups = {}
         for _, buffData in ipairs(PersonalBuffs) do
-            local key = buffData[2]
-            if optionsPanel.buffCheckboxes[key] then
-                optionsPanel.buffCheckboxes[key]:SetChecked(db.enabledBuffs[key])
+            local _, _, _, _, _, _, groupId = unpack(buffData)
+            local settingKey = GetBuffSettingKey(buffData)
+            if groupId then
+                if not seenSyncGroups[groupId] then
+                    seenSyncGroups[groupId] = true
+                    if optionsPanel.buffCheckboxes[settingKey] then
+                        optionsPanel.buffCheckboxes[settingKey]:SetChecked(db.enabledBuffs[settingKey])
+                    end
+                end
+            else
+                if optionsPanel.buffCheckboxes[settingKey] then
+                    optionsPanel.buffCheckboxes[settingKey]:SetChecked(db.enabledBuffs[settingKey])
+                end
             end
         end
         optionsPanel.sizeSlider:SetValue(db.iconSize)
@@ -1438,15 +1512,7 @@ local function SlashHandler(msg)
                     frame:Show()
                 end
             end
-            for _, buffData in ipairs(PersonalBuffs) do
-                local _, key = unpack(buffData)
-                local frame = buffFrames[key]
-                if frame and db.enabledBuffs[key] then
-                    frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
-                    frame.count:SetText("NO\nSOURCE")
-                    frame:Show()
-                end
-            end
+            ShowTestModePersonalBuffs(db)
             mainFrame:Show()
             PositionBuffFrames()
         end
@@ -1493,10 +1559,14 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
                 RaidBuffsTrackerDB.enabledBuffs[key] = true
             end
         end
+        local seenInitGroups = {}
         for _, buffData in ipairs(PersonalBuffs) do
-            local key = buffData[2]
-            if RaidBuffsTrackerDB.enabledBuffs[key] == nil then
-                RaidBuffsTrackerDB.enabledBuffs[key] = true
+            local settingKey = GetBuffSettingKey(buffData)
+            if not seenInitGroups[settingKey] then
+                seenInitGroups[settingKey] = true
+                if RaidBuffsTrackerDB.enabledBuffs[settingKey] == nil then
+                    RaidBuffsTrackerDB.enabledBuffs[settingKey] = true
+                end
             end
         end
 
