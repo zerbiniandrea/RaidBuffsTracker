@@ -1291,15 +1291,28 @@ local function CreateOptionsPanel()
 
     rightY = rightY - 4
 
-    -- Grow direction
+    -- Lock button and grow direction
+    local lockBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    lockBtn:SetSize(52, 18)
+    lockBtn:SetPoint("TOPLEFT", rightColX, rightY)
+    lockBtn:SetNormalFontObject("GameFontHighlightSmall")
+    lockBtn:SetHighlightFontObject("GameFontHighlightSmall")
+    lockBtn:SetText(RaidBuffsTrackerDB.locked and "Unlock" or "Lock")
+    lockBtn:SetScript("OnClick", function(self)
+        RaidBuffsTrackerDB.locked = not RaidBuffsTrackerDB.locked
+        self:SetText(RaidBuffsTrackerDB.locked and "Unlock" or "Lock")
+        UpdateAnchor()
+    end)
+    panel.lockBtn = lockBtn
+
     local growLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    growLabel:SetPoint("TOPLEFT", rightColX, rightY)
+    growLabel:SetPoint("LEFT", lockBtn, "RIGHT", 10, 0)
     growLabel:SetText("Grow:")
 
     local growBtns = {}
     local directions = { "LEFT", "CENTER", "RIGHT" }
     local dirLabels = { "Left", "Center", "Right" }
-    local growBtnWidth = 70
+    local growBtnWidth = 52
 
     for i, dir in ipairs(directions) do
         local btn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
@@ -1333,13 +1346,6 @@ local function CreateOptionsPanel()
 
     -- Behavior header
     _, rightY = CreateSectionHeader(panel, "Behavior", rightColX, rightY)
-
-    local lockCb
-    lockCb, rightY = CreateCheckbox(rightColX, rightY, "Lock Position", RaidBuffsTrackerDB.locked, function(self)
-        RaidBuffsTrackerDB.locked = self:GetChecked()
-        UpdateAnchor()
-    end)
-    panel.lockCheckbox = lockCb
 
     local reminderCb
     reminderCb, rightY = CreateCheckbox(
@@ -1721,7 +1727,7 @@ local function ToggleOptions()
         optionsPanel.sizeSlider:SetValue(db.iconSize)
         optionsPanel.spacingSlider:SetValue((db.spacing or 0.2) * 100)
         optionsPanel.textSlider:SetValue((db.textScale or 0.32) * 100)
-        optionsPanel.lockCheckbox:SetChecked(db.locked)
+        optionsPanel.lockBtn:SetText(db.locked and "Unlock" or "Lock")
         optionsPanel.reminderCheckbox:SetChecked(db.showBuffReminder ~= false)
         optionsPanel.groupCheckbox:SetChecked(db.showOnlyInGroup ~= false)
         if optionsPanel.instanceCheckbox then
