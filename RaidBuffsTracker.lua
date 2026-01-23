@@ -87,6 +87,7 @@ local defaults = {
     textScale = 0.32, -- multiplier of iconSize (reset ratios default)
     showBuffReminder = true,
     showOnlyInGroup = false,
+    showOnlyInInstance = false,
     hideBuffsWithoutProvider = false,
     showOnlyPlayerClassBuff = false,
     filterByClassBenefit = false,
@@ -497,10 +498,17 @@ UpdateDisplay = function()
 
     local db = RaidBuffsTrackerDB
 
-    -- Hide if not in group and setting is enabled
-    if db.showOnlyInGroup and GetNumGroupMembers() == 0 then
-        mainFrame:Hide()
-        return
+    -- Hide based on visibility settings
+    if db.showOnlyInGroup then
+        if db.showOnlyInInstance then
+            if not IsInInstance() then
+                mainFrame:Hide()
+                return
+            end
+        elseif GetNumGroupMembers() == 0 then
+            mainFrame:Hide()
+            return
+        end
     end
 
     local presentClasses = nil
@@ -931,6 +939,7 @@ local function CreateOptionsPanel()
         local label = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         label:SetPoint("LEFT", cb, "RIGHT", 4, 0)
         label:SetText(labelText)
+        cb.label = label
 
         return cb, y - ITEM_HEIGHT
     end
@@ -1198,7 +1207,19 @@ local function CreateOptionsPanel()
     )
     panel.reminderCheckbox = reminderCb
 
-    local groupCb
+    -- Helper to enable/disable checkbox with label greying
+    local function SetCheckboxEnabled(cb, enabled)
+        cb:SetEnabled(enabled)
+        if cb.label then
+            if enabled then
+                cb.label:SetTextColor(1, 1, 1)
+            else
+                cb.label:SetTextColor(0.5, 0.5, 0.5)
+            end
+        end
+    end
+
+    local groupCb, instanceCb
     groupCb, rightY = CreateCheckbox(
         rightColX,
         rightY,
@@ -1206,10 +1227,33 @@ local function CreateOptionsPanel()
         RaidBuffsTrackerDB.showOnlyInGroup ~= false,
         function(self)
             RaidBuffsTrackerDB.showOnlyInGroup = self:GetChecked()
+            -- Update sub-checkbox enabled state
+            if instanceCb then
+                SetCheckboxEnabled(instanceCb, self:GetChecked())
+                if not self:GetChecked() then
+                    instanceCb:SetChecked(false)
+                    RaidBuffsTrackerDB.showOnlyInInstance = false
+                end
+            end
             UpdateDisplay()
         end
     )
     panel.groupCheckbox = groupCb
+
+    -- Sub-checkbox: Only in instance (indented under group checkbox)
+    instanceCb, rightY = CreateCheckbox(
+        rightColX + 20,
+        rightY,
+        "Only in instance",
+        RaidBuffsTrackerDB.showOnlyInInstance,
+        function(self)
+            RaidBuffsTrackerDB.showOnlyInInstance = self:GetChecked()
+            UpdateDisplay()
+        end
+    )
+    SetCheckboxEnabled(instanceCb, RaidBuffsTrackerDB.showOnlyInGroup)
+    panel.instanceCheckbox = instanceCb
+    panel.SetCheckboxEnabled = SetCheckboxEnabled
 
     local providerCb
     providerCb, rightY = CreateCheckbox(
@@ -1449,6 +1493,10 @@ local function ToggleOptions()
         optionsPanel.lockCheckbox:SetChecked(db.locked)
         optionsPanel.reminderCheckbox:SetChecked(db.showBuffReminder ~= false)
         optionsPanel.groupCheckbox:SetChecked(db.showOnlyInGroup ~= false)
+        if optionsPanel.instanceCheckbox then
+            optionsPanel.instanceCheckbox:SetChecked(db.showOnlyInInstance)
+            optionsPanel.SetCheckboxEnabled(optionsPanel.instanceCheckbox, db.showOnlyInGroup)
+        end
         if optionsPanel.providerCheckbox then
             optionsPanel.providerCheckbox:SetChecked(db.hideBuffsWithoutProvider)
         end

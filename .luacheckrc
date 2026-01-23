@@ -26,6 +26,7 @@ read_globals = {
 	"GetNumGroupMembers",
 	"GetTime",
 	"InCombatLockdown",
+	"IsInInstance",
 	"IsInRaid",
 	"Settings",
 	"SettingsPanel",
