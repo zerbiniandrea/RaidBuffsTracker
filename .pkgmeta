@@ -1,3 +1,6 @@
 ignore:
   - images
   - .github
+  - .luacheckrc
+  - stylua.toml
+  - Makefile
