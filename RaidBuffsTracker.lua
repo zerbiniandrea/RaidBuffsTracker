@@ -662,7 +662,7 @@ RefreshTestDisplay = function()
                 local fakeBuffed = testModeData.fakeTotal - testModeData.fakeMissing[i]
                 frame.count:SetText(fakeBuffed .. "/" .. testModeData.fakeTotal)
             end
-            if frame.testText then
+            if frame.testText and testModeData.showLabels then
                 frame.testText:SetFont(STANDARD_TEXT_FONT, GetFontSize(0.6), "OUTLINE")
                 frame.testText:Show()
             end
@@ -677,7 +677,7 @@ RefreshTestDisplay = function()
         if frame then
             frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
             frame.count:SetText(missingText or "")
-            if frame.testText then
+            if frame.testText and testModeData.showLabels then
                 frame.testText:SetFont(STANDARD_TEXT_FONT, GetFontSize(0.6), "OUTLINE")
                 frame.testText:Show()
             end
@@ -702,7 +702,7 @@ RefreshTestDisplay = function()
                     frame.count:SetText(missingText or "")
                 end
                 frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
-                if frame.testText then
+                if frame.testText and testModeData.showLabels then
                     frame.testText:SetFont(STANDARD_TEXT_FONT, GetFontSize(0.6), "OUTLINE")
                     frame.testText:Show()
                 end
@@ -716,7 +716,11 @@ RefreshTestDisplay = function()
 end
 
 -- Toggle test mode - returns true if test mode is now ON, false if OFF
-ToggleTestMode = function()
+-- showLabels: if true (default), show "TEST" labels above icons
+ToggleTestMode = function(showLabels)
+    if showLabels == nil then
+        showLabels = true
+    end
     if testMode then
         testMode = false
         testModeData = nil
@@ -737,6 +741,7 @@ ToggleTestMode = function()
             fakeTotal = math.random(10, 20),
             fakeRemaining = math.random(1, db.expirationThreshold or 15) * 60,
             fakeMissing = {},
+            showLabels = showLabels,
         }
         for i = 1, #RaidBuffs do
             testModeData.fakeMissing[i] = math.random(1, 5)
@@ -1933,6 +1938,8 @@ local function SlashHandler(msg)
 
     if cmd == "glowdemo" then
         ShowGlowDemo()
+    elseif cmd == "test" then
+        ToggleTestMode(false) -- no labels, for previews
     else
         ToggleOptions()
     end
