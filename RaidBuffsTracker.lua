@@ -1171,6 +1171,37 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         SLASH_RAIDBUFFSTRACKER2 = "/raidbuffstracker"
         SlashCmdList["RAIDBUFFSTRACKER"] = SlashHandler
 
+        -- Register with WoW's Interface Options
+        local settingsPanel = CreateFrame("Frame")
+        settingsPanel.name = "RaidBuffsTracker"
+
+        local title = settingsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+        title:SetPoint("TOPLEFT", 16, -16)
+        title:SetText("|cff00ff00RaidBuffsTracker|r")
+
+        local desc = settingsPanel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        desc:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
+        desc:SetText("Track missing raid buffs at a glance.")
+
+        local openBtn = CreateFrame("Button", nil, settingsPanel, "UIPanelButtonTemplate")
+        openBtn:SetSize(150, 24)
+        openBtn:SetPoint("TOPLEFT", desc, "BOTTOMLEFT", 0, -16)
+        openBtn:SetText("Open Options")
+        openBtn:SetScript("OnClick", function()
+            ToggleOptions()
+            -- Close the WoW settings panel
+            if SettingsPanel then
+                SettingsPanel:Hide()
+            end
+        end)
+
+        local slashInfo = settingsPanel:CreateFontString(nil, "ARTWORK", "GameFontDisable")
+        slashInfo:SetPoint("TOPLEFT", openBtn, "BOTTOMLEFT", 0, -12)
+        slashInfo:SetText("Slash commands: /rbt or /raidbuffstracker")
+
+        local category = Settings.RegisterCanvasLayoutCategory(settingsPanel, settingsPanel.name)
+        Settings.RegisterAddOnCategory(category)
+
     elseif event == "PLAYER_ENTERING_WORLD" then
         if not mainFrame then
             InitializeFrames()
