@@ -36,7 +36,11 @@ To open the options panel, type `/rbt`
   <img src="https://github.com/zerbiniandrea/RaidBuffsTracker/blob/main/images/settings.png?raw=true" />
 </p>
 
-## Notes
+## Limitations
 
-- Due to WoW API limitations, the addon only works out of combat.
-- Spec-level filtering (e.g., excluding Feral Druids from Intellect) is not supported because it requires inspect requests which are rate-limited and too heavy.
+- **Combat lockout** - Due to WoW API restrictions, buff tracking only updates out of combat.
+- **No spec-level filtering** - The addon will not constantly inspect each player's spec, as this would be too resource-intensive. This means it can't exclude buffs that don't benefit certain specs, like Intellect for Feral Druids.
+
+## Support
+
+If you encounter issues or have suggestions, feel free to reach out on [Discord](https://discord.com/users/285458497020362762) or open an issue on [GitHub](https://github.com/zerbiniandrea/RaidBuffsTracker/issues).
