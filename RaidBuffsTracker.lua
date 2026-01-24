@@ -1115,7 +1115,7 @@ local function CreateOptionsPanel()
     -- Title (next to icon)
     local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("LEFT", addonIcon, "RIGHT", 8, 0)
-    title:SetText("|cff00ff00RaidBuffsTracker|r")
+    title:SetText("RaidBuffsTracker")
 
     -- Scale controls (top right area) - using buttons to avoid slider scaling issues
     -- Base scale is 1.2 (displayed as 100%), range is 80%-150%
@@ -2085,7 +2085,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
 
         local title = settingsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
         title:SetPoint("TOPLEFT", 16, -16)
-        title:SetText("|cff00ff00RaidBuffsTracker|r")
+        title:SetText("RaidBuffsTracker")
 
         local desc = settingsPanel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
         desc:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
