@@ -30,6 +30,7 @@ To open the options panel, type `/rbt`
 ## Limitations
 
 *   **Combat lockout** - Due to WoW API restrictions, buff tracking only updates out of combat.
+*   **Mythic+ disabled** - Blizzard restricts aura/buff API access during active Mythic+ keystones (all buff data is marked as "secret"). The addon automatically hides in M+ and works normally in regular dungeons, raids, and open world.
 *   **No spec-level filtering** - The addon will not constantly inspect each player's spec, as this would be too resource-intensive. This means it can't exclude buffs that don't benefit certain specs, like Intellect for Feral Druids.
 
 ## Support
