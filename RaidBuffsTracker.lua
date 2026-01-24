@@ -31,6 +31,8 @@ local PersonalBuffs = {
     { 156910, "beaconOfFaith", "Beacon of Faith", "PALADIN", nil, "NO\nFAITH", "beacons" },
     { 53563, "beaconOfLight", "Beacon of Light", "PALADIN", nil, "NO\nLIGHT", "beacons" },
     { 369459, "sourceOfMagic", "Source of Magic", "EVOKER", "HEALER", "NO\nSOURCE", nil },
+    -- Shadowform will drop during Void Form, but that only happens in combat
+    { 232698, "shadowform", "Shadowform", "PRIEST", "DAMAGER", "NO\nFORM", nil },
 }
 
 -- Display names and text for grouped buffs
@@ -87,6 +89,7 @@ local defaults = {
         atrophicPoison = true,
         sourceOfMagic = true,
         beacons = true,
+        shadowform = true,
     },
     iconSize = 64,
     spacing = 0.2, -- multiplier of iconSize (reset ratios default)
@@ -322,7 +325,13 @@ local function IsPlayerBuffActive(spellID, role)
     local groupSize = GetNumGroupMembers()
 
     if groupSize == 0 then
-        return false
+		-- Solo: check if player matches the role and has the buff
+        if not role or UnitGroupRolesAssigned(unit) == role then
+            local hasBuff, _ = UnitHasBuff("player", spellID)
+            return hasBuff
+        else
+            return false
+        end
     end
 
     for i = 1, groupSize do
