@@ -260,6 +260,12 @@ local defaults = {
     optionsPanelScale = 1.2, -- base scale (displayed as 100%)
 }
 
+-- Constants
+local TEXCOORD_INSET = 0.08
+local BORDER_PADDING = 2
+local MISSING_TEXT_SCALE = 0.6 -- scale for "NO X" warning text
+local OPTIONS_BASE_SCALE = 1.2
+
 -- Locals
 local mainFrame
 local buffFrames = {}
@@ -271,7 +277,6 @@ local testMode = false
 local testModeData = nil -- Stores seeded fake values for consistent test display
 local playerClass = nil -- Cached player class, set once on init
 local optionsPanel
-local MISSING_TEXT_SCALE = 0.6 -- scale for "NO X" warning text
 
 -- Check if a buff is enabled (defaults to true if not explicitly set to false)
 local function IsBuffEnabled(key)
@@ -283,6 +288,30 @@ end
 -- Excludes: non-existent, dead/ghost, disconnected, hostile (cross-faction in open world)
 local function IsValidGroupMember(unit)
     return UnitExists(unit) and not UnitIsDeadOrGhost(unit) and UnitIsConnected(unit) and UnitCanAssist("player", unit)
+end
+
+-- Iterate over valid group members, calling callback(unit) for each
+-- Handles raid vs party unit naming automatically
+local function IterateGroupMembers(callback)
+    local inRaid = IsInRaid()
+    local groupSize = GetNumGroupMembers()
+
+    for i = 1, groupSize do
+        local unit
+        if inRaid then
+            unit = "raid" .. i
+        else
+            if i == 1 then
+                unit = "player"
+            else
+                unit = "party" .. (i - 1)
+            end
+        end
+
+        if IsValidGroupMember(unit) then
+            callback(unit)
+        end
+    end
 end
 
 -- Calculate font size based on settings, with optional scale multiplier
@@ -305,35 +334,20 @@ end
 -- Get classes present in the group
 local function GetGroupClasses()
     local classes = {}
-    local inRaid = IsInRaid()
-    local groupSize = GetNumGroupMembers()
 
-    if groupSize == 0 then
+    if GetNumGroupMembers() == 0 then
         if playerClass then
             classes[playerClass] = true
         end
         return classes
     end
 
-    for i = 1, groupSize do
-        local unit
-        if inRaid then
-            unit = "raid" .. i
-        else
-            if i == 1 then
-                unit = "player"
-            else
-                unit = "party" .. (i - 1)
-            end
+    IterateGroupMembers(function(unit)
+        local _, class = UnitClass(unit)
+        if class then
+            classes[class] = true
         end
-
-        if IsValidGroupMember(unit) then
-            local _, class = UnitClass(unit)
-            if class then
-                classes[class] = true
-            end
-        end
-    end
+    end)
     return classes
 end
 
@@ -397,11 +411,9 @@ local function CountMissingBuff(spellIDs, buffKey)
     local missing = 0
     local total = 0
     local minRemaining = nil
-    local inRaid = IsInRaid()
-    local groupSize = GetNumGroupMembers()
     local beneficiaries = BuffBeneficiaries[buffKey]
 
-    if groupSize == 0 then
+    if GetNumGroupMembers() == 0 then
         -- Solo: check if player benefits
         if beneficiaries and not beneficiaries[playerClass] then
             return 0, 0, nil -- player doesn't benefit, skip
@@ -416,34 +428,21 @@ local function CountMissingBuff(spellIDs, buffKey)
         return missing, total, minRemaining
     end
 
-    for i = 1, groupSize do
-        local unit
-        if inRaid then
-            unit = "raid" .. i
-        else
-            if i == 1 then
-                unit = "player"
-            else
-                unit = "party" .. (i - 1)
-            end
-        end
-
-        if IsValidGroupMember(unit) then
-            -- Check if unit's class benefits from this buff
-            local _, unitClass = UnitClass(unit)
-            if not beneficiaries or beneficiaries[unitClass] then
-                total = total + 1
-                local hasBuff, remaining = UnitHasBuff(unit, spellIDs)
-                if not hasBuff then
-                    missing = missing + 1
-                elseif remaining then
-                    if not minRemaining or remaining < minRemaining then
-                        minRemaining = remaining
-                    end
+    IterateGroupMembers(function(unit)
+        -- Check if unit's class benefits from this buff
+        local _, unitClass = UnitClass(unit)
+        if not beneficiaries or beneficiaries[unitClass] then
+            total = total + 1
+            local hasBuff, remaining = UnitHasBuff(unit, spellIDs)
+            if not hasBuff then
+                missing = missing + 1
+            elseif remaining then
+                if not minRemaining or remaining < minRemaining then
+                    minRemaining = remaining
                 end
             end
         end
-    end
+    end)
 
     return missing, total, minRemaining
 end
@@ -452,10 +451,8 @@ end
 local function CountPresenceBuff(spellIDs)
     local found = 0
     local minRemaining = nil
-    local inRaid = IsInRaid()
-    local groupSize = GetNumGroupMembers()
 
-    if groupSize == 0 then
+    if GetNumGroupMembers() == 0 then
         local hasBuff, remaining = UnitHasBuff("player", spellIDs)
         if hasBuff then
             found = 1
@@ -464,30 +461,17 @@ local function CountPresenceBuff(spellIDs)
         return found, minRemaining
     end
 
-    for i = 1, groupSize do
-        local unit
-        if inRaid then
-            unit = "raid" .. i
-        else
-            if i == 1 then
-                unit = "player"
-            else
-                unit = "party" .. (i - 1)
-            end
-        end
-
-        if IsValidGroupMember(unit) then
-            local hasBuff, remaining = UnitHasBuff(unit, spellIDs)
-            if hasBuff then
-                found = found + 1
-                if remaining then
-                    if not minRemaining or remaining < minRemaining then
-                        minRemaining = remaining
-                    end
+    IterateGroupMembers(function(unit)
+        local hasBuff, remaining = UnitHasBuff(unit, spellIDs)
+        if hasBuff then
+            found = found + 1
+            if remaining then
+                if not minRemaining or remaining < minRemaining then
+                    minRemaining = remaining
                 end
             end
         end
-    end
+    end)
 
     return found, minRemaining
 end
@@ -495,32 +479,22 @@ end
 -- Check if player's buff is active on anyone in the group
 -- Returns true if the buff (from player) exists on someone, false otherwise
 -- If role is specified, only checks units with that role
-local function IsPlayerBuffActive(spellID, role, groupSize)
-    local inRaid = IsInRaid()
+local function IsPlayerBuffActive(spellID, role)
+    local found = false
 
-    for i = 1, groupSize do
-        local unit
-        if inRaid then
-            unit = "raid" .. i
-        else
-            if i == 1 then
-                unit = "player"
-            else
-                unit = "party" .. (i - 1)
+    IterateGroupMembers(function(unit)
+        if found then
+            return
+        end
+        if not role or UnitGroupRolesAssigned(unit) == role then
+            local hasBuff, _, sourceUnit = UnitHasBuff(unit, spellID)
+            if hasBuff and sourceUnit and UnitIsUnit(sourceUnit, "player") then
+                found = true
             end
         end
+    end)
 
-        if IsValidGroupMember(unit) then
-            if not role or UnitGroupRolesAssigned(unit) == role then
-                local hasBuff, _, sourceUnit = UnitHasBuff(unit, spellID)
-                if hasBuff and sourceUnit and UnitIsUnit(sourceUnit, "player") then
-                    return true
-                end
-            end
-        end
-    end
-
-    return false
+    return found
 end
 
 -- Check if player should cast their personal buff (returns true if a beneficiary needs it)
@@ -536,12 +510,11 @@ local function ShouldShowPersonalBuff(spellIDs, requiredClass, beneficiaryRole)
     end
 
     -- Personal buffs require a group (you cast them on others)
-    local groupSize = GetNumGroupMembers()
-    if groupSize == 0 then
+    if GetNumGroupMembers() == 0 then
         return nil
     end
 
-    return not IsPlayerBuffActive(spellID, beneficiaryRole, groupSize)
+    return not IsPlayerBuffActive(spellID, beneficiaryRole)
 end
 
 -- Check if player should cast their self buff or weapon imbue (returns true if missing)
@@ -727,6 +700,12 @@ local function SetExpirationGlow(frame, show)
     end
 end
 
+-- Hide a buff frame and clear its glow
+local function HideFrame(frame)
+    frame:Hide()
+    SetExpirationGlow(frame, false)
+end
+
 -- Create icon frame for a buff
 local function CreateBuffFrame(buff, _)
     local frame = CreateFrame("Frame", "BuffReminders_" .. buff.key, mainFrame)
@@ -740,7 +719,7 @@ local function CreateBuffFrame(buff, _)
     -- Icon texture
     frame.icon = frame:CreateTexture(nil, "ARTWORK")
     frame.icon:SetAllPoints()
-    frame.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    frame.icon:SetTexCoord(TEXCOORD_INSET, 1 - TEXCOORD_INSET, TEXCOORD_INSET, 1 - TEXCOORD_INSET)
     frame.icon:SetDesaturated(false)
     frame.icon:SetVertexColor(1, 1, 1, 1)
     local texture = GetBuffTexture(buff.spellID, buff.iconByRole)
@@ -750,8 +729,8 @@ local function CreateBuffFrame(buff, _)
 
     -- Border (background behind icon)
     frame.border = frame:CreateTexture(nil, "BACKGROUND")
-    frame.border:SetPoint("TOPLEFT", -2, 2)
-    frame.border:SetPoint("BOTTOMRIGHT", 2, -2)
+    frame.border:SetPoint("TOPLEFT", -BORDER_PADDING, BORDER_PADDING)
+    frame.border:SetPoint("BOTTOMRIGHT", BORDER_PADDING, -BORDER_PADDING)
     frame.border:SetColorTexture(0, 0, 0, 1)
 
     -- Count text (font size scales with icon size)
@@ -865,8 +844,7 @@ RefreshTestDisplay = function()
 
     -- Hide all frames, clear glows, and hide test labels first
     for _, frame in pairs(buffFrames) do
-        frame:Hide()
-        SetExpirationGlow(frame, false)
+        HideFrame(frame)
         if frame.testText then
             frame.testText:Hide()
         end
@@ -1031,16 +1009,8 @@ UpdateDisplay = function()
     -- Process coverage buffs (need everyone to have them)
     for _, buff in ipairs(RaidBuffs) do
         local frame = buffFrames[buff.key]
-
-        local showBuff = true
-        -- Filter: only show player's class buff
-        if db.showOnlyPlayerClassBuff and buff.class ~= playerClass then
-            showBuff = false
-        end
-        -- Filter: hide buffs without provider in group
-        if showBuff and presentClasses and not presentClasses[buff.class] then
-            showBuff = false
-        end
+        local showBuff = (not db.showOnlyPlayerClassBuff or buff.class == playerClass)
+            and (not presentClasses or presentClasses[buff.class])
 
         if frame and IsBuffEnabled(buff.key) and showBuff then
             local missing, total, minRemaining = CountMissingBuff(buff.spellID, buff.key)
@@ -1058,34 +1028,20 @@ UpdateDisplay = function()
                 anyVisible = true
                 SetExpirationGlow(frame, true)
             else
-                frame:Hide()
-                SetExpirationGlow(frame, false)
+                HideFrame(frame)
             end
         elseif frame then
-            frame:Hide()
-            SetExpirationGlow(frame, false)
+            HideFrame(frame)
         end
     end
 
     -- Process presence buffs (need at least 1 person to have them)
     for _, buff in ipairs(PresenceBuffs) do
         local frame = buffFrames[buff.key]
-        -- Ready check only: determined by infoTooltip starting with "Ready Check Only"
         local readyCheckOnly = buff.infoTooltip and buff.infoTooltip:match("^Ready Check Only")
-
-        local showBuff = true
-        -- Filter: ready check only buffs
-        if readyCheckOnly and not inReadyCheck then
-            showBuff = false
-        end
-        -- Filter: only show player's class buff
-        if showBuff and db.showOnlyPlayerClassBuff and buff.class ~= playerClass then
-            showBuff = false
-        end
-        -- Filter: hide buffs without provider in group
-        if showBuff and presentClasses and not presentClasses[buff.class] then
-            showBuff = false
-        end
+        local showBuff = (not readyCheckOnly or inReadyCheck)
+            and (not db.showOnlyPlayerClassBuff or buff.class == playerClass)
+            and (not presentClasses or presentClasses[buff.class])
 
         if frame and IsBuffEnabled(buff.key) and showBuff then
             local count, minRemaining = CountPresenceBuff(buff.spellID)
@@ -1106,12 +1062,10 @@ UpdateDisplay = function()
                 SetExpirationGlow(frame, true)
             else
                 -- At least 1 person has it and not expiring - all good
-                frame:Hide()
-                SetExpirationGlow(frame, false)
+                HideFrame(frame)
             end
         elseif frame then
-            frame:Hide()
-            SetExpirationGlow(frame, false)
+            HideFrame(frame)
         end
     end
 
@@ -1125,7 +1079,7 @@ UpdateDisplay = function()
             local shouldShow = ShouldShowPersonalBuff(buff.spellID, buff.class, buff.beneficiaryRole)
             if shouldShow then
                 frame.icon:SetAllPoints()
-                frame.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                frame.icon:SetTexCoord(TEXCOORD_INSET, 1 - TEXCOORD_INSET, TEXCOORD_INSET, 1 - TEXCOORD_INSET)
                 frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
                 frame.count:SetText(buff.missingText or "")
                 frame:Show()
@@ -1137,12 +1091,10 @@ UpdateDisplay = function()
                     table.insert(visibleGroups[buff.groupId], { frame = frame, spellID = buff.spellID })
                 end
             else
-                frame:Hide()
-                SetExpirationGlow(frame, false)
+                HideFrame(frame)
             end
         elseif frame then
-            frame:Hide()
-            SetExpirationGlow(frame, false)
+            HideFrame(frame)
         end
     end
 
@@ -1175,7 +1127,7 @@ UpdateDisplay = function()
             )
             if shouldShow then
                 frame.icon:SetAllPoints()
-                frame.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                frame.icon:SetTexCoord(TEXCOORD_INSET, 1 - TEXCOORD_INSET, TEXCOORD_INSET, 1 - TEXCOORD_INSET)
                 -- Update icon based on current role (for role-dependent buffs like shields)
                 if buff.iconByRole then
                     local texture = GetBuffTexture(buff.spellID, buff.iconByRole)
@@ -1189,12 +1141,10 @@ UpdateDisplay = function()
                 anyVisible = true
                 SetExpirationGlow(frame, false)
             else
-                frame:Hide()
-                SetExpirationGlow(frame, false)
+                HideFrame(frame)
             end
         elseif frame then
-            frame:Hide()
-            SetExpirationGlow(frame, false)
+            HideFrame(frame)
         end
     end
 
@@ -1384,7 +1334,7 @@ local function CreateOptionsPanel()
     addonIcon:SetSize(28, 28)
     addonIcon:SetPoint("TOPLEFT", 12, -8)
     addonIcon:SetTexture("Interface\\AddOns\\BuffReminders\\icon.tga")
-    addonIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    addonIcon:SetTexCoord(TEXCOORD_INSET, 1 - TEXCOORD_INSET, TEXCOORD_INSET, 1 - TEXCOORD_INSET)
 
     -- Title (next to icon)
     local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -1392,8 +1342,8 @@ local function CreateOptionsPanel()
     title:SetText("BuffReminders")
 
     -- Scale controls (top right area) - using buttons to avoid slider scaling issues
-    -- Base scale is 1.2 (displayed as 100%), range is 80%-150%
-    local BASE_SCALE = 1.2
+    -- Base scale is OPTIONS_BASE_SCALE (displayed as 100%), range is 80%-150%
+    local BASE_SCALE = OPTIONS_BASE_SCALE
     local MIN_PCT, MAX_PCT = 80, 150
     local scaleDown, scaleUp
 
@@ -1463,6 +1413,21 @@ local function CreateOptionsPanel()
         return header, y - 18
     end
 
+    -- Setup tooltip for a widget
+    local function SetupTooltip(widget, tooltipTitle, tooltipDesc, anchor)
+        widget:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, anchor or "ANCHOR_RIGHT")
+            GameTooltip:SetText(tooltipTitle)
+            if tooltipDesc then
+                GameTooltip:AddLine(tooltipDesc, 1, 1, 1, true)
+            end
+            GameTooltip:Show()
+        end)
+        widget:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+    end
+
     -- Create buff checkbox (compact, for left column)
     -- spellIDs can be a single ID, a table of IDs (for multi-rank spells), or a table of tables (for grouped buffs with multiple icons)
     -- infoTooltip is optional: "Title|Description" format shows a "?" icon with tooltip
@@ -1487,7 +1452,7 @@ local function CreateOptionsPanel()
                 local icon = panel:CreateTexture(nil, "ARTWORK")
                 icon:SetSize(18, 18)
                 icon:SetPoint("LEFT", lastAnchor, lastAnchor == cb and "RIGHT" or "RIGHT", 2, 0)
-                icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                icon:SetTexCoord(TEXCOORD_INSET, 1 - TEXCOORD_INSET, TEXCOORD_INSET, 1 - TEXCOORD_INSET)
                 icon:SetTexture(texture)
                 lastAnchor = icon
             end
@@ -1543,15 +1508,7 @@ local function CreateOptionsPanel()
         cb.label = label
 
         if tooltip then
-            cb:SetScript("OnEnter", function(self)
-                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                GameTooltip:SetText(labelText)
-                GameTooltip:AddLine(tooltip, 1, 1, 1, true)
-                GameTooltip:Show()
-            end)
-            cb:SetScript("OnLeave", function()
-                GameTooltip:Hide()
-            end)
+            SetupTooltip(cb, labelText, tooltip)
         end
 
         return cb, y - ITEM_HEIGHT
@@ -1621,14 +1578,7 @@ local function CreateOptionsPanel()
             editBox:SetFocus()
             editBox:HighlightText()
         end)
-        valueBtn:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_TOP")
-            GameTooltip:SetText("Click to type a value")
-            GameTooltip:Show()
-        end)
-        valueBtn:SetScript("OnLeave", function()
-            GameTooltip:Hide()
-        end)
+        SetupTooltip(valueBtn, "Click to type a value", nil, "ANCHOR_TOP")
 
         slider:SetScript("OnValueChanged", function(self, val)
             val = math.floor(val)
@@ -2119,15 +2069,12 @@ local function CreateOptionsPanel()
         mainFrame:ClearAllPoints()
         mainFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     end)
-    resetPosBtn:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:SetText("Reset Position")
-        GameTooltip:AddLine("Moves the buff tracker back to the center of the screen.", 1, 1, 1, true)
-        GameTooltip:Show()
-    end)
-    resetPosBtn:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
+    SetupTooltip(
+        resetPosBtn,
+        "Reset Position",
+        "Moves the buff tracker back to the center of the screen.",
+        "ANCHOR_TOP"
+    )
 
     local resetRatiosBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     resetRatiosBtn:SetSize(btnWidth, 22)
@@ -2142,15 +2089,7 @@ local function CreateOptionsPanel()
         panel.textValue:SetText("34%")
         UpdateVisuals()
     end)
-    resetRatiosBtn:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:SetText("Reset Ratios")
-        GameTooltip:AddLine("Resets spacing and text size to recommended ratios.", 1, 1, 1, true)
-        GameTooltip:Show()
-    end)
-    resetRatiosBtn:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
+    SetupTooltip(resetRatiosBtn, "Reset Ratios", "Resets spacing and text size to recommended ratios.", "ANCHOR_TOP")
 
     local testBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     testBtn:SetSize(btnWidth, 22)
@@ -2289,12 +2228,12 @@ ShowGlowDemo = function()
 
         local icon = iconFrame:CreateTexture(nil, "ARTWORK")
         icon:SetAllPoints()
-        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        icon:SetTexCoord(TEXCOORD_INSET, 1 - TEXCOORD_INSET, TEXCOORD_INSET, 1 - TEXCOORD_INSET)
         icon:SetTexture(GetBuffTexture(1459)) -- Arcane Intellect icon
 
         local border = iconFrame:CreateTexture(nil, "BACKGROUND")
-        border:SetPoint("TOPLEFT", -2, 2)
-        border:SetPoint("BOTTOMRIGHT", 2, -2)
+        border:SetPoint("TOPLEFT", -BORDER_PADDING, BORDER_PADDING)
+        border:SetPoint("BOTTOMRIGHT", BORDER_PADDING, -BORDER_PADDING)
         border:SetColorTexture(0, 0, 0, 1)
 
         -- Setup and play glow animation
