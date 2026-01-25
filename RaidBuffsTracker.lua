@@ -24,13 +24,16 @@ local PresenceBuffs = {
 }
 
 -- Personal buffs: only tracks if the player should cast their buff
--- {spellID, settingKey, displayName, requiredClass, beneficiaryRole, missingText, groupId}
+-- {spellID, settingKey, displayName, requiredClass, beneficiaryRole, missingText, groupId, selfCast}
 -- Only shows if player is the required class, has the spell talented, and a beneficiary needs it
 -- groupId is optional - buffs with same groupId share a single setting and show one icon
+-- selfCast means the buff can only be cast on the player (e.g. Shadowform, Water Shield)
 local PersonalBuffs = {
-    { 156910, "beaconOfFaith", "Beacon of Faith", "PALADIN", nil, "NO\nFAITH", "beacons" },
-    { 53563, "beaconOfLight", "Beacon of Light", "PALADIN", nil, "NO\nLIGHT", "beacons" },
-    { 369459, "sourceOfMagic", "Source of Magic", "EVOKER", "HEALER", "NO\nSOURCE", nil },
+    { 156910, "beaconOfFaith", "Beacon of Faith", "PALADIN", nil, "NO\nFAITH", "beacons", false },
+    { 53563, "beaconOfLight", "Beacon of Light", "PALADIN", nil, "NO\nLIGHT", "beacons", false },
+    { 369459, "sourceOfMagic", "Source of Magic", "EVOKER", "HEALER", "NO\nSOURCE", nil, false },
+    -- Shadowform will drop during Void Form, but that only happens in combat. We're happy enough just checking Shadowform before going into combat.
+    { 232698, "shadowform", "Shadowform", "PRIEST", "DAMAGER", "NO\nFORM", nil, true },
 }
 
 -- Display names and text for grouped buffs
@@ -87,6 +90,7 @@ local defaults = {
         atrophicPoison = true,
         sourceOfMagic = true,
         beacons = true,
+        shadowform = true,
     },
     iconSize = 64,
     spacing = 0.2, -- multiplier of iconSize (reset ratios default)
@@ -316,12 +320,18 @@ end
 -- Check if player's buff is active on anyone in the group
 -- Returns true if the buff (from player) exists on someone, false otherwise
 -- If role is specified, only checks units with that role
-local function IsPlayerBuffActive(spellID, role)
+-- If selfCast is true, only checks against the player
+local function IsPlayerBuffActive(spellID, role, selfCast, groupSize)
     local inRaid = IsInRaid()
-    local groupSize = GetNumGroupMembers()
 
-    if groupSize == 0 then
-        return false
+    -- Solo: check self-cast buffs against the player, regardless of group size
+    if selfCast then
+        if not role or UnitGroupRolesAssigned(unit) == role then
+            local hasBuff, _ = UnitHasBuff("player", spellID)
+            return hasBuff
+        else
+            return false
+        end
     end
 
     for i = 1, groupSize do
@@ -351,7 +361,7 @@ end
 
 -- Check if player should cast their personal buff (returns true if a beneficiary needs it)
 -- Returns nil if player can't provide this buff
-local function ShouldShowPersonalBuff(spellIDs, requiredClass, beneficiaryRole)
+local function ShouldShowPersonalBuff(spellIDs, requiredClass, beneficiaryRole, selfCast)
     local _, playerClass = UnitClass("player")
     if playerClass ~= requiredClass then
         return nil
@@ -362,7 +372,13 @@ local function ShouldShowPersonalBuff(spellIDs, requiredClass, beneficiaryRole)
         return nil
     end
 
-    return not IsPlayerBuffActive(spellID, beneficiaryRole)
+    -- when solo, do not show personal buffs unless they're self-cast.
+    local groupSize = GetNumGroupMembers()
+    if not selfCast and groupSize == 0 then
+        return nil
+    end
+
+    return not IsPlayerBuffActive(spellID, beneficiaryRole, selfCast, groupSize)
 end
 
 -- Forward declarations
@@ -887,12 +903,12 @@ UpdateDisplay = function()
     -- Process personal buffs (player's own buff responsibility)
     local visibleGroups = {} -- Track visible buffs by groupId for merging
     for _, buffData in ipairs(PersonalBuffs) do
-        local spellIDs, key, _, requiredClass, beneficiaryRole, missingText, groupId = unpack(buffData)
+        local spellIDs, key, _, requiredClass, beneficiaryRole, missingText, groupId, selfCast = unpack(buffData)
         local frame = buffFrames[key]
         local settingKey = GetBuffSettingKey(buffData)
 
         if frame and db.enabledBuffs[settingKey] then
-            local shouldShow = ShouldShowPersonalBuff(spellIDs, requiredClass, beneficiaryRole)
+            local shouldShow = ShouldShowPersonalBuff(spellIDs, requiredClass, beneficiaryRole, selfCast)
             if shouldShow then
                 frame.icon:SetAllPoints()
                 frame.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
