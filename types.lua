@@ -54,6 +54,13 @@
 ---@field displayName string
 ---@field missingText? string
 
+---@class CustomBuff
+---@field spellID number
+---@field key string
+---@field name string
+---@field missingText? string
+---@field class? ClassName
+
 ---@class BuffFrame: Frame
 ---@field key string
 ---@field spellIDs SpellID
@@ -67,6 +74,7 @@
 ---@field isPresenceBuff? boolean
 ---@field isPersonalBuff? boolean
 ---@field isSelfBuff? boolean
+---@field isCustomBuff? boolean
 ---@field glowTexture? Texture
 ---@field glowAnim? AnimationGroup
 ---@field glowShowing? boolean

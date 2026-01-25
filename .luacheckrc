@@ -14,6 +14,7 @@ globals = {
 	"SLASH_BUFFREMINDERS1",
 	"SLASH_BUFFREMINDERS2",
 	"SlashCmdList",
+	"StaticPopupDialogs",
 }
 
 read_globals = {
@@ -33,6 +34,8 @@ read_globals = {
 	"IsInRaid",
 	"Settings",
 	"SettingsPanel",
+	"StaticPopup_Show",
+	"time",
 	"UIParent",
 	"IsPlayerSpell",
 	"UnitCanAssist",

@@ -189,6 +189,30 @@ local function GetBuffSettingKey(buff)
     return buff.groupId or buff.key
 end
 
+---Generate a unique key for a custom buff
+---@param spellID number
+---@return string
+local function GenerateCustomBuffKey(spellID)
+    return "custom_" .. spellID .. "_" .. time()
+end
+
+---Validate a spell ID exists via GetSpellInfo
+---@param spellID number
+---@return boolean valid
+---@return string? name
+---@return number? iconID
+local function ValidateSpellID(spellID)
+    local name, _, iconID
+    pcall(function()
+        local info = C_Spell.GetSpellInfo(spellID)
+        if info then
+            name = info.name
+            iconID = info.iconID
+        end
+    end)
+    return name ~= nil, name, iconID
+end
+
 -- Classes that benefit from each buff (BETA: class-level only, not spec-aware)
 -- nil = everyone benefits, otherwise only listed classes are counted
 local BuffBeneficiaries = {
@@ -572,6 +596,7 @@ end
 
 -- Forward declarations
 local UpdateDisplay, PositionBuffFrames, UpdateAnchor, ShowGlowDemo, ToggleTestMode, RefreshTestDisplay
+local ShowCustomBuffModal
 
 -- Glow style definitions
 local GlowStyles = {
@@ -821,6 +846,19 @@ PositionBuffFrames = function()
             table.insert(visibleFrames, frame)
         end
     end
+    -- Custom buffs (sorted by key for consistent order)
+    local customBuffs = db.customBuffs or {}
+    local sortedCustomKeys = {}
+    for key in pairs(customBuffs) do
+        table.insert(sortedCustomKeys, key)
+    end
+    table.sort(sortedCustomKeys)
+    for _, key in ipairs(sortedCustomKeys) do
+        local frame = buffFrames[key]
+        if frame and frame:IsShown() then
+            table.insert(visibleFrames, frame)
+        end
+    end
 
     local count = #visibleFrames
     if count == 0 then
@@ -933,6 +971,22 @@ RefreshTestDisplay = function()
                 frame.testText:Show()
             end
             frame:Show()
+        end
+    end
+
+    -- Show ALL custom buffs (self buffs)
+    if db.customBuffs then
+        for _, customBuff in pairs(db.customBuffs) do
+            local frame = buffFrames[customBuff.key]
+            if frame then
+                frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
+                frame.count:SetText(customBuff.missingText or "NO\nBUFF")
+                if frame.testText and testModeData.showLabels then
+                    frame.testText:SetFont(STANDARD_TEXT_FONT, GetFontSize(0.6), "OUTLINE")
+                    frame.testText:Show()
+                end
+                frame:Show()
+            end
         end
     end
 
@@ -1160,6 +1214,29 @@ UpdateDisplay = function()
         end
     end
 
+    -- Process custom buffs (self buffs only - show if player doesn't have the buff)
+    if db.customBuffs then
+        for _, customBuff in pairs(db.customBuffs) do
+            local frame = buffFrames[customBuff.key]
+            -- Check class filter (nil means any class)
+            local classMatch = not customBuff.class or customBuff.class == playerClass
+            if frame and IsBuffEnabled(customBuff.key) and classMatch then
+                local hasBuff = UnitHasBuff("player", customBuff.spellID)
+                if not hasBuff then
+                    frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
+                    frame.count:SetText(customBuff.missingText or "NO\nBUFF")
+                    frame:Show()
+                    anyVisible = true
+                    SetExpirationGlow(frame, false)
+                else
+                    HideFrame(frame)
+                end
+            elseif frame then
+                HideFrame(frame)
+            end
+        end
+    end
+
     if anyVisible then
         mainFrame:Show()
         PositionBuffFrames()
@@ -1254,7 +1331,38 @@ local function InitializeFrames()
         buffFrames[buff.key].isSelfBuff = true
     end
 
+    -- Create frames for custom buffs (always self buffs)
+    if db.customBuffs then
+        for _, customBuff in pairs(db.customBuffs) do
+            local frame = CreateBuffFrame(customBuff, 0)
+            frame.isCustomBuff = true
+            buffFrames[customBuff.key] = frame
+        end
+    end
+
     mainFrame:Hide()
+end
+
+---Create a frame for a newly added custom buff (called at runtime when adding buffs)
+---@param customBuff CustomBuff
+local function CreateCustomBuffFrameRuntime(customBuff)
+    if not mainFrame then
+        return
+    end
+    local frame = CreateBuffFrame(customBuff, 0)
+    frame.isCustomBuff = true
+    buffFrames[customBuff.key] = frame
+end
+
+---Remove a custom buff frame (called at runtime when deleting buffs)
+---@param key string
+local function RemoveCustomBuffFrame(key)
+    local frame = buffFrames[key]
+    if frame then
+        frame:Hide()
+        frame:SetParent(nil)
+        buffFrames[key] = nil
+    end
 end
 
 -- Update anchor position and visibility
@@ -1682,6 +1790,127 @@ local function CreateOptionsPanel()
     selfNote:SetText("(buffs on yourself)")
     leftY = leftY - 14
     leftY = RenderBuffCheckboxes(leftColX, leftY, SelfBuffs)
+
+    leftY = leftY - SECTION_SPACING
+
+    -- Custom Buffs header
+    _, leftY = CreateSectionHeader(panel, "Custom Buffs", leftColX, leftY)
+    local customNote = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    customNote:SetPoint("TOPLEFT", leftColX, leftY)
+    customNote:SetText("(user-defined buffs)")
+    leftY = leftY - 14
+
+    -- Container for custom buff rows (for dynamic refresh)
+    local customBuffsContainer = CreateFrame("Frame", nil, panel)
+    customBuffsContainer:SetPoint("TOPLEFT", leftColX, leftY)
+    customBuffsContainer:SetSize(LEFT_COL_WIDTH, 200)
+    panel.customBuffsContainer = customBuffsContainer
+    panel.customBuffRows = {}
+
+    -- Function to render custom buff rows
+    local function RenderCustomBuffRows()
+        -- Clear existing rows
+        for _, row in ipairs(panel.customBuffRows) do
+            row:Hide()
+            row:SetParent(nil)
+        end
+        panel.customBuffRows = {}
+
+        local db = BuffRemindersDB
+        local customY = 0
+
+        -- Sort custom buffs by key for consistent order
+        local sortedKeys = {}
+        if db.customBuffs then
+            for key in pairs(db.customBuffs) do
+                table.insert(sortedKeys, key)
+            end
+        end
+        table.sort(sortedKeys)
+
+        for _, key in ipairs(sortedKeys) do
+            local customBuff = db.customBuffs[key]
+            local row = CreateFrame("Frame", nil, customBuffsContainer)
+            row:SetSize(LEFT_COL_WIDTH, 20)
+            row:SetPoint("TOPLEFT", 0, customY)
+
+            -- Checkbox
+            local cb = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
+            cb:SetSize(20, 20)
+            cb:SetPoint("LEFT", 0, 0)
+            cb:SetChecked(IsBuffEnabled(key))
+            cb:SetScript("OnClick", function(self)
+                BuffRemindersDB.enabledBuffs[key] = self:GetChecked()
+                UpdateDisplay()
+            end)
+            panel.buffCheckboxes[key] = cb
+
+            -- Icon
+            local icon = row:CreateTexture(nil, "ARTWORK")
+            icon:SetSize(18, 18)
+            icon:SetPoint("LEFT", cb, "RIGHT", 2, 0)
+            icon:SetTexCoord(TEXCOORD_INSET, 1 - TEXCOORD_INSET, TEXCOORD_INSET, 1 - TEXCOORD_INSET)
+            local texture = GetBuffTexture(customBuff.spellID)
+            if texture then
+                icon:SetTexture(texture)
+            end
+
+            -- Name label
+            local label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            label:SetPoint("LEFT", icon, "RIGHT", 4, 0)
+            label:SetWidth(100)
+            label:SetJustifyH("LEFT")
+            label:SetText(customBuff.name or ("Spell " .. customBuff.spellID))
+
+            -- Edit button
+            local editBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+            editBtn:SetSize(18, 18)
+            editBtn:SetPoint("LEFT", label, "RIGHT", 2, 0)
+            editBtn:SetNormalFontObject("GameFontHighlightSmall")
+            editBtn:SetText("E")
+            editBtn:SetScript("OnClick", function()
+                ShowCustomBuffModal(key, RenderCustomBuffRows)
+            end)
+            SetupTooltip(editBtn, "Edit", "Edit this custom buff", "ANCHOR_TOP")
+
+            -- Delete button
+            local deleteBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+            deleteBtn:SetSize(18, 18)
+            deleteBtn:SetPoint("LEFT", editBtn, "RIGHT", 2, 0)
+            deleteBtn:SetNormalFontObject("GameFontHighlightSmall")
+            deleteBtn:SetText("X")
+            deleteBtn:SetScript("OnClick", function()
+                StaticPopup_Show("BUFFREMINDERS_DELETE_CUSTOM", customBuff.name or key, nil, {
+                    key = key,
+                    refreshPanel = RenderCustomBuffRows,
+                })
+            end)
+            SetupTooltip(deleteBtn, "Delete", "Delete this custom buff", "ANCHOR_TOP")
+
+            table.insert(panel.customBuffRows, row)
+            customY = customY - ITEM_HEIGHT
+        end
+
+        -- Add button
+        local addBtn = CreateFrame("Button", nil, customBuffsContainer, "UIPanelButtonTemplate")
+        addBtn:SetSize(130, 20)
+        addBtn:SetPoint("TOPLEFT", 0, customY - 4)
+        addBtn:SetText("+ Add Custom Buff")
+        addBtn:SetNormalFontObject("GameFontHighlightSmall")
+        addBtn:SetScript("OnClick", function()
+            ShowCustomBuffModal(nil, RenderCustomBuffRows)
+        end)
+        table.insert(panel.customBuffRows, addBtn)
+
+        -- Update container height and leftY
+        customBuffsContainer:SetHeight(math.abs(customY) + 30)
+
+        return customY - 30
+    end
+
+    panel.RenderCustomBuffRows = RenderCustomBuffRows
+    local customHeight = RenderCustomBuffRows()
+    leftY = leftY + customHeight
 
     -- ========== RIGHT COLUMN: SETTINGS ==========
     local rightY = startY
@@ -2157,6 +2386,10 @@ local function ToggleOptions()
         RefreshBuffCheckboxes(PresenceBuffs)
         RefreshBuffCheckboxes(PersonalBuffs)
         RefreshBuffCheckboxes(SelfBuffs)
+        -- Refresh custom buffs section
+        if optionsPanel.RenderCustomBuffRows then
+            optionsPanel.RenderCustomBuffRows()
+        end
         optionsPanel.sizeSlider:SetValue(db.iconSize)
         optionsPanel.spacingSlider:SetValue((db.spacing or 0.2) * 100)
         optionsPanel.textSlider:SetValue((db.textScale or 0.34) * 100)
@@ -2263,6 +2496,372 @@ ShowGlowDemo = function()
     glowDemoPanel = panel
 end
 
+-- Delete confirmation dialog for custom buffs
+StaticPopupDialogs["BUFFREMINDERS_DELETE_CUSTOM"] = {
+    text = 'Delete custom buff "%s"?',
+    button1 = "Delete",
+    button2 = "Cancel",
+    OnAccept = function(self, data)
+        if data and data.key then
+            BuffRemindersDB.customBuffs[data.key] = nil
+            BuffRemindersDB.enabledBuffs[data.key] = nil
+            RemoveCustomBuffFrame(data.key)
+            if data.refreshPanel then
+                data.refreshPanel()
+            end
+            UpdateDisplay()
+        end
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+-- Custom buff add/edit modal dialog
+local customBuffModal
+ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
+    if customBuffModal then
+        customBuffModal:Hide()
+    end
+
+    local MODAL_WIDTH = 320
+    local MODAL_HEIGHT = 270
+    local editingBuff = existingKey and BuffRemindersDB.customBuffs[existingKey] or nil
+
+    local modal = CreateFrame("Frame", "BuffRemindersCustomBuffModal", UIParent, "BackdropTemplate")
+    modal:SetSize(MODAL_WIDTH, MODAL_HEIGHT)
+    modal:SetPoint("CENTER")
+    modal:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 2,
+    })
+    modal:SetBackdropColor(0.1, 0.1, 0.1, 0.98)
+    modal:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+    modal:SetMovable(true)
+    modal:EnableMouse(true)
+    modal:RegisterForDrag("LeftButton")
+    modal:SetScript("OnDragStart", modal.StartMoving)
+    modal:SetScript("OnDragStop", modal.StopMovingOrSizing)
+    modal:SetFrameStrata("DIALOG")
+    modal:SetFrameLevel(200)
+    tinsert(UISpecialFrames, "BuffRemindersCustomBuffModal")
+
+    local title = modal:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("TOP", 0, -12)
+    title:SetText(editingBuff and "Edit Custom Buff" or "Add Custom Buff")
+
+    local closeBtn = CreateFrame("Button", nil, modal, "UIPanelCloseButton")
+    closeBtn:SetPoint("TOPRIGHT", -2, -2)
+
+    local y = -40
+
+    -- Spell ID input
+    local spellIdLabel = modal:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    spellIdLabel:SetPoint("TOPLEFT", 20, y)
+    spellIdLabel:SetText("Spell ID:")
+
+    local spellIdBox = CreateFrame("EditBox", nil, modal, "InputBoxTemplate")
+    spellIdBox:SetSize(100, 20)
+    spellIdBox:SetPoint("LEFT", spellIdLabel, "RIGHT", 10, 0)
+    spellIdBox:SetAutoFocus(false)
+    spellIdBox:SetNumeric(true)
+    if editingBuff then
+        spellIdBox:SetText(tostring(editingBuff.spellID))
+    end
+
+    local lookupBtn = CreateFrame("Button", nil, modal, "UIPanelButtonTemplate")
+    lookupBtn:SetSize(60, 20)
+    lookupBtn:SetPoint("LEFT", spellIdBox, "RIGHT", 5, 0)
+    lookupBtn:SetText("Lookup")
+
+    y = y - 30
+
+    -- Preview area
+    local previewBg = modal:CreateTexture(nil, "BACKGROUND")
+    previewBg:SetSize(MODAL_WIDTH - 40, 50)
+    previewBg:SetPoint("TOPLEFT", 20, y)
+    previewBg:SetColorTexture(0.05, 0.05, 0.05, 1)
+
+    local previewIcon = modal:CreateTexture(nil, "ARTWORK")
+    previewIcon:SetSize(40, 40)
+    previewIcon:SetPoint("TOPLEFT", 25, y - 5)
+    previewIcon:SetTexCoord(TEXCOORD_INSET, 1 - TEXCOORD_INSET, TEXCOORD_INSET, 1 - TEXCOORD_INSET)
+    previewIcon:Hide()
+
+    local previewName = modal:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    previewName:SetPoint("TOPLEFT", previewIcon, "TOPRIGHT", 10, -2)
+    previewName:SetText("")
+
+    local previewDesc = modal:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    previewDesc:SetPoint("TOPLEFT", previewName, "BOTTOMLEFT", 0, -2)
+    previewDesc:SetWidth(MODAL_WIDTH - 100)
+    previewDesc:SetHeight(24) -- Limit to ~2 lines
+    previewDesc:SetJustifyH("LEFT")
+    previewDesc:SetJustifyV("TOP")
+    previewDesc:SetText("")
+    previewDesc:SetTextColor(0.8, 0.8, 0.8)
+    previewDesc:SetWordWrap(true)
+    previewDesc:SetNonSpaceWrap(false)
+
+    local previewError = modal:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    previewError:SetPoint("CENTER", previewBg, "CENTER", 0, 0)
+    previewError:SetText("Enter a spell ID and click Lookup")
+    previewError:SetTextColor(0.6, 0.6, 0.6)
+
+    -- State for validated spell
+    local validatedSpellID = editingBuff and editingBuff.spellID or nil
+    local validatedSpellName = editingBuff and editingBuff.name or nil
+
+    if editingBuff then
+        local valid, name, iconID = ValidateSpellID(editingBuff.spellID)
+        if valid then
+            previewIcon:SetTexture(iconID)
+            previewIcon:Show()
+            previewName:SetText(name or "")
+            previewError:Hide()
+            validatedSpellName = name
+            -- Get spell description
+            pcall(function()
+                local desc = C_Spell.GetSpellDescription(editingBuff.spellID)
+                if desc then
+                    previewDesc:SetText(desc)
+                end
+            end)
+        end
+    end
+
+    lookupBtn:SetScript("OnClick", function()
+        local spellID = tonumber(spellIdBox:GetText())
+        if not spellID then
+            previewIcon:Hide()
+            previewName:SetText("")
+            previewDesc:SetText("")
+            previewError:SetText("Invalid spell ID")
+            previewError:SetTextColor(1, 0.3, 0.3)
+            previewError:Show()
+            validatedSpellID = nil
+            validatedSpellName = nil
+            return
+        end
+
+        local valid, name, iconID = ValidateSpellID(spellID)
+        if valid then
+            previewIcon:SetTexture(iconID)
+            previewIcon:Show()
+            previewName:SetText(name or "")
+            previewError:Hide()
+            validatedSpellID = spellID
+            validatedSpellName = name
+            -- Get spell description
+            pcall(function()
+                local desc = C_Spell.GetSpellDescription(spellID)
+                if desc then
+                    previewDesc:SetText(desc)
+                end
+            end)
+        else
+            previewIcon:Hide()
+            previewName:SetText("")
+            previewDesc:SetText("")
+            previewError:SetText("Spell not found")
+            previewError:SetTextColor(1, 0.3, 0.3)
+            previewError:Show()
+            validatedSpellID = nil
+            validatedSpellName = nil
+        end
+    end)
+
+    y = y - 60
+
+    -- Advanced options toggle
+    local advancedShown = false
+    local advancedFrame = CreateFrame("Frame", nil, modal)
+    advancedFrame:SetPoint("TOPLEFT", 20, y - 25)
+    advancedFrame:SetSize(MODAL_WIDTH - 40, 85)
+    advancedFrame:Hide()
+
+    local advancedBtn = CreateFrame("Button", nil, modal)
+    advancedBtn:SetPoint("TOPLEFT", 20, y)
+    advancedBtn:SetSize(200, 20)
+    local advancedText = advancedBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    advancedText:SetPoint("LEFT", 0, 0)
+    advancedText:SetText("[+] Show Advanced Options")
+    advancedText:SetTextColor(0.6, 0.8, 1)
+
+    -- Advanced options
+    local advY = 0
+
+    -- Display Name
+    local nameLabel = advancedFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    nameLabel:SetPoint("TOPLEFT", 0, advY)
+    nameLabel:SetText("Display Name:")
+
+    local nameBox = CreateFrame("EditBox", nil, advancedFrame, "InputBoxTemplate")
+    nameBox:SetSize(150, 18)
+    nameBox:SetPoint("LEFT", nameLabel, "RIGHT", 5, 0)
+    nameBox:SetAutoFocus(false)
+    if editingBuff and editingBuff.name then
+        nameBox:SetText(editingBuff.name)
+    end
+
+    advY = advY - 25
+
+    -- Missing Text
+    local missingLabel = advancedFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    missingLabel:SetPoint("TOPLEFT", 0, advY)
+    missingLabel:SetText("Missing Text:")
+
+    local missingBox = CreateFrame("EditBox", nil, advancedFrame, "InputBoxTemplate")
+    missingBox:SetSize(80, 18)
+    missingBox:SetPoint("LEFT", missingLabel, "RIGHT", 5, 0)
+    missingBox:SetAutoFocus(false)
+    if editingBuff and editingBuff.missingText then
+        missingBox:SetText(editingBuff.missingText:gsub("\n", "\\n"))
+    end
+
+    local missingHint = advancedFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    missingHint:SetPoint("LEFT", missingBox, "RIGHT", 5, 0)
+    missingHint:SetText("(use \\n for newline)")
+
+    advY = advY - 25
+
+    -- Class Filter
+    local classLabel = advancedFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    classLabel:SetPoint("TOPLEFT", 0, advY)
+    classLabel:SetText("Only for class:")
+
+    local classOptions = {
+        { value = nil, label = "Any" },
+        { value = "WARRIOR", label = "Warrior" },
+        { value = "PALADIN", label = "Paladin" },
+        { value = "HUNTER", label = "Hunter" },
+        { value = "ROGUE", label = "Rogue" },
+        { value = "PRIEST", label = "Priest" },
+        { value = "DEATHKNIGHT", label = "Death Knight" },
+        { value = "SHAMAN", label = "Shaman" },
+        { value = "MAGE", label = "Mage" },
+        { value = "WARLOCK", label = "Warlock" },
+        { value = "MONK", label = "Monk" },
+        { value = "DRUID", label = "Druid" },
+        { value = "DEMONHUNTER", label = "Demon Hunter" },
+        { value = "EVOKER", label = "Evoker" },
+    }
+    local selectedClass = editingBuff and editingBuff.class or nil
+
+    local classDropdown =
+        CreateFrame("Frame", "BuffRemindersCustomClassDropdown", advancedFrame, "UIDropDownMenuTemplate")
+    classDropdown:SetPoint("LEFT", classLabel, "RIGHT", -10, -2)
+    UIDropDownMenu_SetWidth(classDropdown, 100)
+
+    local function ClassDropdown_Initialize(self, level)
+        for _, cls in ipairs(classOptions) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = cls.label
+            info.value = cls.value
+            info.checked = selectedClass == cls.value
+            info.func = function()
+                selectedClass = cls.value
+                UIDropDownMenu_SetSelectedValue(classDropdown, cls.value)
+                UIDropDownMenu_SetText(classDropdown, cls.label)
+            end
+            UIDropDownMenu_AddButton(info, level)
+        end
+    end
+
+    UIDropDownMenu_Initialize(classDropdown, ClassDropdown_Initialize)
+    UIDropDownMenu_SetSelectedValue(classDropdown, selectedClass)
+    for _, cls in ipairs(classOptions) do
+        if cls.value == selectedClass then
+            UIDropDownMenu_SetText(classDropdown, cls.label)
+            break
+        end
+    end
+
+    advancedBtn:SetScript("OnClick", function()
+        advancedShown = not advancedShown
+        if advancedShown then
+            advancedText:SetText("[-] Hide Advanced Options")
+            advancedFrame:Show()
+            modal:SetHeight(MODAL_HEIGHT + 85)
+        else
+            advancedText:SetText("[+] Show Advanced Options")
+            advancedFrame:Hide()
+            modal:SetHeight(MODAL_HEIGHT)
+        end
+    end)
+
+    -- Buttons at bottom
+    local cancelBtn = CreateFrame("Button", nil, modal, "UIPanelButtonTemplate")
+    cancelBtn:SetSize(80, 22)
+    cancelBtn:SetPoint("BOTTOMRIGHT", -20, 15)
+    cancelBtn:SetText("Cancel")
+    cancelBtn:SetScript("OnClick", function()
+        modal:Hide()
+    end)
+
+    local saveBtn = CreateFrame("Button", nil, modal, "UIPanelButtonTemplate")
+    saveBtn:SetSize(80, 22)
+    saveBtn:SetPoint("RIGHT", cancelBtn, "LEFT", -10, 0)
+    saveBtn:SetText("Save")
+    saveBtn:SetScript("OnClick", function()
+        if not validatedSpellID then
+            previewError:SetText("Please validate a spell ID first")
+            previewError:SetTextColor(1, 0.3, 0.3)
+            previewError:Show()
+            return
+        end
+
+        local key = existingKey or GenerateCustomBuffKey(validatedSpellID)
+        local displayName = nameBox:GetText()
+        if displayName == "" then
+            displayName = validatedSpellName or ("Spell " .. validatedSpellID)
+        end
+
+        local missingText = missingBox:GetText()
+        if missingText ~= "" then
+            missingText = missingText:gsub("\\n", "\n")
+        else
+            missingText = nil
+        end
+
+        local customBuff = {
+            spellID = validatedSpellID,
+            key = key,
+            name = displayName,
+            missingText = missingText,
+            class = selectedClass,
+        }
+
+        BuffRemindersDB.customBuffs[key] = customBuff
+
+        -- Create frame if new
+        if not existingKey then
+            CreateCustomBuffFrameRuntime(customBuff)
+        else
+            -- Update existing frame's icon
+            local frame = buffFrames[key]
+            if frame then
+                local texture = GetBuffTexture(validatedSpellID)
+                if texture then
+                    frame.icon:SetTexture(texture)
+                end
+                frame.displayName = displayName
+            end
+        end
+
+        modal:Hide()
+        if refreshPanelCallback then
+            refreshPanelCallback()
+        end
+        UpdateDisplay()
+    end)
+
+    customBuffModal = modal
+    modal:Show()
+end
+
 -- Slash command handler
 local function SlashHandler(msg)
     local cmd = msg:match("^(%S*)") or ""
@@ -2313,6 +2912,12 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
                 end
             end
         end
+
+        -- Initialize custom buffs storage
+        if not BuffRemindersDB.customBuffs then
+            BuffRemindersDB.customBuffs = {}
+        end
+
         SLASH_BUFFREMINDERS1 = "/br"
         SLASH_BUFFREMINDERS2 = "/buffreminders"
         SlashCmdList["BUFFREMINDERS"] = SlashHandler
