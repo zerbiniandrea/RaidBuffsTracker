@@ -94,7 +94,6 @@ local defaults = {
     showBuffReminder = true,
     showOnlyInGroup = false,
     showOnlyInInstance = false,
-    hideBuffsWithoutProvider = false,
     showOnlyPlayerClassBuff = false,
     filterByClassBenefit = false,
     showOnlyOnReadyCheck = false,
@@ -792,10 +791,7 @@ UpdateDisplay = function()
         end
     end
 
-    local presentClasses = nil
-    if db.hideBuffsWithoutProvider then
-        presentClasses = GetGroupClasses()
-    end
+    local presentClasses = GetGroupClasses()
 
     local _, playerClass = UnitClass("player")
 
@@ -1617,19 +1613,6 @@ local function CreateOptionsPanel()
     panel.readyCheckSlider = readyCheckSlider
     panel.readyCheckSliderValue = readyCheckSliderValue
 
-    local providerCb
-    providerCb, rightY = CreateCheckbox(
-        rightColX,
-        rightY,
-        "Hide buffs for missing classes",
-        RaidBuffsTrackerDB.hideBuffsWithoutProvider,
-        function(self)
-            RaidBuffsTrackerDB.hideBuffsWithoutProvider = self:GetChecked()
-            UpdateDisplay()
-        end
-    )
-    panel.providerCheckbox = providerCb
-
     local playerClassCb
     playerClassCb, rightY = CreateCheckbox(
         rightColX,
@@ -1914,9 +1897,6 @@ local function ToggleOptions()
         if optionsPanel.instanceCheckbox then
             optionsPanel.instanceCheckbox:SetChecked(db.showOnlyInInstance)
             optionsPanel.SetCheckboxEnabled(optionsPanel.instanceCheckbox, db.showOnlyInGroup)
-        end
-        if optionsPanel.providerCheckbox then
-            optionsPanel.providerCheckbox:SetChecked(db.hideBuffsWithoutProvider)
         end
         if optionsPanel.playerClassCheckbox then
             optionsPanel.playerClassCheckbox:SetChecked(db.showOnlyPlayerClassBuff)
