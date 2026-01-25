@@ -123,6 +123,7 @@ local readyCheckTimer = nil
 local inCombat = false
 local testMode = false
 local testModeData = nil -- Stores seeded fake values for consistent test display
+local playerClass = nil -- Cached player class, set once on init
 local optionsPanel
 local MISSING_TEXT_SCALE = 0.6 -- scale for "NO X" warning text
 
@@ -156,9 +157,8 @@ local function GetGroupClasses()
     local groupSize = GetNumGroupMembers()
 
     if groupSize == 0 then
-        local _, class = UnitClass("player")
-        if class then
-            classes[class] = true
+        if playerClass then
+            classes[playerClass] = true
         end
         return classes
     end
@@ -232,7 +232,6 @@ local function CountMissingBuff(spellIDs, buffKey)
 
     if groupSize == 0 then
         -- Solo: check if player benefits
-        local _, playerClass = UnitClass("player")
         if beneficiaries and not beneficiaries[playerClass] then
             return 0, 0, nil -- player doesn't benefit, skip
         end
@@ -356,7 +355,6 @@ end
 -- Check if player should cast their personal buff (returns true if a beneficiary needs it)
 -- Returns nil if player can't provide this buff
 local function ShouldShowPersonalBuff(spellIDs, requiredClass, beneficiaryRole)
-    local _, playerClass = UnitClass("player")
     if playerClass ~= requiredClass then
         return nil
     end
@@ -378,7 +376,6 @@ end
 -- Check if player should cast their self buff (returns true if missing)
 -- Returns nil if player can't/shouldn't use this buff
 local function ShouldShowSelfBuff(spellID, requiredClass)
-    local _, playerClass = UnitClass("player")
     if playerClass ~= requiredClass then
         return nil
     end
@@ -567,7 +564,6 @@ local function CreateBuffFrame(buffData, _)
     frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(), "OUTLINE")
 
     -- "BUFF!" text for the class that provides this buff
-    local _, playerClass = UnitClass("player")
     frame.isPlayerBuff = (playerClass == classProvider)
     if frame.isPlayerBuff then
         frame.buffText = frame:CreateFontString(nil, "OVERLAY")
@@ -840,8 +836,6 @@ UpdateDisplay = function()
     end
 
     local presentClasses = GetGroupClasses()
-
-    local _, playerClass = UnitClass("player")
 
     local anyVisible = false
 
@@ -2122,6 +2116,7 @@ eventFrame:RegisterEvent("READY_CHECK")
 
 eventFrame:SetScript("OnEvent", function(self, event, arg1)
     if event == "ADDON_LOADED" and arg1 == addonName then
+        _, playerClass = UnitClass("player")
         if not RaidBuffsTrackerDB then
             RaidBuffsTrackerDB = {}
         end
