@@ -31,6 +31,7 @@ local PersonalBuffs = {
     { 156910, "beaconOfFaith", "Beacon of Faith", "PALADIN", nil, "NO\nFAITH", "beacons" },
     { 53563, "beaconOfLight", "Beacon of Light", "PALADIN", nil, "NO\nLIGHT", "beacons" },
     { 369459, "sourceOfMagic", "Source of Magic", "EVOKER", "HEALER", "NO\nSOURCE", nil },
+    { 474750, "symbioticRelationship", "Symbiotic Relationship", "DRUID", nil, "NO\nLINK", nil },
 }
 
 -- Self buffs: buffs the player casts on themselves
