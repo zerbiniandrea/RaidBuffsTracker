@@ -25,6 +25,7 @@ read_globals = {
 	"CreateFrame",
 	"GetNumGroupMembers",
 	"GetTime",
+	"GetWeaponEnchantInfo",
 	"InCombatLockdown",
 	"IsInInstance",
 	"IsInRaid",

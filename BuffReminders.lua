@@ -33,17 +33,21 @@ local PersonalBuffs = {
     { 369459, "sourceOfMagic", "Source of Magic", "EVOKER", "HEALER", "NO\nSOURCE", nil },
 }
 
--- Self buffs: buffs the player casts on themselves
--- {spellID, settingKey, displayName, requiredClass, missingText}
--- Only shows if player is the required class and has the spell (spec is inferred from spell knowledge)
+-- Self buffs: buffs/imbues the player casts on themselves
+-- { spellID, settingKey, displayName, requiredClass, missingText, enchantID, groupId }
+-- TODO: Refactor to use named fields instead of positional arrays for better readability
 local SelfBuffs = {
     -- Shadowform will drop during Void Form, but that only happens in combat. We're happy enough just checking Shadowform before going into combat.
-    { 232698, "shadowform", "Shadowform", "PRIEST", "NO\nFORM" },
+    { 232698, "shadowform", "Shadowform", "PRIEST", "NO\nFORM", nil, nil },
+    -- Enhancement Shaman weapon imbues
+    { 33757, "windfuryWeapon", "Windfury Weapon", "SHAMAN", "NO\nWF", 5401, "shamanImbues" },
+    { 318038, "flametongueWeapon", "Flametongue Weapon", "SHAMAN", "NO\nFT", 5400, "shamanImbues" },
 }
 
 -- Display names and text for grouped buffs
 local BuffGroups = {
     beacons = { displayName = "Beacons", missingText = "NO\nBEACONS" },
+    shamanImbues = { displayName = "Shaman Imbues" },
 }
 
 -- Get the effective setting key for a buff (groupId if present, otherwise individual key)
@@ -373,9 +377,10 @@ local function ShouldShowPersonalBuff(spellIDs, requiredClass, beneficiaryRole)
     return not IsPlayerBuffActive(spellID, beneficiaryRole, groupSize)
 end
 
--- Check if player should cast their self buff (returns true if missing)
+-- Check if player should cast their self buff or weapon imbue (returns true if missing)
 -- Returns nil if player can't/shouldn't use this buff
-local function ShouldShowSelfBuff(spellID, requiredClass)
+-- enchantID: for weapon imbues, checks if this enchant is on either weapon
+local function ShouldShowSelfBuff(spellID, requiredClass, enchantID)
     if playerClass ~= requiredClass then
         return nil
     end
@@ -384,6 +389,13 @@ local function ShouldShowSelfBuff(spellID, requiredClass)
         return nil
     end
 
+    -- Weapon imbue: check if this specific enchant is on either weapon
+    if enchantID then
+        local _, _, _, mainHandEnchantID, _, _, _, offHandEnchantID = GetWeaponEnchantInfo()
+        return mainHandEnchantID ~= enchantID and offHandEnchantID ~= enchantID
+    end
+
+    -- Regular buff check
     local hasBuff, _ = UnitHasBuff("player", spellID)
     return not hasBuff
 end
@@ -971,13 +983,14 @@ UpdateDisplay = function()
         end
     end
 
-    -- Process self buffs (player's own buff on themselves)
+    -- Process self buffs (player's own buff on themselves, including weapon imbues)
     for _, buffData in ipairs(SelfBuffs) do
-        local spellID, key, _, requiredClass, missingText = unpack(buffData)
+        local spellID, key, _, requiredClass, missingText, enchantID, groupId = unpack(buffData)
         local frame = buffFrames[key]
+        local settingKey = groupId or key
 
-        if frame and db.enabledBuffs[key] then
-            local shouldShow = ShouldShowSelfBuff(spellID, requiredClass)
+        if frame and db.enabledBuffs[settingKey] then
+            local shouldShow = ShouldShowSelfBuff(spellID, requiredClass, enchantID)
             if shouldShow then
                 frame.icon:SetAllPoints()
                 frame.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
@@ -1469,9 +1482,18 @@ local function CreateOptionsPanel()
     selfNote:SetText("(buffs on yourself)")
     leftY = leftY - 14
 
+    local seenSelfGroups = {}
     for _, buffData in ipairs(SelfBuffs) do
-        local spellID, key, displayName = unpack(buffData)
-        leftY = CreateBuffCheckbox(leftColX, leftY, spellID, key, displayName)
+        local spellID, key, displayName, _, _, _, groupId = unpack(buffData)
+        if groupId then
+            if not seenSelfGroups[groupId] then
+                seenSelfGroups[groupId] = true
+                local groupInfo = BuffGroups[groupId]
+                leftY = CreateBuffCheckbox(leftColX, leftY, spellID, groupId, groupInfo.displayName)
+            end
+        else
+            leftY = CreateBuffCheckbox(leftColX, leftY, spellID, key, displayName)
+        end
     end
 
     -- ========== RIGHT COLUMN: SETTINGS ==========
@@ -1975,10 +1997,21 @@ local function ToggleOptions()
                 end
             end
         end
+        local seenSelfSyncGroups = {}
         for _, buffData in ipairs(SelfBuffs) do
-            local key = buffData[2]
-            if optionsPanel.buffCheckboxes[key] then
-                optionsPanel.buffCheckboxes[key]:SetChecked(db.enabledBuffs[key])
+            local _, _, _, _, _, _, groupId = unpack(buffData)
+            local settingKey = GetBuffSettingKey(buffData)
+            if groupId then
+                if not seenSelfSyncGroups[groupId] then
+                    seenSelfSyncGroups[groupId] = true
+                    if optionsPanel.buffCheckboxes[settingKey] then
+                        optionsPanel.buffCheckboxes[settingKey]:SetChecked(db.enabledBuffs[settingKey])
+                    end
+                end
+            else
+                if optionsPanel.buffCheckboxes[settingKey] then
+                    optionsPanel.buffCheckboxes[settingKey]:SetChecked(db.enabledBuffs[settingKey])
+                end
             end
         end
         optionsPanel.sizeSlider:SetValue(db.iconSize)
@@ -2125,7 +2158,9 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         if not BuffRemindersDB.renameNotificationShown then
             BuffRemindersDB.renameNotificationShown = true
             print("|cff00ccffBuffReminders:|r This addon was renamed from |cffffcc00RaidBuffsTracker|r.")
-            print("|cff00ccffBuffReminders:|r Your previous settings could not be migrated. Use |cffffcc00/br|r to reconfigure.")
+            print(
+                "|cff00ccffBuffReminders:|r Your previous settings could not be migrated. Use |cffffcc00/br|r to reconfigure."
+            )
         end
 
         for k, v in pairs(defaults) do
@@ -2162,10 +2197,14 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
                 end
             end
         end
+        local seenSelfInitGroups = {}
         for _, buffData in ipairs(SelfBuffs) do
-            local key = buffData[2]
-            if BuffRemindersDB.enabledBuffs[key] == nil then
-                BuffRemindersDB.enabledBuffs[key] = true
+            local settingKey = GetBuffSettingKey(buffData)
+            if not seenSelfInitGroups[settingKey] then
+                seenSelfInitGroups[settingKey] = true
+                if BuffRemindersDB.enabledBuffs[settingKey] == nil then
+                    BuffRemindersDB.enabledBuffs[settingKey] = true
+                end
             end
         end
 
