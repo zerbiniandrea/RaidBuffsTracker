@@ -18,8 +18,6 @@ From the author of [Raid Buffs Tracker](https://wago.io/iWkZ4Eq-i), one of the m
 *   Smart filtering - Show only in group, hide buffs without provider, show only your class buff, count only benefiting classes
 *   Customizable - Adjust icon size, spacing, and text size
 
-![Glow Styles](https://github.com/zerbiniandrea/BuffReminders/blob/main/images/glows.png?raw=true)
-
 ## Configuration
 
 To open the options panel, type `/br`
@@ -35,6 +33,8 @@ Choose which buffs to track. Buffs are organized by type: raid-wide buffs, prese
 Configure when and how the addon displays. Control visibility (group only, instance only, ready check only), adjust icon size and spacing, set expiration warning thresholds, and choose from 5 glow styles.
 
 ![BuffReminders Settings - Options](https://github.com/zerbiniandrea/BuffReminders/blob/main/images/settings-options.png?raw=true)
+
+![Glow Styles](https://github.com/zerbiniandrea/BuffReminders/blob/main/images/glows.png?raw=true)
 
 ### Custom Buffs
 

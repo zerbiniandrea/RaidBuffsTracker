@@ -19,6 +19,7 @@ globals = {
 
 read_globals = {
 	-- WoW API
+	"C_AddOns",
 	"C_ChallengeMode",
 	"C_Spell",
 	"C_Timer",

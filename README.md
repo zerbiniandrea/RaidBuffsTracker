@@ -23,10 +23,6 @@
 - Smart filtering - Show only in group, hide buffs without provider, show only your class buff, count only benefiting classes
 - Customizable - Adjust icon size, spacing, and text size
 
-<p align="center">
-  <img src="https://github.com/zerbiniandrea/BuffReminders/blob/main/images/glows.png?raw=true" />
-</p>
-
 ## Configuration
 
 To open the options panel, type `/br`
@@ -45,6 +41,10 @@ Configure when and how the addon displays. Control visibility (group only, insta
 
 <p align="center">
   <img src="https://github.com/zerbiniandrea/BuffReminders/blob/main/images/settings-options.png?raw=true" />
+</p>
+
+<p align="center">
+  <img src="https://github.com/zerbiniandrea/BuffReminders/blob/main/images/glows.png?raw=true" />
 </p>
 
 ### Custom Buffs

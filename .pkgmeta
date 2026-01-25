@@ -8,6 +8,7 @@ ignore:
   - .luarc.json
   - stylua.toml
   - Makefile
+  - README.md
   - CURSEFORGE.md
   - CLAUDE.md
   - types.lua

@@ -1556,6 +1556,12 @@ local function CreateOptionsPanel()
     title:SetPoint("LEFT", addonIcon, "RIGHT", 8, 0)
     title:SetText("BuffReminders")
 
+    -- Version (next to title, smaller font)
+    local version = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    version:SetPoint("LEFT", title, "RIGHT", 6, 0)
+    local addonVersion = C_AddOns.GetAddOnMetadata("BuffReminders", "Version") or ""
+    version:SetText(addonVersion)
+
     -- Scale controls (top right area) - using buttons to avoid slider scaling issues
     -- Base scale is OPTIONS_BASE_SCALE (displayed as 100%), range is 80%-150%
     local BASE_SCALE = OPTIONS_BASE_SCALE
