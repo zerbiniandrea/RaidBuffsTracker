@@ -83,7 +83,7 @@ local BuffBeneficiaries = {
 -- Default settings
 local defaults = {
     position = { point = "CENTER", x = 0, y = 0 },
-    locked = false,
+    locked = true,
     enabledBuffs = {
         intellect = true,
         stamina = true,
