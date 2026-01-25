@@ -1371,6 +1371,7 @@ local function CreateOptionsPanel()
     panel:SetScript("OnDragStop", panel.StopMovingOrSizing)
     panel:SetFrameStrata("DIALOG")
     panel:Hide()
+    tinsert(UISpecialFrames, "BuffRemindersOptions")
 
     -- Addon icon
     local addonIcon = panel:CreateTexture(nil, "ARTWORK")

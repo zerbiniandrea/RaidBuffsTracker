@@ -43,9 +43,12 @@ read_globals = {
 	"UnitIsDeadOrGhost",
 	"UnitIsUnit",
 
+	"tinsert",
+
 	-- WoW UI globals
 	"GameTooltip",
 	"STANDARD_TEXT_FONT",
+	"UISpecialFrames",
 	"UIDropDownMenu_AddButton",
 	"UIDropDownMenu_CreateInfo",
 	"UIDropDownMenu_DisableDropDown",
