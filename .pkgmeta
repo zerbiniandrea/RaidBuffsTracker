@@ -10,3 +10,4 @@ ignore:
   - Makefile
   - CURSEFORGE.md
   - CLAUDE.md
+  - types.lua
