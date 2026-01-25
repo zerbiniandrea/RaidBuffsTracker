@@ -10,9 +10,9 @@ ignore = {
 
 globals = {
 	"_",
-	"RaidBuffsTrackerDB",
-	"SLASH_RAIDBUFFSTRACKER1",
-	"SLASH_RAIDBUFFSTRACKER2",
+	"BuffRemindersDB",
+	"SLASH_BUFFREMINDERS1",
+	"SLASH_BUFFREMINDERS2",
 	"SlashCmdList",
 }
 

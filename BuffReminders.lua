@@ -135,7 +135,7 @@ end
 
 -- Calculate font size based on settings, with optional scale multiplier
 local function GetFontSize(scale)
-    local db = RaidBuffsTrackerDB
+    local db = BuffRemindersDB
     local baseSize = db.iconSize * (db.textScale or defaults.textScale)
     return math.floor(baseSize * (scale or 1))
 end
@@ -227,7 +227,7 @@ local function CountMissingBuff(spellIDs, buffKey)
     local minRemaining = nil
     local inRaid = IsInRaid()
     local groupSize = GetNumGroupMembers()
-    local db = RaidBuffsTrackerDB
+    local db = BuffRemindersDB
     local beneficiaries = db.filterByClassBenefit and buffKey and BuffBeneficiaries[buffKey] or nil
 
     if groupSize == 0 then
@@ -485,7 +485,7 @@ local GlowStyles = {
 
 -- Show/hide expiration glow on a buff frame
 local function SetExpirationGlow(frame, show)
-    local db = RaidBuffsTrackerDB
+    local db = BuffRemindersDB
     local styleIndex = db.glowStyle or 1
 
     if show then
@@ -532,12 +532,12 @@ end
 local function CreateBuffFrame(buffData, _)
     local spellIDs, key, displayName, classProvider = unpack(buffData)
 
-    local frame = CreateFrame("Frame", "RaidBuffsTracker_" .. key, mainFrame)
+    local frame = CreateFrame("Frame", "BuffReminders_" .. key, mainFrame)
     frame.key = key
     frame.spellIDs = spellIDs
     frame.displayName = displayName
 
-    local db = RaidBuffsTrackerDB
+    local db = BuffRemindersDB
     frame:SetSize(db.iconSize, db.iconSize)
 
     -- Icon texture
@@ -585,17 +585,17 @@ local function CreateBuffFrame(buffData, _)
     frame.testText:Hide()
 
     -- Dragging
-    frame:EnableMouse(not RaidBuffsTrackerDB.locked)
+    frame:EnableMouse(not BuffRemindersDB.locked)
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", function()
-        if not RaidBuffsTrackerDB.locked then
+        if not BuffRemindersDB.locked then
             mainFrame:StartMoving()
         end
     end)
     frame:SetScript("OnDragStop", function()
         mainFrame:StopMovingOrSizing()
         local point, _, _, x, y = mainFrame:GetPoint()
-        RaidBuffsTrackerDB.position = { point = point, x = x, y = y }
+        BuffRemindersDB.position = { point = point, x = x, y = y }
     end)
 
     frame:Hide()
@@ -604,7 +604,7 @@ end
 
 -- Position all visible buff frames (in definition order)
 PositionBuffFrames = function()
-    local db = RaidBuffsTrackerDB
+    local db = BuffRemindersDB
     local iconSize = db.iconSize or 32
     local spacing = math.floor(iconSize * (db.spacing or 0.2))
     local direction = db.growDirection or "CENTER"
@@ -668,7 +668,7 @@ RefreshTestDisplay = function()
         return
     end
 
-    local db = RaidBuffsTrackerDB
+    local db = BuffRemindersDB
 
     -- Hide all frames, clear glows, and hide test labels first
     for _, frame in pairs(buffFrames) do
@@ -784,7 +784,7 @@ ToggleTestMode = function(showLabels)
     else
         testMode = true
         -- Seed fake values for consistent display during test mode
-        local db = RaidBuffsTrackerDB
+        local db = BuffRemindersDB
         testModeData = {
             fakeTotal = math.random(10, 20),
             fakeRemaining = math.random(1, db.expirationThreshold or 15) * 60,
@@ -815,7 +815,7 @@ UpdateDisplay = function()
         return
     end
 
-    local db = RaidBuffsTrackerDB
+    local db = BuffRemindersDB
 
     -- Hide based on visibility settings
     if db.showOnlyOnReadyCheck and not inReadyCheck then
@@ -1025,11 +1025,11 @@ end
 -- Make frame draggable
 local function SetupDragging()
     mainFrame:SetMovable(true)
-    mainFrame:EnableMouse(not RaidBuffsTrackerDB.locked)
+    mainFrame:EnableMouse(not BuffRemindersDB.locked)
     mainFrame:RegisterForDrag("LeftButton")
 
     mainFrame:SetScript("OnDragStart", function(self)
-        if not RaidBuffsTrackerDB.locked then
+        if not BuffRemindersDB.locked then
             self:StartMoving()
         end
     end)
@@ -1037,16 +1037,16 @@ local function SetupDragging()
     mainFrame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
         local point, _, _, x, y = self:GetPoint()
-        RaidBuffsTrackerDB.position = { point = point, x = x, y = y }
+        BuffRemindersDB.position = { point = point, x = x, y = y }
     end)
 end
 
 -- Initialize main frame
 local function InitializeFrames()
-    mainFrame = CreateFrame("Frame", "RaidBuffsTrackerFrame", UIParent)
+    mainFrame = CreateFrame("Frame", "BuffRemindersFrame", UIParent)
     mainFrame:SetSize(200, 50)
 
-    local db = RaidBuffsTrackerDB
+    local db = BuffRemindersDB
     mainFrame:SetPoint(
         db.position.point or "CENTER",
         UIParent,
@@ -1102,7 +1102,7 @@ UpdateAnchor = function()
     if not mainFrame or not mainFrame.anchorFrame then
         return
     end
-    local db = RaidBuffsTrackerDB
+    local db = BuffRemindersDB
     local direction = db.growDirection or "CENTER"
 
     mainFrame.anchorFrame:ClearAllPoints()
@@ -1129,7 +1129,7 @@ end
 
 -- Update icon sizes and text (called when settings change)
 local function UpdateVisuals()
-    local db = RaidBuffsTrackerDB
+    local db = BuffRemindersDB
     local size = db.iconSize
     for _, frame in pairs(buffFrames) do
         frame:SetSize(size, size)
@@ -1162,7 +1162,7 @@ local function CreateOptionsPanel()
     local SECTION_SPACING = 12
     local ITEM_HEIGHT = 22
 
-    local panel = CreateFrame("Frame", "RaidBuffsTrackerOptions", UIParent, "BackdropTemplate")
+    local panel = CreateFrame("Frame", "BuffRemindersOptions", UIParent, "BackdropTemplate")
     panel:SetWidth(PANEL_WIDTH)
     panel:SetPoint("CENTER")
     panel:SetBackdrop({
@@ -1184,13 +1184,13 @@ local function CreateOptionsPanel()
     local addonIcon = panel:CreateTexture(nil, "ARTWORK")
     addonIcon:SetSize(28, 28)
     addonIcon:SetPoint("TOPLEFT", 12, -8)
-    addonIcon:SetTexture("Interface\\AddOns\\RaidBuffsTracker\\icon.tga")
+    addonIcon:SetTexture("Interface\\AddOns\\BuffReminders\\icon.tga")
     addonIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
     -- Title (next to icon)
     local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("LEFT", addonIcon, "RIGHT", 8, 0)
-    title:SetText("RaidBuffsTracker")
+    title:SetText("BuffReminders")
 
     -- Scale controls (top right area) - using buttons to avoid slider scaling issues
     -- Base scale is 1.2 (displayed as 100%), range is 80%-150%
@@ -1200,16 +1200,16 @@ local function CreateOptionsPanel()
 
     local scaleValue = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     scaleValue:SetPoint("TOPRIGHT", -70, -14)
-    local currentScale = RaidBuffsTrackerDB.optionsPanelScale or BASE_SCALE
+    local currentScale = BuffRemindersDB.optionsPanelScale or BASE_SCALE
     local currentPct = math.floor(currentScale / BASE_SCALE * 100 + 0.5)
     scaleValue:SetText(currentPct .. "%")
 
     local function UpdateScale(delta)
         -- Use integer math to avoid floating point issues
-        local oldPct = math.floor((RaidBuffsTrackerDB.optionsPanelScale or BASE_SCALE) / BASE_SCALE * 100 + 0.5)
+        local oldPct = math.floor((BuffRemindersDB.optionsPanelScale or BASE_SCALE) / BASE_SCALE * 100 + 0.5)
         local newPct = math.max(MIN_PCT, math.min(MAX_PCT, oldPct + delta))
         local newScale = newPct / 100 * BASE_SCALE
-        RaidBuffsTrackerDB.optionsPanelScale = newScale
+        BuffRemindersDB.optionsPanelScale = newScale
         panel:SetScale(newScale)
         scaleValue:SetText(newPct .. "%")
         -- Disable buttons at limits
@@ -1236,8 +1236,8 @@ local function CreateOptionsPanel()
     scaleUp:SetEnabled(currentPct < MAX_PCT)
 
     -- Apply saved scale
-    if RaidBuffsTrackerDB.optionsPanelScale then
-        panel:SetScale(RaidBuffsTrackerDB.optionsPanelScale)
+    if BuffRemindersDB.optionsPanelScale then
+        panel:SetScale(BuffRemindersDB.optionsPanelScale)
     end
 
     -- Close button
@@ -1269,9 +1269,9 @@ local function CreateOptionsPanel()
         local cb = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
         cb:SetSize(20, 20)
         cb:SetPoint("TOPLEFT", x, y)
-        cb:SetChecked(RaidBuffsTrackerDB.enabledBuffs[key])
+        cb:SetChecked(BuffRemindersDB.enabledBuffs[key])
         cb:SetScript("OnClick", function(self)
-            RaidBuffsTrackerDB.enabledBuffs[key] = self:GetChecked()
+            BuffRemindersDB.enabledBuffs[key] = self:GetChecked()
             UpdateDisplay()
         end)
 
@@ -1488,10 +1488,10 @@ local function CreateOptionsPanel()
         16,
         128,
         1,
-        RaidBuffsTrackerDB.iconSize,
+        BuffRemindersDB.iconSize,
         "",
         function(val)
-            RaidBuffsTrackerDB.iconSize = val
+            BuffRemindersDB.iconSize = val
             UpdateVisuals()
         end
     )
@@ -1506,10 +1506,10 @@ local function CreateOptionsPanel()
         0,
         50,
         1,
-        math.floor((RaidBuffsTrackerDB.spacing or 0.2) * 100),
+        math.floor((BuffRemindersDB.spacing or 0.2) * 100),
         "%",
         function(val)
-            RaidBuffsTrackerDB.spacing = val / 100
+            BuffRemindersDB.spacing = val / 100
             if testMode then
                 PositionBuffFrames()
             else
@@ -1528,10 +1528,10 @@ local function CreateOptionsPanel()
         20,
         60,
         1,
-        math.floor((RaidBuffsTrackerDB.textScale or 0.34) * 100),
+        math.floor((BuffRemindersDB.textScale or 0.34) * 100),
         "%",
         function(val)
-            RaidBuffsTrackerDB.textScale = val / 100
+            BuffRemindersDB.textScale = val / 100
             UpdateVisuals()
         end
     )
@@ -1546,10 +1546,10 @@ local function CreateOptionsPanel()
     lockBtn:SetPoint("TOPLEFT", rightColX, rightY)
     lockBtn:SetNormalFontObject("GameFontHighlightSmall")
     lockBtn:SetHighlightFontObject("GameFontHighlightSmall")
-    lockBtn:SetText(RaidBuffsTrackerDB.locked and "Unlock" or "Lock")
+    lockBtn:SetText(BuffRemindersDB.locked and "Unlock" or "Lock")
     lockBtn:SetScript("OnClick", function(self)
-        RaidBuffsTrackerDB.locked = not RaidBuffsTrackerDB.locked
-        self:SetText(RaidBuffsTrackerDB.locked and "Unlock" or "Lock")
+        BuffRemindersDB.locked = not BuffRemindersDB.locked
+        self:SetText(BuffRemindersDB.locked and "Unlock" or "Lock")
         UpdateAnchor()
     end)
     panel.lockBtn = lockBtn
@@ -1573,13 +1573,13 @@ local function CreateOptionsPanel()
         btn:SetDisabledFontObject("GameFontDisableSmall")
         btn.direction = dir
         btn:SetScript("OnClick", function()
-            RaidBuffsTrackerDB.growDirection = dir
+            BuffRemindersDB.growDirection = dir
             for _, b in ipairs(growBtns) do
                 b:SetEnabled(b.direction ~= dir)
             end
             UpdateDisplay()
         end)
-        btn:SetEnabled(RaidBuffsTrackerDB.growDirection ~= dir)
+        btn:SetEnabled(BuffRemindersDB.growDirection ~= dir)
         growBtns[i] = btn
     end
     panel.growBtns = growBtns
@@ -1601,9 +1601,9 @@ local function CreateOptionsPanel()
         rightColX,
         rightY,
         'Show "BUFF!" reminder',
-        RaidBuffsTrackerDB.showBuffReminder ~= false,
+        BuffRemindersDB.showBuffReminder ~= false,
         function(self)
-            RaidBuffsTrackerDB.showBuffReminder = self:GetChecked()
+            BuffRemindersDB.showBuffReminder = self:GetChecked()
             UpdateVisuals()
         end
     )
@@ -1626,15 +1626,15 @@ local function CreateOptionsPanel()
         rightColX,
         rightY,
         "Show only in group/raid",
-        RaidBuffsTrackerDB.showOnlyInGroup ~= false,
+        BuffRemindersDB.showOnlyInGroup ~= false,
         function(self)
-            RaidBuffsTrackerDB.showOnlyInGroup = self:GetChecked()
+            BuffRemindersDB.showOnlyInGroup = self:GetChecked()
             -- Update sub-checkbox enabled state
             if instanceCb then
                 SetCheckboxEnabled(instanceCb, self:GetChecked())
                 if not self:GetChecked() then
                     instanceCb:SetChecked(false)
-                    RaidBuffsTrackerDB.showOnlyInInstance = false
+                    BuffRemindersDB.showOnlyInInstance = false
                 end
             end
             UpdateDisplay()
@@ -1647,13 +1647,13 @@ local function CreateOptionsPanel()
         rightColX + 20,
         rightY,
         "Only in instance",
-        RaidBuffsTrackerDB.showOnlyInInstance,
+        BuffRemindersDB.showOnlyInInstance,
         function(self)
-            RaidBuffsTrackerDB.showOnlyInInstance = self:GetChecked()
+            BuffRemindersDB.showOnlyInInstance = self:GetChecked()
             UpdateDisplay()
         end
     )
-    SetCheckboxEnabled(instanceCb, RaidBuffsTrackerDB.showOnlyInGroup)
+    SetCheckboxEnabled(instanceCb, BuffRemindersDB.showOnlyInGroup)
     panel.instanceCheckbox = instanceCb
     panel.SetCheckboxEnabled = SetCheckboxEnabled
 
@@ -1662,9 +1662,9 @@ local function CreateOptionsPanel()
         rightColX,
         rightY,
         "Show only on ready check",
-        RaidBuffsTrackerDB.showOnlyOnReadyCheck,
+        BuffRemindersDB.showOnlyOnReadyCheck,
         function(self)
-            RaidBuffsTrackerDB.showOnlyOnReadyCheck = self:GetChecked()
+            BuffRemindersDB.showOnlyOnReadyCheck = self:GetChecked()
             -- Enable/disable the duration slider
             if readyCheckSlider then
                 local enabled = self:GetChecked()
@@ -1686,13 +1686,13 @@ local function CreateOptionsPanel()
         10,
         30,
         1,
-        RaidBuffsTrackerDB.readyCheckDuration or 15,
+        BuffRemindersDB.readyCheckDuration or 15,
         "s",
         function(val)
-            RaidBuffsTrackerDB.readyCheckDuration = val
+            BuffRemindersDB.readyCheckDuration = val
         end
     )
-    local rcEnabled = RaidBuffsTrackerDB.showOnlyOnReadyCheck
+    local rcEnabled = BuffRemindersDB.showOnlyOnReadyCheck
     local rcColor = rcEnabled and 1 or 0.5
     readyCheckSlider:SetEnabled(rcEnabled)
     readyCheckSlider.label:SetTextColor(rcColor, rcColor, rcColor)
@@ -1705,9 +1705,9 @@ local function CreateOptionsPanel()
         rightColX,
         rightY,
         "Show only my class buffs",
-        RaidBuffsTrackerDB.showOnlyPlayerClassBuff,
+        BuffRemindersDB.showOnlyPlayerClassBuff,
         function(self)
-            RaidBuffsTrackerDB.showOnlyPlayerClassBuff = self:GetChecked()
+            BuffRemindersDB.showOnlyPlayerClassBuff = self:GetChecked()
             UpdateDisplay()
         end
     )
@@ -1718,9 +1718,9 @@ local function CreateOptionsPanel()
         rightColX,
         rightY,
         "Only count benefiting classes |cffff8000(BETA)|r",
-        RaidBuffsTrackerDB.filterByClassBenefit,
+        BuffRemindersDB.filterByClassBenefit,
         function(self)
-            RaidBuffsTrackerDB.filterByClassBenefit = self:GetChecked()
+            BuffRemindersDB.filterByClassBenefit = self:GetChecked()
             UpdateDisplay()
         end
     )
@@ -1741,9 +1741,9 @@ local function CreateOptionsPanel()
         rightColX,
         rightY,
         "Show glow when expiring in:",
-        RaidBuffsTrackerDB.showExpirationGlow,
+        BuffRemindersDB.showExpirationGlow,
         function(self)
-            RaidBuffsTrackerDB.showExpirationGlow = self:GetChecked()
+            BuffRemindersDB.showExpirationGlow = self:GetChecked()
             if panel.SetGlowControlsEnabled then
                 panel.SetGlowControlsEnabled(self:GetChecked())
             end
@@ -1781,10 +1781,10 @@ local function CreateOptionsPanel()
         1,
         15,
         1,
-        RaidBuffsTrackerDB.expirationThreshold or 5,
+        BuffRemindersDB.expirationThreshold or 5,
         " min",
         function(val)
-            RaidBuffsTrackerDB.expirationThreshold = val
+            BuffRemindersDB.expirationThreshold = val
             if testMode then
                 RefreshTestDisplay()
             else
@@ -1801,7 +1801,7 @@ local function CreateOptionsPanel()
     styleLabel:SetPoint("TOPLEFT", rightColX, rightY)
     styleLabel:SetText("Style:")
 
-    local styleDropdown = CreateFrame("Frame", "RaidBuffsTrackerStyleDropdown", panel, "UIDropDownMenuTemplate")
+    local styleDropdown = CreateFrame("Frame", "BuffRemindersStyleDropdown", panel, "UIDropDownMenuTemplate")
     styleDropdown:SetPoint("LEFT", styleLabel, "RIGHT", -10, -2)
     UIDropDownMenu_SetWidth(styleDropdown, 100)
 
@@ -1810,9 +1810,9 @@ local function CreateOptionsPanel()
             local info = UIDropDownMenu_CreateInfo()
             info.text = style.name
             info.value = i
-            info.checked = (RaidBuffsTrackerDB.glowStyle or 1) == i
+            info.checked = (BuffRemindersDB.glowStyle or 1) == i
             info.func = function()
-                RaidBuffsTrackerDB.glowStyle = i
+                BuffRemindersDB.glowStyle = i
                 UIDropDownMenu_SetSelectedValue(styleDropdown, i)
                 UIDropDownMenu_SetText(styleDropdown, style.name)
                 if testMode then
@@ -1826,8 +1826,8 @@ local function CreateOptionsPanel()
     end
 
     UIDropDownMenu_Initialize(styleDropdown, StyleDropdown_Initialize)
-    UIDropDownMenu_SetSelectedValue(styleDropdown, RaidBuffsTrackerDB.glowStyle or 1)
-    UIDropDownMenu_SetText(styleDropdown, GlowStyles[RaidBuffsTrackerDB.glowStyle or 1].name)
+    UIDropDownMenu_SetSelectedValue(styleDropdown, BuffRemindersDB.glowStyle or 1)
+    UIDropDownMenu_SetText(styleDropdown, GlowStyles[BuffRemindersDB.glowStyle or 1].name)
     panel.styleDropdown = styleDropdown
 
     -- Preview button
@@ -1856,7 +1856,7 @@ local function CreateOptionsPanel()
     panel.SetGlowControlsEnabled = SetGlowControlsEnabled
 
     -- Set initial state
-    SetGlowControlsEnabled(RaidBuffsTrackerDB.showExpirationGlow)
+    SetGlowControlsEnabled(BuffRemindersDB.showExpirationGlow)
 
     rightY = rightY - 28
 
@@ -1880,7 +1880,7 @@ local function CreateOptionsPanel()
     resetPosBtn:SetPoint("TOP", -totalBtnWidth / 2 + btnWidth / 2, bottomY)
     resetPosBtn:SetText("Reset Pos")
     resetPosBtn:SetScript("OnClick", function()
-        RaidBuffsTrackerDB.position = { point = "CENTER", x = 0, y = 0 }
+        BuffRemindersDB.position = { point = "CENTER", x = 0, y = 0 }
         mainFrame:ClearAllPoints()
         mainFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     end)
@@ -1899,8 +1899,8 @@ local function CreateOptionsPanel()
     resetRatiosBtn:SetPoint("LEFT", resetPosBtn, "RIGHT", btnSpacing, 0)
     resetRatiosBtn:SetText("Reset Ratios")
     resetRatiosBtn:SetScript("OnClick", function()
-        RaidBuffsTrackerDB.spacing = 0.2
-        RaidBuffsTrackerDB.textScale = 0.34
+        BuffRemindersDB.spacing = 0.2
+        BuffRemindersDB.textScale = 0.34
         panel.spacingSlider:SetValue(20)
         panel.textSlider:SetValue(34)
         panel.spacingValue:SetText("20%")
@@ -1945,7 +1945,7 @@ local function ToggleOptions()
         optionsPanel:Hide()
     else
         -- Refresh values
-        local db = RaidBuffsTrackerDB
+        local db = BuffRemindersDB
         for _, buffData in ipairs(RaidBuffs) do
             local key = buffData[2]
             if optionsPanel.buffCheckboxes[key] then
@@ -2034,7 +2034,7 @@ ShowGlowDemo = function()
     local ICON_SIZE = 64
     local SPACING = 20
 
-    local panel = CreateFrame("Frame", "RaidBuffsTrackerGlowDemo", UIParent, "BackdropTemplate")
+    local panel = CreateFrame("Frame", "BuffRemindersGlowDemo", UIParent, "BackdropTemplate")
     local numStyles = #GlowStyles
     panel:SetSize(numStyles * (ICON_SIZE + SPACING) + SPACING, ICON_SIZE + 70)
     panel:SetPoint("CENTER")
@@ -2117,31 +2117,31 @@ eventFrame:RegisterEvent("READY_CHECK")
 eventFrame:SetScript("OnEvent", function(self, event, arg1)
     if event == "ADDON_LOADED" and arg1 == addonName then
         _, playerClass = UnitClass("player")
-        if not RaidBuffsTrackerDB then
-            RaidBuffsTrackerDB = {}
+        if not BuffRemindersDB then
+            BuffRemindersDB = {}
         end
         for k, v in pairs(defaults) do
-            if RaidBuffsTrackerDB[k] == nil then
+            if BuffRemindersDB[k] == nil then
                 if type(v) == "table" then
-                    RaidBuffsTrackerDB[k] = {}
+                    BuffRemindersDB[k] = {}
                     for k2, v2 in pairs(v) do
-                        RaidBuffsTrackerDB[k][k2] = v2
+                        BuffRemindersDB[k][k2] = v2
                     end
                 else
-                    RaidBuffsTrackerDB[k] = v
+                    BuffRemindersDB[k] = v
                 end
             end
         end
         for _, buffData in ipairs(RaidBuffs) do
             local key = buffData[2]
-            if RaidBuffsTrackerDB.enabledBuffs[key] == nil then
-                RaidBuffsTrackerDB.enabledBuffs[key] = true
+            if BuffRemindersDB.enabledBuffs[key] == nil then
+                BuffRemindersDB.enabledBuffs[key] = true
             end
         end
         for _, buffData in ipairs(PresenceBuffs) do
             local key = buffData[2]
-            if RaidBuffsTrackerDB.enabledBuffs[key] == nil then
-                RaidBuffsTrackerDB.enabledBuffs[key] = true
+            if BuffRemindersDB.enabledBuffs[key] == nil then
+                BuffRemindersDB.enabledBuffs[key] = true
             end
         end
         local seenInitGroups = {}
@@ -2149,29 +2149,29 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
             local settingKey = GetBuffSettingKey(buffData)
             if not seenInitGroups[settingKey] then
                 seenInitGroups[settingKey] = true
-                if RaidBuffsTrackerDB.enabledBuffs[settingKey] == nil then
-                    RaidBuffsTrackerDB.enabledBuffs[settingKey] = true
+                if BuffRemindersDB.enabledBuffs[settingKey] == nil then
+                    BuffRemindersDB.enabledBuffs[settingKey] = true
                 end
             end
         end
         for _, buffData in ipairs(SelfBuffs) do
             local key = buffData[2]
-            if RaidBuffsTrackerDB.enabledBuffs[key] == nil then
-                RaidBuffsTrackerDB.enabledBuffs[key] = true
+            if BuffRemindersDB.enabledBuffs[key] == nil then
+                BuffRemindersDB.enabledBuffs[key] = true
             end
         end
 
-        SLASH_RAIDBUFFSTRACKER1 = "/rbt"
-        SLASH_RAIDBUFFSTRACKER2 = "/raidbuffstracker"
-        SlashCmdList["RAIDBUFFSTRACKER"] = SlashHandler
+        SLASH_BUFFREMINDERS1 = "/br"
+        SLASH_BUFFREMINDERS2 = "/buffreminders"
+        SlashCmdList["BUFFREMINDERS"] = SlashHandler
 
         -- Register with WoW's Interface Options
         local settingsPanel = CreateFrame("Frame")
-        settingsPanel.name = "RaidBuffsTracker"
+        settingsPanel.name = "BuffReminders"
 
         local title = settingsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
         title:SetPoint("TOPLEFT", 16, -16)
-        title:SetText("RaidBuffsTracker")
+        title:SetText("BuffReminders")
 
         local desc = settingsPanel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
         desc:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
@@ -2191,7 +2191,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
 
         local slashInfo = settingsPanel:CreateFontString(nil, "ARTWORK", "GameFontDisable")
         slashInfo:SetPoint("TOPLEFT", openBtn, "BOTTOMLEFT", 0, -12)
-        slashInfo:SetText("Slash commands: /rbt or /raidbuffstracker")
+        slashInfo:SetText("Slash commands: /br or /buffreminders")
 
         local category = Settings.RegisterCanvasLayoutCategory(settingsPanel, settingsPanel.name)
         Settings.RegisterAddOnCategory(category)
@@ -2228,7 +2228,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
             UpdateDisplay()
         end
         -- Start timer to reset ready check state
-        local duration = RaidBuffsTrackerDB.readyCheckDuration or 15
+        local duration = BuffRemindersDB.readyCheckDuration or 15
         readyCheckTimer = C_Timer.NewTimer(duration, function()
             inReadyCheck = false
             readyCheckTimer = nil

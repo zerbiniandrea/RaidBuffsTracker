@@ -1,16 +1,16 @@
-<h1 align="center">RaidBuffsTracker</h1>
+<h1 align="center">BuffReminders</h1>
 <p align="center">
-  <img src="https://github.com/zerbiniandrea/RaidBuffsTracker/blob/main/images/logo.png?raw=true" width="180" />
+  <img src="https://github.com/zerbiniandrea/BuffReminders/blob/main/images/logo.png?raw=true" width="180" />
 </p>
 <p align="center">
   <a href="https://discord.com/users/285458497020362762"><img src="https://shields.io/badge/discord-5865F2?logo=discord&style=for-the-badge&logoColor=white" /></a>
-  <a href="https://github.com/zerbiniandrea/RaidBuffsTracker"><img src="https://shields.io/badge/github-gray?logo=github&style=for-the-badge&logoColor=white" /></a>
+  <a href="https://github.com/zerbiniandrea/BuffReminders"><img src="https://shields.io/badge/github-gray?logo=github&style=for-the-badge&logoColor=white" /></a>
 </p>
 <p align="center">A lightweight World of Warcraft addon that tracks missing raid buffs with a clean icon display.</p>
 <p align="center">From the author of <a href="https://wago.io/iWkZ4Eq-i">Raid Buffs Tracker</a>, one of the most popular raid buffs tracking WeakAuras.</p>
 
 <p align="center">
-  <img src="https://github.com/zerbiniandrea/RaidBuffsTracker/blob/main/images/buffs.png?raw=true" />
+  <img src="https://github.com/zerbiniandrea/BuffReminders/blob/main/images/buffs.png?raw=true" />
 </p>
 
 ## Features
@@ -25,15 +25,15 @@
 - Customizable - Adjust icon size, spacing, and text size
 
 <p align="center">
-  <img src="https://github.com/zerbiniandrea/RaidBuffsTracker/blob/main/images/glows.png?raw=true" />
+  <img src="https://github.com/zerbiniandrea/BuffReminders/blob/main/images/glows.png?raw=true" />
 </p>
 
 ## Configuration
 
-To open the options panel, type `/rbt`
+To open the options panel, type `/br`
 
 <p align="center">
-  <img src="https://github.com/zerbiniandrea/RaidBuffsTracker/blob/main/images/settings.png?raw=true" />
+  <img src="https://github.com/zerbiniandrea/BuffReminders/blob/main/images/settings.png?raw=true" />
 </p>
 
 ## Limitations
@@ -44,4 +44,4 @@ To open the options panel, type `/rbt`
 
 ## Support
 
-If you encounter issues or have suggestions, feel free to reach out on [Discord](https://discord.com/users/285458497020362762) or open an issue on [GitHub](https://github.com/zerbiniandrea/RaidBuffsTracker/issues).
+If you encounter issues or have suggestions, feel free to reach out on [Discord](https://discord.com/users/285458497020362762) or open an issue on [GitHub](https://github.com/zerbiniandrea/BuffReminders/issues).

@@ -1,0 +1,11 @@
+## Interface: 120000
+## Title: BuffReminders
+## Notes: Shows missing buffs with count overlay
+## Author: zerbi
+## Version: @project-version@
+## SavedVariables: BuffRemindersDB
+## X-Curse-Project-ID: 1441094
+## X-Wago-ID: qGYZZjNg
+## IconTexture: Interface\AddOns\BuffReminders\icon.tga
+
+BuffReminders.lua

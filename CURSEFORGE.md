@@ -1,12 +1,12 @@
-# RaidBuffsTracker
+# BuffReminders
 
-[![](https://shields.io/badge/discord-5865F2?logo=discord&style=for-the-badge&logoColor=white)](https://discord.com/users/285458497020362762) [![](https://shields.io/badge/github-gray?logo=github&style=for-the-badge&logoColor=white)](https://github.com/zerbiniandrea/RaidBuffsTracker)
+[![](https://shields.io/badge/discord-5865F2?logo=discord&style=for-the-badge&logoColor=white)](https://discord.com/users/285458497020362762) [![](https://shields.io/badge/github-gray?logo=github&style=for-the-badge&logoColor=white)](https://github.com/zerbiniandrea/BuffReminders)
 
 A lightweight World of Warcraft addon that tracks missing raid buffs with a clean icon display.
 
 From the author of [Raid Buffs Tracker](https://wago.io/iWkZ4Eq-i), one of the most popular raid buffs tracking WeakAuras.
 
-![BuffDisplay](https://github.com/zerbiniandrea/RaidBuffsTracker/blob/main/images/buffs.png?raw=true)
+![BuffDisplay](https://github.com/zerbiniandrea/BuffReminders/blob/main/images/buffs.png?raw=true)
 
 ## Features
 
@@ -19,13 +19,13 @@ From the author of [Raid Buffs Tracker](https://wago.io/iWkZ4Eq-i), one of the m
 *   Class benefit filtering - Only show buffs that benefit your class (BETA)
 *   Customizable - Adjust icon size, spacing, and text size
 
-![Glow Styles](https://github.com/zerbiniandrea/RaidBuffsTracker/blob/main/images/glows.png?raw=true)
+![Glow Styles](https://github.com/zerbiniandrea/BuffReminders/blob/main/images/glows.png?raw=true)
 
 ## Configuration
 
-To open the options panel, type `/rbt`
+To open the options panel, type `/br`
 
-![RaidBuffsTracker Settings](https://github.com/zerbiniandrea/RaidBuffsTracker/blob/main/images/settings.png?raw=true)
+![BuffReminders Settings](https://github.com/zerbiniandrea/BuffReminders/blob/main/images/settings.png?raw=true)
 
 ## Limitations
 
@@ -35,4 +35,4 @@ To open the options panel, type `/rbt`
 
 ## Support
 
-If you encounter issues or have suggestions, feel free to reach out on [Discord](https://discord.com/users/285458497020362762) or open an issue on [GitHub](https://github.com/zerbiniandrea/RaidBuffsTracker/issues).
+If you encounter issues or have suggestions, feel free to reach out on [Discord](https://discord.com/users/285458497020362762) or open an issue on [GitHub](https://github.com/zerbiniandrea/BuffReminders/issues).
