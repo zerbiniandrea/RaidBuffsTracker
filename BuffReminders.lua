@@ -1571,8 +1571,12 @@ local function CreateOptionsPanel()
     -- ========== LEFT COLUMN: BUFF SELECTION ==========
     local leftY = startY
 
-    -- Tracked Buffs header
-    _, leftY = CreateSectionHeader(panel, "Tracked Buffs", leftColX, leftY)
+    -- Raid Buffs header
+    _, leftY = CreateSectionHeader(panel, "Raid Buffs", leftColX, leftY)
+    local raidNote = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    raidNote:SetPoint("TOPLEFT", leftColX, leftY)
+    raidNote:SetText("(for the whole group)")
+    leftY = leftY - 14
     leftY = RenderBuffCheckboxes(leftColX, leftY, RaidBuffs)
 
     leftY = leftY - SECTION_SPACING
@@ -1581,7 +1585,7 @@ local function CreateOptionsPanel()
     _, leftY = CreateSectionHeader(panel, "Presence Buffs", leftColX, leftY)
     local presenceNote = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     presenceNote:SetPoint("TOPLEFT", leftColX, leftY)
-    presenceNote:SetText("(need at least 1)")
+    presenceNote:SetText("(at least 1 person needs)")
     leftY = leftY - 14
     leftY = RenderBuffCheckboxes(leftColX, leftY, PresenceBuffs)
 
@@ -1591,7 +1595,7 @@ local function CreateOptionsPanel()
     _, leftY = CreateSectionHeader(panel, "Personal Buffs", leftColX, leftY)
     local personalNote = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     personalNote:SetPoint("TOPLEFT", leftColX, leftY)
-    personalNote:SetText("(your buff only)")
+    personalNote:SetText("(buffs you cast on others)")
     leftY = leftY - 14
     leftY = RenderBuffCheckboxes(leftColX, leftY, PersonalBuffs)
 
