@@ -1,6 +1,6 @@
-.PHONY: all lint format check
+.PHONY: all lint format check typecheck
 
-all: lint format
+all: typecheck lint format
 
 lint:
 	luacheck .
@@ -8,5 +8,8 @@ lint:
 format:
 	stylua .
 
-check: lint
+typecheck:
+	lua-language-server --check . --checklevel=Warning
+
+check: typecheck lint
 	stylua --check .

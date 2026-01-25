@@ -1,13 +1,84 @@
 local addonName, _ = ...
 
--- Buff definitions using named fields for clarity
--- All buff tables share these core fields:
---   spellID: number or table of numbers for the buff spell(s)
---   key: string setting key for enabling/disabling
---   name: display name shown in settings
---   class: provider class (for filtering)
--- Additional fields vary by buff type (see comments below)
+-- ============================================================================
+-- TYPE DEFINITIONS (LuaLS annotations)
+-- ============================================================================
 
+-- WoW API types (stubs for type checking)
+---@class Frame
+---@class Texture
+---@class FontString
+---@class AnimationGroup
+
+---@alias SpellID number|number[]
+---@alias ClassName "WARRIOR"|"PALADIN"|"HUNTER"|"ROGUE"|"PRIEST"|"DEATHKNIGHT"|"SHAMAN"|"MAGE"|"WARLOCK"|"MONK"|"DRUID"|"DEMONHUNTER"|"EVOKER"
+---@alias RoleType "TANK"|"HEALER"|"DAMAGER"
+
+---@class RaidBuff
+---@field spellID SpellID
+---@field key string
+---@field name string
+---@field class ClassName
+
+---@class PresenceBuff
+---@field spellID SpellID
+---@field key string
+---@field name string
+---@field class ClassName
+---@field missingText string
+---@field infoTooltip? string
+
+---@class PersonalBuff
+---@field spellID SpellID
+---@field key string
+---@field name string
+---@field class ClassName
+---@field missingText string
+---@field groupId? string
+---@field beneficiaryRole? RoleType
+---@field infoTooltip? string
+
+---@class SelfBuff
+---@field spellID SpellID
+---@field key string
+---@field name string
+---@field class ClassName
+---@field missingText string
+---@field groupId? string
+---@field enchantID? number
+---@field buffIdOverride? number
+---@field requiresTalentSpellID? number
+---@field excludeTalentSpellID? number
+---@field iconByRole? table<RoleType, number>
+---@field infoTooltip? string
+
+---@class BuffGroup
+---@field displayName string
+---@field missingText? string
+
+---@class BuffFrame: Frame
+---@field key string
+---@field spellIDs SpellID
+---@field displayName string
+---@field icon Texture
+---@field border Texture
+---@field count FontString
+---@field buffText? FontString
+---@field testText FontString
+---@field isPlayerBuff? boolean
+---@field isPresenceBuff? boolean
+---@field isPersonalBuff? boolean
+---@field isSelfBuff? boolean
+---@field glowTexture? Texture
+---@field glowAnim? AnimationGroup
+---@field glowShowing? boolean
+---@field currentGlowStyle? number
+
+-- ============================================================================
+-- BUFF DATA TABLES
+-- ============================================================================
+
+---@type RaidBuff[]
 local RaidBuffs = {
     { spellID = 1459, key = "intellect", name = "Arcane Intellect", class = "MAGE" },
     { spellID = 6673, key = "attackPower", name = "Battle Shout", class = "WARRIOR" },
@@ -36,10 +107,7 @@ local RaidBuffs = {
     { spellID = 462854, key = "skyfury", name = "Skyfury", class = "SHAMAN" },
 }
 
--- Presence-based buffs: only need at least 1 person to have it active
--- Additional fields:
---   missingText: text shown when buff is missing
---   infoTooltip: optional tooltip shown with "?" icon (e.g., "Ready Check Only|Description")
+---@type PresenceBuff[]
 local PresenceBuffs = {
     { spellID = 381637, key = "atrophicPoison", name = "Atrophic Poison", class = "ROGUE", missingText = "NO\nPOISON" },
     { spellID = 465, key = "devotionAura", name = "Devotion Aura", class = "PALADIN", missingText = "NO\nAURA" },
@@ -53,12 +121,7 @@ local PresenceBuffs = {
     },
 }
 
--- Personal buffs: only tracks if the player should cast their buff on others
--- Only shows if player is the required class, has the spell talented, and a beneficiary needs it
--- Additional fields:
---   beneficiaryRole: optional role filter (e.g., "HEALER")
---   missingText: text shown when buff is missing
---   groupId: optional - buffs with same groupId share a single setting and show one icon
+---@type PersonalBuff[]
 local PersonalBuffs = {
     -- Beacons (alphabetical: Faith, Light)
     {
@@ -102,15 +165,7 @@ local PersonalBuffs = {
     },
 }
 
--- Self buffs: buffs/imbues the player casts on themselves
--- Additional fields:
---   missingText: text shown when buff is missing
---   enchantID: optional - for weapon imbues, checks if this enchant is on either weapon
---   groupId: optional - buffs with same groupId share a single setting and show one icon
---   buffIdOverride: optional - separate buff ID to check (if different from spellID, e.g., passive effects)
---   requiresTalentSpellID: optional - only show if player has this talent
---   excludeTalentSpellID: optional - hide if player has this talent
---   iconByRole: optional - table mapping role (HEALER/DAMAGER/TANK) to spellID for icon
+---@type SelfBuff[]
 local SelfBuffs = {
     -- Paladin weapon rites (alphabetical: Adjuration, Sanctification)
     {
@@ -197,7 +252,7 @@ local SelfBuffs = {
     },
 }
 
--- Display names and text for grouped buffs
+---@type table<string, BuffGroup>
 local BuffGroups = {
     beacons = { displayName = "Beacons", missingText = "NO\nBEACONS" },
     shamanImbues = { displayName = "Shaman Imbues" },
@@ -205,7 +260,9 @@ local BuffGroups = {
     shamanShields = { displayName = "Shaman Shields" },
 }
 
--- Get the effective setting key for a buff (groupId if present, otherwise individual key)
+---Get the effective setting key for a buff (groupId if present, otherwise individual key)
+---@param buff RaidBuff|PresenceBuff|PersonalBuff|SelfBuff
+---@return string
 local function GetBuffSettingKey(buff)
     return buff.groupId or buff.key
 end
@@ -278,20 +335,25 @@ local testModeData = nil -- Stores seeded fake values for consistent test displa
 local playerClass = nil -- Cached player class, set once on init
 local optionsPanel
 
--- Check if a buff is enabled (defaults to true if not explicitly set to false)
+---Check if a buff is enabled (defaults to true if not explicitly set to false)
+---@param key string
+---@return boolean
 local function IsBuffEnabled(key)
     local db = BuffRemindersDB
     return db.enabledBuffs[key] ~= false
 end
 
--- Check if a unit is a valid group member for buff tracking
--- Excludes: non-existent, dead/ghost, disconnected, hostile (cross-faction in open world)
+---Check if a unit is a valid group member for buff tracking
+---Excludes: non-existent, dead/ghost, disconnected, hostile (cross-faction in open world)
+---@param unit string
+---@return boolean
 local function IsValidGroupMember(unit)
     return UnitExists(unit) and not UnitIsDeadOrGhost(unit) and UnitIsConnected(unit) and UnitCanAssist("player", unit)
 end
 
--- Iterate over valid group members, calling callback(unit) for each
--- Handles raid vs party unit naming automatically
+---Iterate over valid group members, calling callback(unit) for each
+---Handles raid vs party unit naming automatically
+---@param callback fun(unit: string)
 local function IterateGroupMembers(callback)
     local inRaid = IsInRaid()
     local groupSize = GetNumGroupMembers()
@@ -314,14 +376,18 @@ local function IterateGroupMembers(callback)
     end
 end
 
--- Calculate font size based on settings, with optional scale multiplier
+---Calculate font size based on settings, with optional scale multiplier
+---@param scale? number
+---@return number
 local function GetFontSize(scale)
     local db = BuffRemindersDB
     local baseSize = db.iconSize * (db.textScale or defaults.textScale)
     return math.floor(baseSize * (scale or 1))
 end
 
--- Format remaining time in seconds to a short string (e.g., "5m" or "30s")
+---Format remaining time in seconds to a short string (e.g., "5m" or "30s")
+---@param seconds number
+---@return string
 local function FormatRemainingTime(seconds)
     local mins = math.floor(seconds / 60)
     if mins > 0 then
@@ -331,7 +397,8 @@ local function FormatRemainingTime(seconds)
     end
 end
 
--- Get classes present in the group
+---Get classes present in the group
+---@return table<ClassName, boolean>
 local function GetGroupClasses()
     local classes = {}
 
@@ -351,8 +418,12 @@ local function GetGroupClasses()
     return classes
 end
 
--- Check if unit has a specific buff (handles single spellID or table of spellIDs)
--- Returns: hasBuff, remainingTime, sourceUnit
+---Check if unit has a specific buff (handles single spellID or table of spellIDs)
+---@param unit string
+---@param spellIDs SpellID
+---@return boolean hasBuff
+---@return number? remainingTime
+---@return string? sourceUnit
 local function UnitHasBuff(unit, spellIDs)
     if type(spellIDs) ~= "table" then
         spellIDs = { spellIDs }
@@ -375,7 +446,8 @@ local function UnitHasBuff(unit, spellIDs)
     return false, nil, nil
 end
 
--- Get player's current role (HEALER, DAMAGER, TANK, or nil)
+---Get player's current role
+---@return RoleType?
 local function GetPlayerRole()
     local spec = GetSpecialization()
     if spec then
@@ -384,7 +456,10 @@ local function GetPlayerRole()
     return nil
 end
 
--- Get spell texture (handles table of spellIDs and role-based icons)
+---Get spell texture (handles table of spellIDs and role-based icons)
+---@param spellIDs SpellID
+---@param iconByRole? table<RoleType, number>
+---@return number? textureID
 local function GetBuffTexture(spellIDs, iconByRole)
     local id
     -- Check for role-based icon override
@@ -405,8 +480,12 @@ local function GetBuffTexture(spellIDs, iconByRole)
     return texture
 end
 
--- Count group members missing a buff (returns missing, total)
--- buffKey is optional, used for class benefit filtering
+---Count group members missing a buff
+---@param spellIDs SpellID
+---@param buffKey? string Used for class benefit filtering
+---@return number missing
+---@return number total
+---@return number? minRemaining
 local function CountMissingBuff(spellIDs, buffKey)
     local missing = 0
     local total = 0
@@ -447,7 +526,10 @@ local function CountMissingBuff(spellIDs, buffKey)
     return missing, total, minRemaining
 end
 
--- Count group members with a presence buff (returns count, minRemaining)
+---Count group members with a presence buff
+---@param spellIDs SpellID
+---@return number count
+---@return number? minRemaining
 local function CountPresenceBuff(spellIDs)
     local found = 0
     local minRemaining = nil
@@ -476,9 +558,10 @@ local function CountPresenceBuff(spellIDs)
     return found, minRemaining
 end
 
--- Check if player's buff is active on anyone in the group
--- Returns true if the buff (from player) exists on someone, false otherwise
--- If role is specified, only checks units with that role
+---Check if player's buff is active on anyone in the group
+---@param spellID number
+---@param role? RoleType Only check units with this role
+---@return boolean
 local function IsPlayerBuffActive(spellID, role)
     local found = false
 
@@ -497,14 +580,17 @@ local function IsPlayerBuffActive(spellID, role)
     return found
 end
 
--- Check if player should cast their personal buff (returns true if a beneficiary needs it)
--- Returns nil if player can't provide this buff
+---Check if player should cast their personal buff (returns true if a beneficiary needs it)
+---@param spellIDs SpellID
+---@param requiredClass ClassName
+---@param beneficiaryRole? RoleType
+---@return boolean? Returns nil if player can't provide this buff
 local function ShouldShowPersonalBuff(spellIDs, requiredClass, beneficiaryRole)
     if playerClass ~= requiredClass then
         return nil
     end
 
-    local spellID = type(spellIDs) == "table" and spellIDs[1] or spellIDs
+    local spellID = (type(spellIDs) == "table" and spellIDs[1] or spellIDs) --[[@as number]]
     if not IsPlayerSpell(spellID) then
         return nil
     end
@@ -517,12 +603,14 @@ local function ShouldShowPersonalBuff(spellIDs, requiredClass, beneficiaryRole)
     return not IsPlayerBuffActive(spellID, beneficiaryRole)
 end
 
--- Check if player should cast their self buff or weapon imbue (returns true if missing)
--- Returns nil if player can't/shouldn't use this buff
--- enchantID: for weapon imbues, checks if this enchant is on either weapon
--- requiresTalent: only show if player HAS this talent (by spellID)
--- excludeTalent: hide if player HAS this talent (by spellID)
--- buffIdOverride: optional separate buff ID to check (if different from spellID)
+---Check if player should cast their self buff or weapon imbue (returns true if missing)
+---@param spellID SpellID
+---@param requiredClass ClassName
+---@param enchantID? number For weapon imbues, checks if this enchant is on either weapon
+---@param requiresTalent? number Only show if player HAS this talent
+---@param excludeTalent? number Hide if player HAS this talent
+---@param buffIdOverride? number Separate buff ID to check (if different from spellID)
+---@return boolean? Returns nil if player can't/shouldn't use this buff
 local function ShouldShowSelfBuff(spellID, requiredClass, enchantID, requiresTalent, excludeTalent, buffIdOverride)
     if playerClass ~= requiredClass then
         return nil
@@ -1023,6 +1111,7 @@ UpdateDisplay = function()
                 SetExpirationGlow(frame, expiringSoon)
             elseif expiringSoon then
                 -- Everyone has buff but expiring soon - show remaining time with glow
+                ---@cast minRemaining number
                 frame.count:SetText(FormatRemainingTime(minRemaining))
                 frame:Show()
                 anyVisible = true
@@ -1055,6 +1144,7 @@ UpdateDisplay = function()
                 SetExpirationGlow(frame, false)
             elseif expiringSoon then
                 -- Has buff but expiring soon - show remaining time with glow
+                ---@cast minRemaining number
                 frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(), "OUTLINE")
                 frame.count:SetText(FormatRemainingTime(minRemaining))
                 frame:Show()
