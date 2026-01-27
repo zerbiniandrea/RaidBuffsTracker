@@ -380,7 +380,6 @@ local defaults = {
     enabledBuffs = {},
     iconSize = 64,
     spacing = 0.2, -- multiplier of iconSize (reset ratios default)
-    textScale = 0.34, -- multiplier of iconSize (reset ratios default)
     showBuffReminder = true,
     showOnlyInGroup = false,
     showOnlyInInstance = false,
@@ -393,6 +392,51 @@ local defaults = {
     expirationThreshold = 15, -- minutes
     glowStyle = 1, -- 1=Orange, 2=Gold, 3=Yellow, 4=White, 5=Red
     optionsPanelScale = 1.2, -- base scale (displayed as 100%)
+    splitCategories = { -- Which categories are split into their own frame (false = in main frame)
+        raid = false,
+        presence = false,
+        personal = false,
+        self = false,
+        custom = false,
+    },
+    categorySettings = { -- Per-category settings (main = non-split buffs, others = when split)
+        main = {
+            position = { point = "CENTER", x = 0, y = 0 },
+            iconSize = 64,
+            spacing = 0.2,
+            growDirection = "CENTER",
+        },
+        raid = {
+            position = { point = "CENTER", x = 0, y = 60 },
+            iconSize = 64,
+            spacing = 0.2,
+            growDirection = "CENTER",
+        },
+        presence = {
+            position = { point = "CENTER", x = 0, y = 20 },
+            iconSize = 64,
+            spacing = 0.2,
+            growDirection = "CENTER",
+        },
+        personal = {
+            position = { point = "CENTER", x = 0, y = -20 },
+            iconSize = 64,
+            spacing = 0.2,
+            growDirection = "CENTER",
+        },
+        self = {
+            position = { point = "CENTER", x = 0, y = -60 },
+            iconSize = 64,
+            spacing = 0.2,
+            growDirection = "CENTER",
+        },
+        custom = {
+            position = { point = "CENTER", x = 0, y = -100 },
+            iconSize = 64,
+            spacing = 0.2,
+            growDirection = "CENTER",
+        },
+    },
 }
 
 -- Constants
@@ -411,6 +455,61 @@ local testMode = false
 local testModeData = nil -- Stores seeded fake values for consistent test display
 local playerClass = nil -- Cached player class, set once on init
 local optionsPanel
+
+-- Category frame system
+local categoryFrames = {}
+local CATEGORIES = { "raid", "presence", "personal", "self", "custom" }
+local CATEGORY_LABELS = {
+    raid = "Raid",
+    presence = "Presence",
+    personal = "Personal",
+    self = "Self",
+    custom = "Custom",
+}
+
+---Check if a category is split into its own frame
+---@param category string
+---@return boolean
+local function IsCategorySplit(category)
+    local db = BuffRemindersDB
+    return db.splitCategories and db.splitCategories[category] == true
+end
+
+---Check if any category is split
+---@return boolean
+local function HasAnySplitCategory()
+    local db = BuffRemindersDB
+    if not db.splitCategories then
+        return false
+    end
+    for _, category in ipairs(CATEGORIES) do
+        if db.splitCategories[category] then
+            return true
+        end
+    end
+    return false
+end
+
+---Get settings for a category (including "main" for non-split buffs)
+---@param category string
+---@return table
+local function GetCategorySettings(category)
+    local db = BuffRemindersDB
+    if db.categorySettings and db.categorySettings[category] then
+        return db.categorySettings[category]
+    end
+    return defaults.categorySettings[category] or defaults.categorySettings.main
+end
+
+---Get the effective category for a frame (its own category if split, otherwise "main")
+---@param frame table
+---@return string
+local function GetEffectiveCategory(frame)
+    if frame.buffCategory and IsCategorySplit(frame.buffCategory) then
+        return frame.buffCategory
+    end
+    return "main"
+end
 
 ---Check if a buff is enabled (defaults to true if not explicitly set to false)
 ---@param key string
@@ -453,13 +552,29 @@ local function IterateGroupMembers(callback)
     end
 end
 
----Calculate font size based on settings, with optional scale multiplier
+-- Fixed text scale ratio (font size = iconSize * TEXT_SCALE_RATIO)
+local TEXT_SCALE_RATIO = 0.32
+
+---Calculate font size based on icon size, with optional scale multiplier
+---@param scale? number
+---@param iconSizeOverride? number
+---@return number
+local function GetFontSize(scale, iconSizeOverride)
+    local mainSettings = GetCategorySettings("main")
+    local iconSize = iconSizeOverride or mainSettings.iconSize or 64
+    local baseSize = iconSize * TEXT_SCALE_RATIO
+    return math.floor(baseSize * (scale or 1))
+end
+
+---Get font size for a specific frame based on its effective category
+---@param frame table
 ---@param scale? number
 ---@return number
-local function GetFontSize(scale)
-    local db = BuffRemindersDB
-    local baseSize = db.iconSize * (db.textScale or defaults.textScale)
-    return math.floor(baseSize * (scale or 1))
+local function GetFrameFontSize(frame, scale)
+    local effectiveCat = GetEffectiveCategory(frame)
+    local catSettings = GetCategorySettings(effectiveCat)
+    local iconSize = catSettings.iconSize or 64
+    return GetFontSize(scale, iconSize)
 end
 
 ---Format remaining time in seconds to a short string (e.g., "5m" or "30s")
@@ -732,7 +847,7 @@ local function ShouldShowSelfBuff(spellID, requiredClass, enchantID, requiresTal
 end
 
 -- Forward declarations
-local UpdateDisplay, PositionBuffFrames, UpdateAnchor, ShowGlowDemo, ToggleTestMode, RefreshTestDisplay
+local UpdateDisplay, UpdateAnchor, ShowGlowDemo, ToggleTestMode, RefreshTestDisplay
 local ShowCustomBuffModal
 
 -- Glow style definitions
@@ -878,6 +993,69 @@ local function HideFrame(frame)
     SetExpirationGlow(frame, false)
 end
 
+-- Create a category frame for grouped display mode
+local function CreateCategoryFrame(category)
+    local db = BuffRemindersDB
+    local catSettings = db.categorySettings and db.categorySettings[category] or defaults.categorySettings[category]
+    local pos = catSettings.position
+
+    local frame = CreateFrame("Frame", "BuffReminders_Category_" .. category, UIParent)
+    frame:SetSize(200, 50)
+    frame:SetPoint(pos.point or "CENTER", UIParent, pos.point or "CENTER", pos.x or 0, pos.y or 0)
+    frame.category = category
+
+    -- Edit mode padding (how much larger the background is than the icons)
+    local EDIT_PADDING = 8
+
+    -- Border for edit mode (outermost, creates the green border)
+    frame.editBorder = frame:CreateTexture(nil, "BACKGROUND", nil, -2)
+    frame.editBorder:SetPoint("TOPLEFT", -EDIT_PADDING - 2, EDIT_PADDING + 2)
+    frame.editBorder:SetPoint("BOTTOMRIGHT", EDIT_PADDING + 2, -EDIT_PADDING - 2)
+    frame.editBorder:SetColorTexture(0, 0.7, 0, 0.9)
+    frame.editBorder:Hide()
+
+    -- Background (shown when unlocked, like WoW edit mode)
+    frame.editBg = frame:CreateTexture(nil, "BACKGROUND", nil, -1)
+    frame.editBg:SetPoint("TOPLEFT", -EDIT_PADDING, EDIT_PADDING)
+    frame.editBg:SetPoint("BOTTOMRIGHT", EDIT_PADDING, -EDIT_PADDING)
+    frame.editBg:SetColorTexture(0.05, 0.2, 0.05, 0.7)
+    frame.editBg:Hide()
+
+    -- Label text at top
+    frame.editLabel = frame:CreateFontString(nil, "OVERLAY")
+    frame.editLabel:SetPoint("BOTTOM", frame, "TOP", 0, EDIT_PADDING + 6)
+    frame.editLabel:SetFont(STANDARD_TEXT_FONT, 11, "OUTLINE")
+    frame.editLabel:SetTextColor(0.4, 1, 0.4, 1)
+    frame.editLabel:SetText(CATEGORY_LABELS[category] or category)
+    frame.editLabel:Hide()
+
+    -- Make frame draggable
+    frame:SetMovable(true)
+    frame:EnableMouse(not db.locked)
+    frame:RegisterForDrag("LeftButton")
+
+    frame:SetScript("OnDragStart", function(self)
+        if not BuffRemindersDB.locked then
+            self:StartMoving()
+        end
+    end)
+
+    frame:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        local point, _, _, x, y = self:GetPoint()
+        if not BuffRemindersDB.categorySettings then
+            BuffRemindersDB.categorySettings = {}
+        end
+        if not BuffRemindersDB.categorySettings[category] then
+            BuffRemindersDB.categorySettings[category] = {}
+        end
+        BuffRemindersDB.categorySettings[category].position = { point = point, x = x, y = y }
+    end)
+
+    frame:Hide()
+    return frame
+end
+
 -- Create icon frame for a buff
 local function CreateBuffFrame(buff, _)
     local frame = CreateFrame("Frame", "BuffReminders_" .. buff.key, mainFrame)
@@ -905,11 +1083,11 @@ local function CreateBuffFrame(buff, _)
     frame.border:SetPoint("BOTTOMRIGHT", BORDER_PADDING, -BORDER_PADDING)
     frame.border:SetColorTexture(0, 0, 0, 1)
 
-    -- Count text (font size scales with icon size)
+    -- Count text (font size scales with icon size, updated in UpdateVisuals)
     frame.count = frame:CreateFontString(nil, "OVERLAY", "NumberFontNormalLarge")
     frame.count:SetPoint("CENTER", 0, 0)
     frame.count:SetTextColor(1, 1, 1, 1)
-    frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(), "OUTLINE")
+    frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(1), "OUTLINE")
 
     -- "BUFF!" text for the class that provides this buff
     frame.isPlayerBuff = (playerClass == buff.class)
@@ -932,57 +1110,107 @@ local function CreateBuffFrame(buff, _)
     frame.testText:SetText("TEST")
     frame.testText:Hide()
 
-    -- Dragging
+    -- Dragging (handles both single-frame and category-frame modes)
     frame:EnableMouse(not BuffRemindersDB.locked)
     frame:RegisterForDrag("LeftButton")
-    frame:SetScript("OnDragStart", function()
+    frame:SetScript("OnDragStart", function(self)
         if not BuffRemindersDB.locked then
-            mainFrame:StartMoving()
+            local parent = self:GetParent()
+            if parent then
+                parent:StartMoving()
+            end
         end
     end)
-    frame:SetScript("OnDragStop", function()
-        mainFrame:StopMovingOrSizing()
-        local point, _, _, x, y = mainFrame:GetPoint()
-        BuffRemindersDB.position = { point = point, x = x, y = y }
+    frame:SetScript("OnDragStop", function(self)
+        local parent = self:GetParent()
+        if not parent then
+            return
+        end
+        parent:StopMovingOrSizing()
+        local point, _, _, x, y = parent:GetPoint()
+        local settings = BuffRemindersDB
+        if parent.category then
+            -- Save to category-specific position (this is a split category frame)
+            if not settings.categorySettings then
+                settings.categorySettings = {}
+            end
+            if not settings.categorySettings[parent.category] then
+                settings.categorySettings[parent.category] = {}
+            end
+            settings.categorySettings[parent.category].position = { point = point, x = x, y = y }
+        else
+            -- Save to main frame position
+            settings.position = { point = point, x = x, y = y }
+        end
     end)
 
     frame:Hide()
     return frame
 end
 
--- Position all visible buff frames (in definition order)
-PositionBuffFrames = function()
-    local db = BuffRemindersDB
-    local iconSize = db.iconSize or 32
-    local spacing = math.floor(iconSize * (db.spacing or 0.2))
-    local direction = db.growDirection or "CENTER"
+-- Helper to position frames within a container using specified settings
+local function PositionFramesInContainer(container, frames, iconSize, spacing, direction)
+    local count = #frames
+    if count == 0 then
+        return
+    end
 
-    -- Collect visible frames in definition order
-    local visibleFrames = {}
+    for i, frame in ipairs(frames) do
+        frame:ClearAllPoints()
+        if direction == "LEFT" then
+            frame:SetPoint("LEFT", container, "LEFT", (i - 1) * (iconSize + spacing), 0)
+        elseif direction == "RIGHT" then
+            frame:SetPoint("RIGHT", container, "RIGHT", -((i - 1) * (iconSize + spacing)), 0)
+        else -- CENTER
+            local totalWidth = count * iconSize + (count - 1) * spacing
+            local startX = -totalWidth / 2 + iconSize / 2
+            frame:SetPoint("CENTER", container, "CENTER", startX + (i - 1) * (iconSize + spacing), 0)
+        end
+    end
+end
+
+-- Position buff frames with split category support
+-- Handles mixed mode: some categories in mainFrame, some split into their own frames
+local function PositionBuffFramesWithSplits()
+    local db = BuffRemindersDB
+
+    -- Collect visible frames by category
+    local framesByCategory = {
+        raid = {},
+        presence = {},
+        personal = {},
+        self = {},
+        custom = {},
+    }
+
     for _, buff in ipairs(RaidBuffs) do
         local frame = buffFrames[buff.key]
         if frame and frame:IsShown() then
-            table.insert(visibleFrames, frame)
+            table.insert(framesByCategory.raid, frame)
         end
     end
+
     for _, buff in ipairs(PresenceBuffs) do
         local frame = buffFrames[buff.key]
         if frame and frame:IsShown() then
-            table.insert(visibleFrames, frame)
+            table.insert(framesByCategory.presence, frame)
         end
     end
+
     for _, buff in ipairs(PersonalBuffs) do
         local frame = buffFrames[buff.key]
         if frame and frame:IsShown() then
-            table.insert(visibleFrames, frame)
+            table.insert(framesByCategory.personal, frame)
         end
     end
+
     for _, buff in ipairs(SelfBuffs) do
         local frame = buffFrames[buff.key]
         if frame and frame:IsShown() then
-            table.insert(visibleFrames, frame)
+            table.insert(framesByCategory.self, frame)
         end
     end
+
     -- Custom buffs (sorted by key for consistent order)
     local customBuffs = db.customBuffs or {}
     local sortedCustomKeys = {}
@@ -993,27 +1221,83 @@ PositionBuffFrames = function()
     for _, key in ipairs(sortedCustomKeys) do
         local frame = buffFrames[key]
         if frame and frame:IsShown() then
-            table.insert(visibleFrames, frame)
+            table.insert(framesByCategory.custom, frame)
         end
     end
 
-    local count = #visibleFrames
-    if count == 0 then
-        return
+    -- Collect frames for mainFrame (non-split categories) in definition order
+    local mainFrameBuffs = {}
+    for _, category in ipairs(CATEGORIES) do
+        if not IsCategorySplit(category) then
+            for _, frame in ipairs(framesByCategory[category]) do
+                table.insert(mainFrameBuffs, frame)
+            end
+        end
     end
 
-    for i, frame in ipairs(visibleFrames) do
-        frame:ClearAllPoints()
-        if direction == "LEFT" then
-            -- Grow right from left anchor
-            frame:SetPoint("LEFT", mainFrame, "LEFT", (i - 1) * (iconSize + spacing), 0)
-        elseif direction == "RIGHT" then
-            -- Grow left from right anchor
-            frame:SetPoint("RIGHT", mainFrame, "RIGHT", -((i - 1) * (iconSize + spacing)), 0)
-        else -- CENTER
-            local totalWidth = count * iconSize + (count - 1) * spacing
-            local startX = -totalWidth / 2 + iconSize / 2
-            frame:SetPoint("CENTER", mainFrame, "CENTER", startX + (i - 1) * (iconSize + spacing), 0)
+    -- Position and size mainFrame
+    if #mainFrameBuffs > 0 then
+        local mainSettings = GetCategorySettings("main")
+        local iconSize = mainSettings.iconSize or 64
+        local spacing = math.floor(iconSize * (mainSettings.spacing or 0.2))
+        local direction = mainSettings.growDirection or "CENTER"
+
+        -- Resize individual buff frames to main icon size
+        for _, frame in ipairs(mainFrameBuffs) do
+            frame:SetSize(iconSize, iconSize)
+        end
+
+        -- Size mainFrame to fit contents
+        local totalWidth = #mainFrameBuffs * iconSize + (#mainFrameBuffs - 1) * spacing
+        mainFrame:SetSize(math.max(totalWidth, iconSize), iconSize)
+
+        PositionFramesInContainer(mainFrame, mainFrameBuffs, iconSize, spacing, direction)
+        mainFrame:Show()
+    elseif not db.locked then
+        -- Keep mainFrame visible when unlocked for positioning
+        local mainSettings = GetCategorySettings("main")
+        mainFrame:SetSize(mainSettings.iconSize or 64, mainSettings.iconSize or 64)
+        mainFrame:Show()
+    else
+        mainFrame:Hide()
+    end
+
+    -- Position frames within each split category
+    for _, category in ipairs(CATEGORIES) do
+        local catFrame = categoryFrames[category]
+        local frames = framesByCategory[category]
+        local isSplit = IsCategorySplit(category)
+
+        if catFrame and isSplit then
+            if #frames > 0 then
+                local catSettings = GetCategorySettings(category)
+                local iconSize = catSettings.iconSize or 64
+                local spacing = math.floor(iconSize * (catSettings.spacing or 0.2))
+                local direction = catSettings.growDirection or "CENTER"
+
+                -- Resize individual buff frames to category's icon size
+                for _, frame in ipairs(frames) do
+                    frame:SetSize(iconSize, iconSize)
+                end
+
+                -- Size category frame to fit contents
+                local totalWidth = #frames * iconSize + (#frames - 1) * spacing
+                catFrame:SetSize(math.max(totalWidth, iconSize), iconSize)
+
+                PositionFramesInContainer(catFrame, frames, iconSize, spacing, direction)
+                catFrame:Show()
+            elseif not db.locked then
+                -- Keep split frame visible when unlocked for positioning
+                local catSettings = GetCategorySettings(category)
+                local iconSize = catSettings.iconSize or 64
+                catFrame:SetSize(iconSize, iconSize)
+                catFrame:Show()
+            else
+                catFrame:Hide()
+            end
+        elseif catFrame then
+            -- Not split - hide category frame
+            catFrame:Hide()
         end
     end
 end
@@ -1041,7 +1325,7 @@ RefreshTestDisplay = function()
     for i, buff in ipairs(RaidBuffs) do
         local frame = buffFrames[buff.key]
         if frame then
-            frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(), "OUTLINE")
+            frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame), "OUTLINE")
             if db.showExpirationGlow and not glowShown then
                 frame.count:SetText(FormatRemainingTime(testModeData.fakeRemaining))
                 SetExpirationGlow(frame, true)
@@ -1051,7 +1335,7 @@ RefreshTestDisplay = function()
                 frame.count:SetText(fakeBuffed .. "/" .. testModeData.fakeTotal)
             end
             if frame.testText and testModeData.showLabels then
-                frame.testText:SetFont(STANDARD_TEXT_FONT, GetFontSize(0.6), "OUTLINE")
+                frame.testText:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, 0.6), "OUTLINE")
                 frame.testText:Show()
             end
             frame:Show()
@@ -1062,10 +1346,10 @@ RefreshTestDisplay = function()
     for _, buff in ipairs(PresenceBuffs) do
         local frame = buffFrames[buff.key]
         if frame then
-            frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
+            frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
             frame.count:SetText(buff.missingText or "")
             if frame.testText and testModeData.showLabels then
-                frame.testText:SetFont(STANDARD_TEXT_FONT, GetFontSize(0.6), "OUTLINE")
+                frame.testText:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, 0.6), "OUTLINE")
                 frame.testText:Show()
             end
             frame:Show()
@@ -1087,9 +1371,9 @@ RefreshTestDisplay = function()
                 else
                     frame.count:SetText(buff.missingText or "")
                 end
-                frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
+                frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
                 if frame.testText and testModeData.showLabels then
-                    frame.testText:SetFont(STANDARD_TEXT_FONT, GetFontSize(0.6), "OUTLINE")
+                    frame.testText:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, 0.6), "OUTLINE")
                     frame.testText:Show()
                 end
                 frame:Show()
@@ -1102,9 +1386,9 @@ RefreshTestDisplay = function()
         local frame = buffFrames[buff.key]
         if frame then
             frame.count:SetText(buff.missingText or "")
-            frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
+            frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
             if frame.testText and testModeData.showLabels then
-                frame.testText:SetFont(STANDARD_TEXT_FONT, GetFontSize(0.6), "OUTLINE")
+                frame.testText:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, 0.6), "OUTLINE")
                 frame.testText:Show()
             end
             frame:Show()
@@ -1116,10 +1400,10 @@ RefreshTestDisplay = function()
         for _, customBuff in pairs(db.customBuffs) do
             local frame = buffFrames[customBuff.key]
             if frame then
-                frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
+                frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
                 frame.count:SetText(customBuff.missingText or "NO\nBUFF")
                 if frame.testText and testModeData.showLabels then
-                    frame.testText:SetFont(STANDARD_TEXT_FONT, GetFontSize(0.6), "OUTLINE")
+                    frame.testText:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, 0.6), "OUTLINE")
                     frame.testText:Show()
                 end
                 frame:Show()
@@ -1127,8 +1411,9 @@ RefreshTestDisplay = function()
         end
     end
 
-    mainFrame:Show()
-    PositionBuffFrames()
+    -- Position and show appropriate frame(s)
+    PositionBuffFramesWithSplits()
+    UpdateAnchor()
 end
 
 -- Toggle test mode - returns true if test mode is now ON, false if OFF
@@ -1167,6 +1452,16 @@ ToggleTestMode = function(showLabels)
     end
 end
 
+-- Helper to hide all display frames (mainFrame and all category frames)
+local function HideAllDisplayFrames()
+    mainFrame:Hide()
+    for _, category in ipairs(CATEGORIES) do
+        if categoryFrames[category] then
+            categoryFrames[category]:Hide()
+        end
+    end
+end
+
 -- Update the display
 UpdateDisplay = function()
     if testMode then
@@ -1174,12 +1469,12 @@ UpdateDisplay = function()
     end
 
     if inCombat then
-        mainFrame:Hide()
+        HideAllDisplayFrames()
         return
     end
 
     if C_ChallengeMode and C_ChallengeMode.IsChallengeModeActive and C_ChallengeMode.IsChallengeModeActive() then
-        mainFrame:Hide()
+        HideAllDisplayFrames()
         return
     end
 
@@ -1187,18 +1482,18 @@ UpdateDisplay = function()
 
     -- Hide based on visibility settings
     if db.showOnlyOnReadyCheck and not inReadyCheck then
-        mainFrame:Hide()
+        HideAllDisplayFrames()
         return
     end
 
     if db.showOnlyInGroup then
         if db.showOnlyInInstance then
             if not IsInInstance() then
-                mainFrame:Hide()
+                HideAllDisplayFrames()
                 return
             end
         elseif GetNumGroupMembers() == 0 then
-            mainFrame:Hide()
+            HideAllDisplayFrames()
             return
         end
     end
@@ -1252,14 +1547,14 @@ UpdateDisplay = function()
             local count, minRemaining = CountPresenceBuff(buff.spellID, playerOnly)
             local expiringSoon = db.showExpirationGlow and minRemaining and minRemaining < (db.expirationThreshold * 60)
             if count == 0 then
-                frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
+                frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
                 frame.count:SetText(buff.missingText or "")
                 frame:Show()
                 anyVisible = true
                 SetExpirationGlow(frame, false)
             elseif expiringSoon then
                 ---@cast minRemaining number
-                frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(), "OUTLINE")
+                frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame), "OUTLINE")
                 frame.count:SetText(FormatRemainingTime(minRemaining))
                 frame:Show()
                 anyVisible = true
@@ -1288,7 +1583,7 @@ UpdateDisplay = function()
             if shouldShow then
                 frame.icon:SetAllPoints()
                 frame.icon:SetTexCoord(TEXCOORD_INSET, 1 - TEXCOORD_INSET, TEXCOORD_INSET, 1 - TEXCOORD_INSET)
-                frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
+                frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
                 frame.count:SetText(buff.missingText or "")
                 frame:Show()
                 anyVisible = true
@@ -1343,7 +1638,7 @@ UpdateDisplay = function()
                         frame.icon:SetTexture(texture)
                     end
                 end
-                frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
+                frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
                 frame.count:SetText(buff.missingText or "")
                 frame:Show()
                 anyVisible = true
@@ -1365,7 +1660,7 @@ UpdateDisplay = function()
             if frame and IsBuffEnabled(customBuff.key) and classMatch then
                 local hasBuff = UnitHasBuff("player", customBuff.spellID)
                 if not hasBuff then
-                    frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(MISSING_TEXT_SCALE), "OUTLINE")
+                    frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
                     frame.count:SetText(customBuff.missingText or "NO\nBUFF")
                     frame:Show()
                     anyVisible = true
@@ -1379,12 +1674,13 @@ UpdateDisplay = function()
         end
     end
 
-    if anyVisible then
-        mainFrame:Show()
-        PositionBuffFrames()
+    if anyVisible or not db.locked then
+        -- Use split-aware positioning (handles both main and split categories)
+        PositionBuffFramesWithSplits()
         UpdateAnchor()
     else
-        mainFrame:Hide()
+        -- Hide everything when locked and no buffs visible
+        HideAllDisplayFrames()
     end
 end
 
@@ -1440,7 +1736,32 @@ local function InitializeFrames()
 
     SetupDragging()
 
-    -- Anchor indicator (shown when unlocked) - use separate frame to draw on top
+    -- Edit mode padding (how much larger the background is than the icons)
+    local EDIT_PADDING = 8
+
+    -- Border for edit mode (outermost, creates the green border)
+    mainFrame.editBorder = mainFrame:CreateTexture(nil, "BACKGROUND", nil, -2)
+    mainFrame.editBorder:SetPoint("TOPLEFT", -EDIT_PADDING - 2, EDIT_PADDING + 2)
+    mainFrame.editBorder:SetPoint("BOTTOMRIGHT", EDIT_PADDING + 2, -EDIT_PADDING - 2)
+    mainFrame.editBorder:SetColorTexture(0, 0.7, 0, 0.9)
+    mainFrame.editBorder:Hide()
+
+    -- Edit mode background (shown when unlocked, like WoW edit mode)
+    mainFrame.editBg = mainFrame:CreateTexture(nil, "BACKGROUND", nil, -1)
+    mainFrame.editBg:SetPoint("TOPLEFT", -EDIT_PADDING, EDIT_PADDING)
+    mainFrame.editBg:SetPoint("BOTTOMRIGHT", EDIT_PADDING, -EDIT_PADDING)
+    mainFrame.editBg:SetColorTexture(0.05, 0.2, 0.05, 0.7)
+    mainFrame.editBg:Hide()
+
+    -- Label text at top
+    mainFrame.editLabel = mainFrame:CreateFontString(nil, "OVERLAY")
+    mainFrame.editLabel:SetPoint("BOTTOM", mainFrame, "TOP", 0, EDIT_PADDING + 6)
+    mainFrame.editLabel:SetFont(STANDARD_TEXT_FONT, 11, "OUTLINE")
+    mainFrame.editLabel:SetTextColor(0.4, 1, 0.4, 1)
+    mainFrame.editLabel:SetText("Main")
+    mainFrame.editLabel:Hide()
+
+    -- Legacy anchor frame (keeping for compatibility, but edit visuals are better)
     mainFrame.anchorFrame = CreateFrame("Frame", nil, mainFrame)
     mainFrame.anchorFrame:SetSize(65, 26)
     mainFrame.anchorFrame:SetFrameLevel(mainFrame:GetFrameLevel() + 100)
@@ -1454,23 +1775,32 @@ local function InitializeFrames()
     mainFrame.anchorText:SetText("ANCHOR")
     mainFrame.anchorFrame:Hide()
 
+    -- Create category frames for grouped display mode
+    for _, category in ipairs(CATEGORIES) do
+        categoryFrames[category] = CreateCategoryFrame(category)
+    end
+
     for i, buff in ipairs(RaidBuffs) do
         buffFrames[buff.key] = CreateBuffFrame(buff, i)
+        buffFrames[buff.key].buffCategory = "raid"
     end
 
     for i, buff in ipairs(PresenceBuffs) do
         buffFrames[buff.key] = CreateBuffFrame(buff, #RaidBuffs + i)
         buffFrames[buff.key].isPresenceBuff = true
+        buffFrames[buff.key].buffCategory = "presence"
     end
 
     for i, buff in ipairs(PersonalBuffs) do
         buffFrames[buff.key] = CreateBuffFrame(buff, #RaidBuffs + #PresenceBuffs + i)
         buffFrames[buff.key].isPersonalBuff = true
+        buffFrames[buff.key].buffCategory = "personal"
     end
 
     for i, buff in ipairs(SelfBuffs) do
         buffFrames[buff.key] = CreateBuffFrame(buff, #RaidBuffs + #PresenceBuffs + #PersonalBuffs + i)
         buffFrames[buff.key].isSelfBuff = true
+        buffFrames[buff.key].buffCategory = "self"
     end
 
     -- Create frames for custom buffs (always self buffs)
@@ -1478,6 +1808,7 @@ local function InitializeFrames()
         for _, customBuff in pairs(db.customBuffs) do
             local frame = CreateBuffFrame(customBuff, 0)
             frame.isCustomBuff = true
+            frame.buffCategory = "custom"
             buffFrames[customBuff.key] = frame
         end
     end
@@ -1493,7 +1824,23 @@ local function CreateCustomBuffFrameRuntime(customBuff)
     end
     local frame = CreateBuffFrame(customBuff, 0)
     frame.isCustomBuff = true
+    frame.buffCategory = "custom"
     buffFrames[customBuff.key] = frame
+end
+
+-- Reparent all buff frames to appropriate parent based on split status
+local ReparentBuffFrames
+ReparentBuffFrames = function()
+    for _, frame in pairs(buffFrames) do
+        local category = frame.buffCategory
+        if category and IsCategorySplit(category) and categoryFrames[category] then
+            -- This category is split - parent to its own frame
+            frame:SetParent(categoryFrames[category])
+        else
+            -- This category is in main frame
+            frame:SetParent(mainFrame)
+        end
+    end
 end
 
 ---Remove a custom buff frame (called at runtime when deleting buffs)
@@ -1507,45 +1854,126 @@ local function RemoveCustomBuffFrame(key)
     end
 end
 
+-- Helper to show/hide edit mode visuals for a frame
+local function SetEditModeVisuals(frame, show, label)
+    if not frame then
+        return
+    end
+    if show then
+        if frame.editBorder then
+            frame.editBorder:Show()
+        end
+        if frame.editBg then
+            frame.editBg:Show()
+        end
+        if frame.editLabel then
+            if label then
+                frame.editLabel:SetText(label)
+            end
+            frame.editLabel:Show()
+        end
+    else
+        if frame.editBorder then
+            frame.editBorder:Hide()
+        end
+        if frame.editBg then
+            frame.editBg:Hide()
+        end
+        if frame.editLabel then
+            frame.editLabel:Hide()
+        end
+    end
+end
+
+-- Build a label showing which categories are in mainFrame
+local function GetMainFrameLabel()
+    local parts = {}
+    for _, category in ipairs(CATEGORIES) do
+        if not IsCategorySplit(category) then
+            table.insert(parts, CATEGORY_LABELS[category])
+        end
+    end
+    if #parts == 0 then
+        return "Main (empty)"
+    elseif #parts == #CATEGORIES then
+        return "Main (all)"
+    else
+        return table.concat(parts, " + ")
+    end
+end
+
 -- Update anchor position and visibility
 UpdateAnchor = function()
-    if not mainFrame or not mainFrame.anchorFrame then
+    if not mainFrame then
         return
     end
     local db = BuffRemindersDB
-    local direction = db.growDirection or "CENTER"
+    local unlocked = not db.locked
+    local hasSplits = HasAnySplitCategory()
 
-    mainFrame.anchorFrame:ClearAllPoints()
-    if direction == "LEFT" then
-        mainFrame.anchorFrame:SetPoint("LEFT", mainFrame, "LEFT", 0, 0)
-    elseif direction == "RIGHT" then
-        mainFrame.anchorFrame:SetPoint("RIGHT", mainFrame, "RIGHT", 0, 0)
-    else -- CENTER
-        mainFrame.anchorFrame:SetPoint("CENTER", mainFrame, "CENTER", 0, 0)
-    end
-
-    if not db.locked and mainFrame:IsShown() then
-        mainFrame.anchorFrame:Show()
-    else
+    -- Hide legacy anchor frames (we use edit mode visuals now)
+    if mainFrame.anchorFrame then
         mainFrame.anchorFrame:Hide()
     end
 
+    -- Update mainFrame edit mode
+    if unlocked and (mainFrame:IsShown() or not hasSplits) then
+        -- Show mainFrame when unlocked even if no buffs, so user can position it
+        if not mainFrame:IsShown() and not hasSplits then
+            mainFrame:Show()
+        end
+        SetEditModeVisuals(mainFrame, true, GetMainFrameLabel())
+    else
+        SetEditModeVisuals(mainFrame, false)
+    end
+
+    -- Update each split category frame
+    for _, category in ipairs(CATEGORIES) do
+        local catFrame = categoryFrames[category]
+        if catFrame then
+            local isSplit = IsCategorySplit(category)
+
+            if isSplit and unlocked then
+                -- Show split category frame when unlocked even if no buffs
+                if not catFrame:IsShown() then
+                    catFrame:Show()
+                end
+                SetEditModeVisuals(catFrame, true, CATEGORY_LABELS[category])
+                catFrame:EnableMouse(true)
+            else
+                SetEditModeVisuals(catFrame, false)
+                if not isSplit then
+                    catFrame:Hide()
+                end
+            end
+        end
+    end
+
     -- Update mouse enabled state (click-through when locked)
-    mainFrame:EnableMouse(not db.locked)
+    mainFrame:EnableMouse(unlocked)
+    for _, category in ipairs(CATEGORIES) do
+        local catFrame = categoryFrames[category]
+        if catFrame then
+            catFrame:EnableMouse(unlocked and IsCategorySplit(category))
+        end
+    end
     for _, frame in pairs(buffFrames) do
-        frame:EnableMouse(not db.locked)
+        frame:EnableMouse(unlocked)
     end
 end
 
 -- Update icon sizes and text (called when settings change)
 local function UpdateVisuals()
     local db = BuffRemindersDB
-    local size = db.iconSize
     for _, frame in pairs(buffFrames) do
+        -- Use effective category settings (split category or "main")
+        local effectiveCat = GetEffectiveCategory(frame)
+        local catSettings = GetCategorySettings(effectiveCat)
+        local size = catSettings.iconSize or 64
         frame:SetSize(size, size)
-        frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(), "OUTLINE")
+        frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, 1), "OUTLINE")
         if frame.buffText then
-            frame.buffText:SetFont(STANDARD_TEXT_FONT, GetFontSize(0.8), "OUTLINE")
+            frame.buffText:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, 0.8), "OUTLINE")
             if db.showBuffReminder then
                 frame.buffText:Show()
             else
@@ -2036,22 +2464,8 @@ local function CreateOptionsPanel()
     end
     panel.SetCheckboxEnabled = SetCheckboxEnabled
 
-    -- LEFT COLUMN: Behavior Settings
-    _, appLeftY = CreateSectionHeader(appearanceContent, "Behavior", appLeftX, appLeftY)
-
-    local reminderCb
-    reminderCb, appLeftY = CreateCheckbox(
-        appearanceContent,
-        appLeftX,
-        appLeftY,
-        'Show "BUFF!" reminder',
-        BuffRemindersDB.showBuffReminder ~= false,
-        function(self)
-            BuffRemindersDB.showBuffReminder = self:GetChecked()
-            UpdateVisuals()
-        end
-    )
-    panel.reminderCheckbox = reminderCb
+    -- LEFT COLUMN: Visibility Settings
+    _, appLeftY = CreateSectionHeader(appearanceContent, "Visibility", appLeftX, appLeftY)
 
     local groupCb, instanceCb
     groupCb, appLeftY = CreateCheckbox(
@@ -2177,10 +2591,17 @@ local function CreateOptionsPanel()
         16,
         128,
         1,
-        BuffRemindersDB.iconSize,
+        GetCategorySettings("main").iconSize or 64,
         "",
         function(val)
-            BuffRemindersDB.iconSize = val
+            local db = BuffRemindersDB
+            if not db.categorySettings then
+                db.categorySettings = {}
+            end
+            if not db.categorySettings.main then
+                db.categorySettings.main = {}
+            end
+            db.categorySettings.main.iconSize = val
             UpdateVisuals()
         end
     )
@@ -2196,12 +2617,19 @@ local function CreateOptionsPanel()
         0,
         50,
         1,
-        math.floor((BuffRemindersDB.spacing or 0.2) * 100),
+        math.floor((GetCategorySettings("main").spacing or 0.2) * 100),
         "%",
         function(val)
-            BuffRemindersDB.spacing = val / 100
+            local db = BuffRemindersDB
+            if not db.categorySettings then
+                db.categorySettings = {}
+            end
+            if not db.categorySettings.main then
+                db.categorySettings.main = {}
+            end
+            db.categorySettings.main.spacing = val / 100
             if testMode then
-                PositionBuffFrames()
+                RefreshTestDisplay()
             else
                 UpdateDisplay()
             end
@@ -2210,50 +2638,19 @@ local function CreateOptionsPanel()
     panel.spacingSlider = spacingSlider
     panel.spacingValue = spacingValue
 
-    local textSlider, textValue
-    textSlider, textValue, appRightY = CreateSlider(
-        appearanceContent,
-        appRightX,
-        appRightY,
-        "Text Size",
-        20,
-        60,
-        1,
-        math.floor((BuffRemindersDB.textScale or 0.34) * 100),
-        "%",
-        function(val)
-            BuffRemindersDB.textScale = val / 100
-            UpdateVisuals()
-        end
-    )
-    panel.textSlider = textSlider
-    panel.textValue = textValue
-
     appRightY = appRightY - 4
 
-    -- Lock button and grow direction
-    local lockBtn = CreateFrame("Button", nil, appearanceContent, "UIPanelButtonTemplate")
-    lockBtn:SetSize(52, 18)
-    lockBtn:SetPoint("TOPLEFT", appRightX, appRightY)
-    lockBtn:SetNormalFontObject("GameFontHighlightSmall")
-    lockBtn:SetHighlightFontObject("GameFontHighlightSmall")
-    lockBtn:SetText(BuffRemindersDB.locked and "Unlock" or "Lock")
-    lockBtn:SetScript("OnClick", function(self)
-        BuffRemindersDB.locked = not BuffRemindersDB.locked
-        self:SetText(BuffRemindersDB.locked and "Unlock" or "Lock")
-        UpdateAnchor()
-    end)
-    panel.lockBtn = lockBtn
-
+    -- Grow direction
     local growLabel = appearanceContent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    growLabel:SetPoint("LEFT", lockBtn, "RIGHT", 10, 0)
-    growLabel:SetText("Grow:")
+    growLabel:SetPoint("TOPLEFT", appRightX, appRightY)
+    growLabel:SetText("Direction:")
 
     local growBtns = {}
     local directions = { "LEFT", "CENTER", "RIGHT" }
     local dirLabels = { "Left", "Center", "Right" }
     local growBtnWidth = 48
 
+    local mainGrowDir = GetCategorySettings("main").growDirection or "CENTER"
     for i, dir in ipairs(directions) do
         local btn = CreateFrame("Button", nil, appearanceContent, "UIPanelButtonTemplate")
         btn:SetSize(growBtnWidth, 18)
@@ -2264,38 +2661,55 @@ local function CreateOptionsPanel()
         btn:SetDisabledFontObject("GameFontDisableSmall")
         btn.direction = dir
         btn:SetScript("OnClick", function()
-            BuffRemindersDB.growDirection = dir
+            local db = BuffRemindersDB
+            if not db.categorySettings then
+                db.categorySettings = {}
+            end
+            if not db.categorySettings.main then
+                db.categorySettings.main = {}
+            end
+            db.categorySettings.main.growDirection = dir
             for _, b in ipairs(growBtns) do
                 b:SetEnabled(b.direction ~= dir)
             end
             UpdateDisplay()
         end)
-        btn:SetEnabled(BuffRemindersDB.growDirection ~= dir)
+        btn:SetEnabled(mainGrowDir ~= dir)
         growBtns[i] = btn
     end
     panel.growBtns = growBtns
 
-    appRightY = appRightY - 26
+    appRightY = appRightY - 24
 
-    -- BOTTOM: Expiration Warning (full width, below both columns)
-    local appearanceY = math.min(appLeftY, appRightY) - SECTION_SPACING
+    -- Show "BUFF!" reminder checkbox
+    local reminderCb
+    reminderCb, appRightY = CreateCheckbox(
+        appearanceContent,
+        appRightX,
+        appRightY,
+        'Show "BUFF!" reminder',
+        BuffRemindersDB.showBuffReminder ~= false,
+        function(self)
+            BuffRemindersDB.showBuffReminder = self:GetChecked()
+            UpdateVisuals()
+        end
+    )
+    panel.reminderCheckbox = reminderCb
 
-    -- Separator
-    local sep1 = appearanceContent:CreateTexture(nil, "ARTWORK")
-    sep1:SetSize(PANEL_WIDTH - COL_PADDING * 2, 1)
-    sep1:SetPoint("TOPLEFT", appLeftX, appearanceY)
-    sep1:SetColorTexture(0.4, 0.4, 0.4, 1)
-    appearanceY = appearanceY - SECTION_SPACING
+    appRightY = appRightY - 8
 
-    -- Expiration Warning header
-    _, appearanceY = CreateSectionHeader(appearanceContent, "Expiration Warning", appLeftX, appearanceY)
+    -- Expiration Warning sub-section (in right column)
+    local expLabel = appearanceContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    expLabel:SetPoint("TOPLEFT", appRightX, appRightY)
+    expLabel:SetText("Expiration Warning")
+    appRightY = appRightY - 14
 
     local glowCb
-    glowCb, appearanceY = CreateCheckbox(
+    glowCb, appRightY = CreateCheckbox(
         appearanceContent,
-        appLeftX,
-        appearanceY,
-        "Show glow when expiring in:",
+        appRightX,
+        appRightY,
+        "Show glow when expiring",
         BuffRemindersDB.showExpirationGlow,
         function(self)
             BuffRemindersDB.showExpirationGlow = self:GetChecked()
@@ -2329,10 +2743,10 @@ local function CreateOptionsPanel()
     panel.glowCheckbox = glowCb
 
     local thresholdSlider, thresholdValue
-    thresholdSlider, thresholdValue, appearanceY = CreateSlider(
+    thresholdSlider, thresholdValue, appRightY = CreateSlider(
         appearanceContent,
-        appLeftX,
-        appearanceY,
+        appRightX,
+        appRightY,
         "Threshold",
         1,
         15,
@@ -2354,7 +2768,7 @@ local function CreateOptionsPanel()
     -- Glow style dropdown
     local styleLabel = appearanceContent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     panel.styleLabel = styleLabel
-    styleLabel:SetPoint("TOPLEFT", appLeftX, appearanceY)
+    styleLabel:SetPoint("TOPLEFT", appRightX, appRightY)
     styleLabel:SetText("Style:")
 
     local styleDropdown =
@@ -2389,9 +2803,10 @@ local function CreateOptionsPanel()
 
     -- Preview button
     local previewBtn = CreateFrame("Button", nil, appearanceContent, "UIPanelButtonTemplate")
-    previewBtn:SetSize(80, 18)
-    previewBtn:SetPoint("LEFT", styleDropdown, "RIGHT", 0, 2)
+    previewBtn:SetSize(60, 18)
+    previewBtn:SetPoint("LEFT", styleDropdown, "RIGHT", -5, 2)
     previewBtn:SetText("Preview")
+    previewBtn:SetNormalFontObject("GameFontHighlightSmall")
     previewBtn:SetScript("OnClick", function()
         ShowGlowDemo()
     end)
@@ -2415,7 +2830,320 @@ local function CreateOptionsPanel()
     -- Set initial state
     SetGlowControlsEnabled(BuffRemindersDB.showExpirationGlow)
 
+    appRightY = appRightY - 28
+
+    -- BOTTOM: Split Categories (full width, below both columns)
+    local appearanceY = math.min(appLeftY, appRightY) - SECTION_SPACING
+
+    -- Separator before Split Categories
+    local sep1 = appearanceContent:CreateTexture(nil, "ARTWORK")
+    sep1:SetSize(PANEL_WIDTH - COL_PADDING * 2, 1)
+    sep1:SetPoint("TOPLEFT", appLeftX, appearanceY)
+    sep1:SetColorTexture(0.4, 0.4, 0.4, 1)
+    appearanceY = appearanceY - SECTION_SPACING
+
+    -- ========== SPLIT CATEGORIES SECTION ==========
+    _, appearanceY = CreateSectionHeader(appearanceContent, "Split Categories", appLeftX, appearanceY)
+
+    local splitDesc = appearanceContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    splitDesc:SetPoint("TOPLEFT", appLeftX, appearanceY)
+    splitDesc:SetJustifyH("LEFT")
+    splitDesc:SetText("Split a category into its own movable frame with separate settings.")
+
+    -- Add help icon with tooltip hint after description
+    local helpIcon = appearanceContent:CreateTexture(nil, "ARTWORK")
+    helpIcon:SetSize(14, 14)
+    helpIcon:SetPoint("LEFT", splitDesc, "RIGHT", 4, 0)
+    helpIcon:SetAtlas("QuestNormal")
+    local helpBtn = CreateFrame("Button", nil, appearanceContent)
+    helpBtn:SetSize(14, 14)
+    helpBtn:SetPoint("CENTER", helpIcon, "CENTER", 0, 0)
+    helpBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Tip", 1, 0.82, 0)
+        GameTooltip:AddLine("Unlock the frame to see and move each category's area.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    helpBtn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+
+    appearanceY = appearanceY - 16
+
+    local CATEGORY_DROPDOWN_LABELS = {
+        raid = "Raid Buffs",
+        presence = "Presence Buffs",
+        personal = "Personal Buffs",
+        self = "Self Buffs",
+        custom = "Custom Buffs",
+    }
+
+    -- Category dropdown
+    local selectedCategory = "raid"
+    panel.selectedCategory = selectedCategory
+
+    local categoryDropdown =
+        CreateFrame("Frame", "BuffRemindersCategoryDropdown", appearanceContent, "UIDropDownMenuTemplate")
+    categoryDropdown:SetPoint("TOPLEFT", appLeftX - 15, appearanceY)
+    UIDropDownMenu_SetWidth(categoryDropdown, 120)
+    panel.categoryDropdown = categoryDropdown
+
+    -- Per-category sliders and controls (declared early for UpdateCategoryControls)
+    local splitCheckbox
+    local catSizeSlider, catSizeValue
+    local catSpacingSlider, catSpacingValue
+    local catGrowLabel
+    local catGrowBtns = {}
+    local resetCatPosBtn
+
+    -- Function to enable/disable split settings based on whether category is split
+    local function SetSplitSettingsEnabled(enabled)
+        local color = enabled and 1 or 0.5
+        if catSizeSlider then
+            catSizeSlider:SetEnabled(enabled)
+            catSizeSlider.label:SetTextColor(color, color, color)
+            catSizeValue:SetTextColor(color, color, color)
+        end
+        if catSpacingSlider then
+            catSpacingSlider:SetEnabled(enabled)
+            catSpacingSlider.label:SetTextColor(color, color, color)
+            catSpacingValue:SetTextColor(color, color, color)
+        end
+        if catGrowLabel then
+            catGrowLabel:SetTextColor(color, color, color)
+        end
+        for _, btn in ipairs(catGrowBtns) do
+            if enabled then
+                local catSettings = GetCategorySettings(selectedCategory)
+                btn:SetEnabled(btn.direction ~= (catSettings.growDirection or "CENTER"))
+            else
+                btn:SetEnabled(false)
+            end
+        end
+        if resetCatPosBtn then
+            resetCatPosBtn:SetEnabled(enabled)
+        end
+    end
+    panel.SetSplitSettingsEnabled = SetSplitSettingsEnabled
+
+    -- Function to update all controls when category changes
+    local function UpdateCategoryControls()
+        local isSplit = IsCategorySplit(selectedCategory)
+        local catSettings = GetCategorySettings(selectedCategory)
+
+        -- Update checkbox
+        if splitCheckbox then
+            splitCheckbox:SetChecked(isSplit)
+        end
+
+        -- Update slider values
+        if catSizeSlider then
+            catSizeSlider:SetValue(catSettings.iconSize or 64)
+        end
+        if catSpacingSlider then
+            catSpacingSlider:SetValue((catSettings.spacing or 0.2) * 100)
+        end
+
+        -- Update direction buttons
+        for _, btn in ipairs(catGrowBtns) do
+            btn:SetEnabled(isSplit and btn.direction ~= (catSettings.growDirection or "CENTER"))
+        end
+
+        -- Enable/disable settings based on split status
+        SetSplitSettingsEnabled(isSplit)
+    end
+    panel.UpdateCategoryControls = UpdateCategoryControls
+
+    local function CategoryDropdown_Initialize(_, level)
+        for _, category in ipairs(CATEGORIES) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = CATEGORY_DROPDOWN_LABELS[category]
+            info.value = category
+            info.checked = selectedCategory == category
+            info.func = function()
+                selectedCategory = category
+                panel.selectedCategory = category
+                UIDropDownMenu_SetSelectedValue(categoryDropdown, category)
+                UIDropDownMenu_SetText(categoryDropdown, CATEGORY_DROPDOWN_LABELS[category])
+                UpdateCategoryControls()
+            end
+            UIDropDownMenu_AddButton(info, level)
+        end
+    end
+
+    UIDropDownMenu_Initialize(categoryDropdown, CategoryDropdown_Initialize)
+    UIDropDownMenu_SetSelectedValue(categoryDropdown, selectedCategory)
+    UIDropDownMenu_SetText(categoryDropdown, CATEGORY_DROPDOWN_LABELS[selectedCategory])
+
     appearanceY = appearanceY - 28
+
+    -- Split checkbox for selected category
+    splitCheckbox, appearanceY = CreateCheckbox(
+        appearanceContent,
+        appLeftX,
+        appearanceY,
+        "Split this category",
+        IsCategorySplit(selectedCategory),
+        function(self)
+            local db = BuffRemindersDB
+            if not db.splitCategories then
+                db.splitCategories = {}
+            end
+            db.splitCategories[selectedCategory] = self:GetChecked()
+            SetSplitSettingsEnabled(self:GetChecked())
+            ReparentBuffFrames()
+            if testMode then
+                RefreshTestDisplay()
+            else
+                UpdateDisplay()
+            end
+        end,
+        "Move this category to its own frame with independent position and settings"
+    )
+    panel.splitCheckbox = splitCheckbox
+
+    appearanceY = appearanceY - 4
+
+    -- Icon Size slider for selected category
+    local catSettings = GetCategorySettings(selectedCategory)
+    catSizeSlider, catSizeValue, appearanceY = CreateSlider(
+        appearanceContent,
+        appLeftX,
+        appearanceY,
+        "Icon Size",
+        16,
+        128,
+        1,
+        catSettings.iconSize or 64,
+        "",
+        function(val)
+            local db = BuffRemindersDB
+            if not db.categorySettings then
+                db.categorySettings = {}
+            end
+            if not db.categorySettings[selectedCategory] then
+                db.categorySettings[selectedCategory] = {}
+            end
+            db.categorySettings[selectedCategory].iconSize = val
+            if testMode then
+                RefreshTestDisplay()
+            else
+                UpdateDisplay()
+            end
+        end
+    )
+    panel.catSizeSlider = catSizeSlider
+    panel.catSizeValue = catSizeValue
+
+    -- Spacing slider for selected category
+    catSpacingSlider, catSpacingValue, appearanceY = CreateSlider(
+        appearanceContent,
+        appLeftX,
+        appearanceY,
+        "Spacing",
+        0,
+        50,
+        1,
+        math.floor((catSettings.spacing or 0.2) * 100),
+        "%",
+        function(val)
+            local db = BuffRemindersDB
+            if not db.categorySettings then
+                db.categorySettings = {}
+            end
+            if not db.categorySettings[selectedCategory] then
+                db.categorySettings[selectedCategory] = {}
+            end
+            db.categorySettings[selectedCategory].spacing = val / 100
+            if testMode then
+                RefreshTestDisplay()
+            else
+                UpdateDisplay()
+            end
+        end
+    )
+    panel.catSpacingSlider = catSpacingSlider
+    panel.catSpacingValue = catSpacingValue
+
+    -- Growth direction buttons for selected category
+    catGrowLabel = appearanceContent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    catGrowLabel:SetPoint("TOPLEFT", appLeftX, appearanceY)
+    catGrowLabel:SetText("Direction:")
+    panel.catGrowLabel = catGrowLabel
+
+    local catGrowBtnWidth = 48
+    for i, dir in ipairs(directions) do
+        local btn = CreateFrame("Button", nil, appearanceContent, "UIPanelButtonTemplate")
+        btn:SetSize(catGrowBtnWidth, 18)
+        btn:SetPoint("LEFT", catGrowLabel, "RIGHT", 5 + (i - 1) * (catGrowBtnWidth + 2), 0)
+        btn:SetText(dirLabels[i])
+        btn:SetNormalFontObject("GameFontHighlightSmall")
+        btn:SetHighlightFontObject("GameFontHighlightSmall")
+        btn:SetDisabledFontObject("GameFontDisableSmall")
+        btn.direction = dir
+        btn:SetScript("OnClick", function()
+            local db = BuffRemindersDB
+            if not db.categorySettings then
+                db.categorySettings = {}
+            end
+            if not db.categorySettings[selectedCategory] then
+                db.categorySettings[selectedCategory] = {}
+            end
+            db.categorySettings[selectedCategory].growDirection = dir
+            for _, b in ipairs(catGrowBtns) do
+                b:SetEnabled(b.direction ~= dir)
+            end
+            if testMode then
+                RefreshTestDisplay()
+            else
+                UpdateDisplay()
+            end
+        end)
+        btn:SetEnabled((catSettings.growDirection or "CENTER") ~= dir)
+        catGrowBtns[i] = btn
+    end
+    panel.catGrowBtns = catGrowBtns
+
+    appearanceY = appearanceY - 26
+
+    -- Reset positions button for split categories
+    resetCatPosBtn = CreateButton(appearanceContent, 110, 18, "Reset positions", function()
+        local db = BuffRemindersDB
+        for _, category in ipairs(CATEGORIES) do
+            if db.categorySettings and db.categorySettings[category] then
+                db.categorySettings[category].position = {
+                    point = defaults.categorySettings[category].position.point,
+                    x = defaults.categorySettings[category].position.x,
+                    y = defaults.categorySettings[category].position.y,
+                }
+            end
+            -- Update frame position
+            local catFrame = categoryFrames[category]
+            if catFrame then
+                local defPos = defaults.categorySettings[category].position
+                catFrame:ClearAllPoints()
+                catFrame:SetPoint(defPos.point, UIParent, defPos.point, defPos.x, defPos.y)
+            end
+        end
+        if testMode then
+            RefreshTestDisplay()
+        else
+            UpdateDisplay()
+        end
+    end)
+    resetCatPosBtn:SetPoint("TOPLEFT", appLeftX, appearanceY)
+    SetupTooltip(
+        resetCatPosBtn,
+        "Reset positions",
+        "Reset all split category frame positions to their defaults",
+        "ANCHOR_TOP"
+    )
+    panel.resetCatPosBtn = resetCatPosBtn
+
+    appearanceY = appearanceY - 26
+
+    -- Set initial enabled state based on whether selected category is split
+    SetSplitSettingsEnabled(IsCategorySplit(selectedCategory))
 
     -- Set appearance content height
     appearanceContent:SetHeight(math.abs(appearanceY) + 20)
@@ -2556,13 +3284,25 @@ local function CreateOptionsPanel()
     contentBottomY = contentBottomY - 15
 
     -- Button row (centered in panel)
-    local btnWidth = 100
-    local btnSpacing = 10
-    local totalBtnWidth = btnWidth * 3 + btnSpacing * 2
+    local btnWidth = 90
+    local btnSpacing = 8
+    local totalBtnWidth = btnWidth * 4 + btnSpacing * 3
+
+    local lockBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    lockBtn:SetSize(btnWidth, 22)
+    lockBtn:SetPoint("TOP", -totalBtnWidth / 2 + btnWidth / 2, contentBottomY)
+    lockBtn:SetText(BuffRemindersDB.locked and "Unlock" or "Lock")
+    lockBtn:SetScript("OnClick", function(self)
+        BuffRemindersDB.locked = not BuffRemindersDB.locked
+        self:SetText(BuffRemindersDB.locked and "Unlock" or "Lock")
+        UpdateAnchor()
+    end)
+    SetupTooltip(lockBtn, "Lock/Unlock", "Unlock to drag and reposition the buff frames.", "ANCHOR_TOP")
+    panel.lockBtn = lockBtn
 
     local resetPosBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     resetPosBtn:SetSize(btnWidth, 22)
-    resetPosBtn:SetPoint("TOP", -totalBtnWidth / 2 + btnWidth / 2, contentBottomY)
+    resetPosBtn:SetPoint("LEFT", lockBtn, "RIGHT", btnSpacing, 0)
     resetPosBtn:SetText("Reset Pos")
     resetPosBtn:SetScript("OnClick", function()
         BuffRemindersDB.position = { point = "CENTER", x = 0, y = 0 }
@@ -2581,15 +3321,19 @@ local function CreateOptionsPanel()
     resetRatiosBtn:SetPoint("LEFT", resetPosBtn, "RIGHT", btnSpacing, 0)
     resetRatiosBtn:SetText("Reset Ratios")
     resetRatiosBtn:SetScript("OnClick", function()
-        BuffRemindersDB.spacing = 0.2
-        BuffRemindersDB.textScale = 0.34
+        local db = BuffRemindersDB
+        if not db.categorySettings then
+            db.categorySettings = {}
+        end
+        if not db.categorySettings.main then
+            db.categorySettings.main = {}
+        end
+        db.categorySettings.main.spacing = 0.2
         panel.spacingSlider:SetValue(20)
-        panel.textSlider:SetValue(34)
         panel.spacingValue:SetText("20%")
-        panel.textValue:SetText("34%")
         UpdateVisuals()
     end)
-    SetupTooltip(resetRatiosBtn, "Reset Ratios", "Resets spacing and text size to recommended ratios.", "ANCHOR_TOP")
+    SetupTooltip(resetRatiosBtn, "Reset Ratios", "Resets spacing to recommended ratio.", "ANCHOR_TOP")
 
     local testBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     testBtn:SetSize(btnWidth, 22)
@@ -2653,9 +3397,9 @@ local function ToggleOptions()
         if optionsPanel.RenderCustomBuffRows then
             optionsPanel.RenderCustomBuffRows()
         end
-        optionsPanel.sizeSlider:SetValue(db.iconSize)
-        optionsPanel.spacingSlider:SetValue((db.spacing or 0.2) * 100)
-        optionsPanel.textSlider:SetValue((db.textScale or 0.34) * 100)
+        local mainSettings = GetCategorySettings("main")
+        optionsPanel.sizeSlider:SetValue(mainSettings.iconSize or 64)
+        optionsPanel.spacingSlider:SetValue((mainSettings.spacing or 0.2) * 100)
         optionsPanel.lockBtn:SetText(db.locked and "Unlock" or "Lock")
         optionsPanel.reminderCheckbox:SetChecked(db.showBuffReminder ~= false)
         optionsPanel.groupCheckbox:SetChecked(db.showOnlyInGroup ~= false)
@@ -2681,7 +3425,11 @@ local function ToggleOptions()
             optionsPanel.SetGlowControlsEnabled(db.showExpirationGlow)
         end
         for _, btn in ipairs(optionsPanel.growBtns) do
-            btn:SetEnabled(btn.direction ~= db.growDirection)
+            btn:SetEnabled(btn.direction ~= (mainSettings.growDirection or "CENTER"))
+        end
+        -- Refresh split category controls (checkbox and settings for selected category)
+        if optionsPanel.UpdateCategoryControls then
+            optionsPanel.UpdateCategoryControls()
         end
         if testMode then
             optionsPanel.testBtn:SetText("Stop Test")
@@ -3154,6 +3902,32 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         -- Initialize custom buffs storage
         if not BuffRemindersDB.customBuffs then
             BuffRemindersDB.customBuffs = {}
+        end
+
+        -- Migrate old global settings to categorySettings.main
+        local db = BuffRemindersDB
+        if not db.categorySettings then
+            db.categorySettings = {}
+        end
+        if not db.categorySettings.main then
+            db.categorySettings.main = {}
+        end
+        -- Copy old settings if categorySettings.main doesn't have them
+        if db.iconSize and not db.categorySettings.main.iconSize then
+            db.categorySettings.main.iconSize = db.iconSize
+        end
+        if db.spacing and not db.categorySettings.main.spacing then
+            db.categorySettings.main.spacing = db.spacing
+        end
+        if db.growDirection and not db.categorySettings.main.growDirection then
+            db.categorySettings.main.growDirection = db.growDirection
+        end
+        if db.position and not db.categorySettings.main.position then
+            db.categorySettings.main.position = {
+                point = db.position.point,
+                x = db.position.x,
+                y = db.position.y,
+            }
         end
 
         SLASH_BUFFREMINDERS1 = "/br"

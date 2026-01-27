@@ -81,7 +81,29 @@
 ---@field isPersonalBuff? boolean
 ---@field isSelfBuff? boolean
 ---@field isCustomBuff? boolean
+---@field buffCategory? CategoryName
 ---@field glowTexture? Texture
 ---@field glowAnim? AnimationGroup
 ---@field glowShowing? boolean
 ---@field currentGlowStyle? number
+
+---@alias CategoryName "raid"|"presence"|"personal"|"self"|"custom"
+
+---@class CategoryPosition
+---@field point string
+---@field x number
+---@field y number
+
+---@class CategorySetting
+---@field position CategoryPosition
+---@field iconSize number
+---@field spacing number
+---@field growDirection string
+
+---@class CategoryFrame: Frame
+---@field category CategoryName
+---@field editBg? Texture
+---@field editBorder? Texture
+---@field editLabel? FontString
+
+---@alias SplitCategories table<CategoryName, boolean>
