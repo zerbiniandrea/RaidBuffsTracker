@@ -26,6 +26,7 @@
 ---@field missingText string
 ---@field groupId? string
 ---@field excludeTalentSpellID? number
+---@field iconOverride? number
 ---@field infoTooltip? string
 
 ---@class PersonalBuff
@@ -51,6 +52,7 @@
 ---@field buffIdOverride? number
 ---@field requiresTalentSpellID? number
 ---@field excludeTalentSpellID? number
+---@field iconOverride? number
 ---@field iconByRole? table<RoleType, number>
 ---@field infoTooltip? string
 
