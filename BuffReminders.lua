@@ -321,10 +321,11 @@ local function GetBuffSettingKey(buff)
 end
 
 ---Generate a unique key for a custom buff
----@param spellID number
+---@param spellID SpellID
 ---@return string
 local function GenerateCustomBuffKey(spellID)
-    return "custom_" .. spellID .. "_" .. time()
+    local id = type(spellID) == "table" and spellID[1] or spellID
+    return "custom_" .. id .. "_" .. time()
 end
 
 ---Validate a spell ID exists via GetSpellInfo
@@ -3525,17 +3526,34 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         customBuffModal:Hide()
     end
 
-    local MODAL_WIDTH = 320
-    local MODAL_HEIGHT = 270
+    local MODAL_WIDTH = 340
+    local BASE_HEIGHT = 270
+    local ROW_HEIGHT = 26
+    local ADVANCED_HEIGHT = 85
+    local CONTENT_LEFT = 20
+    local ROWS_START_Y = -60 -- Below title and "Spell IDs:" label
     local editingBuff = existingKey and BuffRemindersDB.customBuffs[existingKey] or nil
 
-    local modal = CreatePanel("BuffRemindersCustomBuffModal", MODAL_WIDTH, MODAL_HEIGHT, {
+    -- Convert existing spellID to array form for editing
+    local existingSpellIDs = {}
+    if editingBuff then
+        if type(editingBuff.spellID) == "table" then
+            for _, id in ipairs(editingBuff.spellID) do
+                table.insert(existingSpellIDs, id)
+            end
+        else
+            table.insert(existingSpellIDs, editingBuff.spellID)
+        end
+    end
+
+    local modal = CreatePanel("BuffRemindersCustomBuffModal", MODAL_WIDTH, BASE_HEIGHT, {
         bgColor = { 0.1, 0.1, 0.1, 0.98 },
         borderColor = { 0.4, 0.4, 0.4, 1 },
         level = 200,
         escClose = true,
     })
 
+    -- Title and close button
     local title = modal:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOP", 0, -12)
     title:SetText(editingBuff and "Edit Custom Buff" or "Add Custom Buff")
@@ -3543,148 +3561,181 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     local closeBtn = CreateFrame("Button", nil, modal, "UIPanelCloseButton")
     closeBtn:SetPoint("TOPRIGHT", -5, -5)
 
-    local y = -40
+    -- Spell IDs label
+    local spellIdsLabel = modal:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    spellIdsLabel:SetPoint("TOPLEFT", CONTENT_LEFT, -40)
+    spellIdsLabel:SetText("Spell IDs:")
 
-    -- Spell ID input
-    local spellIdLabel = modal:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    spellIdLabel:SetPoint("TOPLEFT", 20, y)
-    spellIdLabel:SetText("Spell ID:")
+    -- State
+    local spellRows = {}
+    local advancedShown = false
 
-    local spellIdBox = CreateFrame("EditBox", nil, modal, "InputBoxTemplate")
-    spellIdBox:SetSize(100, 20)
-    spellIdBox:SetPoint("LEFT", spellIdLabel, "RIGHT", 10, 0)
-    spellIdBox:SetAutoFocus(false)
-    spellIdBox:SetNumeric(true)
-    if editingBuff then
-        spellIdBox:SetText(tostring(editingBuff.spellID))
+    -- Forward declarations
+    local addSpellBtn, advancedBtn, advancedText, advancedFrame
+    local nameBox, missingBox, selectedClass
+
+    -- Single layout function that positions everything
+    local function UpdateLayout()
+        local rowCount = #spellRows
+
+        -- Position each row
+        for i, rowData in ipairs(spellRows) do
+            rowData.frame:ClearAllPoints()
+            rowData.frame:SetPoint("TOPLEFT", modal, "TOPLEFT", CONTENT_LEFT, ROWS_START_Y - ((i - 1) * ROW_HEIGHT))
+            -- Show/hide remove button
+            if rowCount > 1 then
+                rowData.removeBtn:Show()
+            else
+                rowData.removeBtn:Hide()
+            end
+        end
+
+        -- Position add button below rows
+        local addBtnY = ROWS_START_Y - (rowCount * ROW_HEIGHT) - 4
+        addSpellBtn:ClearAllPoints()
+        addSpellBtn:SetPoint("TOPLEFT", modal, "TOPLEFT", CONTENT_LEFT, addBtnY)
+
+        -- Position advanced toggle below add button
+        local advancedY = addBtnY - 26
+        advancedBtn:ClearAllPoints()
+        advancedBtn:SetPoint("TOPLEFT", modal, "TOPLEFT", CONTENT_LEFT, advancedY)
+
+        -- Position advanced frame below toggle
+        advancedFrame:ClearAllPoints()
+        advancedFrame:SetPoint("TOPLEFT", modal, "TOPLEFT", CONTENT_LEFT, advancedY - 22)
+
+        -- Update modal height
+        local extraRows = math.max(0, rowCount - 1)
+        local advancedExtra = advancedShown and ADVANCED_HEIGHT or 0
+        modal:SetHeight(BASE_HEIGHT + (extraRows * ROW_HEIGHT) + advancedExtra)
     end
 
-    local lookupBtn = CreateFrame("Button", nil, modal, "UIPanelButtonTemplate")
-    lookupBtn:SetSize(60, 20)
-    lookupBtn:SetPoint("LEFT", spellIdBox, "RIGHT", 5, 0)
-    lookupBtn:SetText("Lookup")
+    -- Create a spell row
+    local function CreateSpellRow(initialSpellID)
+        local rowFrame = CreateFrame("Frame", nil, modal)
+        rowFrame:SetSize(MODAL_WIDTH - 40, ROW_HEIGHT - 2)
 
-    y = y - 30
-
-    -- Preview area
-    local previewBg = modal:CreateTexture(nil, "BACKGROUND")
-    previewBg:SetSize(MODAL_WIDTH - 40, 50)
-    previewBg:SetPoint("TOPLEFT", 20, y)
-    previewBg:SetColorTexture(0.05, 0.05, 0.05, 1)
-
-    local previewIcon = CreateBuffIcon(modal, 40)
-    previewIcon:SetPoint("TOPLEFT", 25, y - 5)
-    previewIcon:Hide()
-
-    local previewName = modal:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    previewName:SetPoint("TOPLEFT", previewIcon, "TOPRIGHT", 10, -2)
-    previewName:SetText("")
-
-    local previewDesc = modal:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    previewDesc:SetPoint("TOPLEFT", previewName, "BOTTOMLEFT", 0, -2)
-    previewDesc:SetWidth(MODAL_WIDTH - 100)
-    previewDesc:SetHeight(24) -- Limit to ~2 lines
-    previewDesc:SetJustifyH("LEFT")
-    previewDesc:SetJustifyV("TOP")
-    previewDesc:SetText("")
-    previewDesc:SetTextColor(0.8, 0.8, 0.8)
-    previewDesc:SetWordWrap(true)
-    previewDesc:SetNonSpaceWrap(false)
-
-    local previewError = modal:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    previewError:SetPoint("CENTER", previewBg, "CENTER", 0, 0)
-    previewError:SetText("Enter a spell ID and click Lookup")
-    previewError:SetTextColor(0.6, 0.6, 0.6)
-
-    -- State for validated spell
-    local validatedSpellID = editingBuff and editingBuff.spellID or nil
-    local validatedSpellName = editingBuff and editingBuff.name or nil
-
-    if editingBuff then
-        local valid, name, iconID = ValidateSpellID(editingBuff.spellID)
-        if valid then
-            previewIcon:SetTexture(iconID)
-            previewIcon:Show()
-            previewName:SetText(name or "")
-            previewError:Hide()
-            validatedSpellName = name
-            -- Get spell description
-            pcall(function()
-                local desc = C_Spell.GetSpellDescription(editingBuff.spellID)
-                if desc then
-                    previewDesc:SetText(desc)
-                end
-            end)
+        -- Edit box
+        local editBox = CreateFrame("EditBox", nil, rowFrame, "InputBoxTemplate")
+        editBox:SetSize(70, 20)
+        editBox:SetPoint("LEFT", 0, 0)
+        editBox:SetAutoFocus(false)
+        if initialSpellID then
+            editBox:SetText(tostring(initialSpellID))
         end
+
+        -- Lookup button
+        local lookupBtn = CreateFrame("Button", nil, rowFrame, "UIPanelButtonTemplate")
+        lookupBtn:SetSize(50, 20)
+        lookupBtn:SetPoint("LEFT", editBox, "RIGHT", 5, 0)
+        lookupBtn:SetText("Lookup")
+        lookupBtn:SetNormalFontObject("GameFontHighlightSmall")
+        lookupBtn:SetHighlightFontObject("GameFontHighlightSmall")
+
+        -- Icon preview
+        local icon = CreateBuffIcon(rowFrame, 18)
+        icon:SetPoint("LEFT", lookupBtn, "RIGHT", 8, 0)
+        icon:Hide()
+
+        -- Spell name
+        local nameText = rowFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        nameText:SetPoint("LEFT", icon, "RIGHT", 5, 0)
+        nameText:SetPoint("RIGHT", rowFrame, "RIGHT", -28, 0)
+        nameText:SetJustifyH("LEFT")
+        nameText:SetWordWrap(false)
+
+        -- Remove button
+        local removeBtn = CreateFrame("Button", nil, rowFrame, "UIPanelButtonTemplate")
+        removeBtn:SetSize(20, 20)
+        removeBtn:SetPoint("RIGHT", 0, 0)
+        removeBtn:SetText("-")
+        removeBtn:SetNormalFontObject("GameFontHighlightSmall")
+        removeBtn:SetHighlightFontObject("GameFontHighlightSmall")
+        removeBtn:Hide()
+
+        local rowData = {
+            frame = rowFrame,
+            editBox = editBox,
+            icon = icon,
+            nameText = nameText,
+            removeBtn = removeBtn,
+            validated = false,
+            spellID = nil,
+            spellName = nil,
+        }
+
+        -- Lookup handler
+        lookupBtn:SetScript("OnClick", function()
+            local spellID = tonumber(editBox:GetText())
+            if not spellID then
+                icon:Hide()
+                nameText:SetText("|cffff4d4dInvalid ID|r")
+                rowData.validated, rowData.spellID, rowData.spellName = false, nil, nil
+                return
+            end
+
+            local valid, name, iconID = ValidateSpellID(spellID)
+            if valid then
+                icon:SetTexture(iconID)
+                icon:Show()
+                nameText:SetText(name or "")
+                rowData.validated, rowData.spellID, rowData.spellName = true, spellID, name
+            else
+                icon:Hide()
+                nameText:SetText("|cffff4d4dNot found|r")
+                rowData.validated, rowData.spellID, rowData.spellName = false, nil, nil
+            end
+        end)
+
+        -- Remove handler
+        removeBtn:SetScript("OnClick", function()
+            for i, rd in ipairs(spellRows) do
+                if rd == rowData then
+                    rowData.frame:Hide()
+                    table.remove(spellRows, i)
+                    UpdateLayout()
+                    break
+                end
+            end
+        end)
+
+        table.insert(spellRows, rowData)
+
+        -- Auto-lookup if initial spell ID provided
+        if initialSpellID then
+            lookupBtn:GetScript("OnClick")()
+        end
+
+        return rowData
     end
 
-    lookupBtn:SetScript("OnClick", function()
-        local spellID = tonumber(spellIdBox:GetText())
-        if not spellID then
-            previewIcon:Hide()
-            previewName:SetText("")
-            previewDesc:SetText("")
-            previewError:SetText("Invalid spell ID")
-            previewError:SetTextColor(1, 0.3, 0.3)
-            previewError:Show()
-            validatedSpellID = nil
-            validatedSpellName = nil
-            return
-        end
-
-        local valid, name, iconID = ValidateSpellID(spellID)
-        if valid then
-            previewIcon:SetTexture(iconID)
-            previewIcon:Show()
-            previewName:SetText(name or "")
-            previewError:Hide()
-            validatedSpellID = spellID
-            validatedSpellName = name
-            -- Get spell description
-            pcall(function()
-                local desc = C_Spell.GetSpellDescription(spellID)
-                if desc then
-                    previewDesc:SetText(desc)
-                end
-            end)
-        else
-            previewIcon:Hide()
-            previewName:SetText("")
-            previewDesc:SetText("")
-            previewError:SetText("Spell not found")
-            previewError:SetTextColor(1, 0.3, 0.3)
-            previewError:Show()
-            validatedSpellID = nil
-            validatedSpellName = nil
-        end
+    -- Add spell ID button
+    addSpellBtn = CreateButton(modal, 100, 18, "+ Add Spell ID", function()
+        CreateSpellRow(nil)
+        UpdateLayout()
     end)
 
-    y = y - 60
-
-    -- Advanced options toggle
-    local advancedShown = false
-    local advancedFrame = CreateFrame("Frame", nil, modal)
-    advancedFrame:SetPoint("TOPLEFT", 20, y - 25)
-    advancedFrame:SetSize(MODAL_WIDTH - 40, 85)
-    advancedFrame:Hide()
-
-    local advancedBtn = CreateFrame("Button", nil, modal)
-    advancedBtn:SetPoint("TOPLEFT", 20, y)
+    -- Advanced options toggle button
+    advancedBtn = CreateFrame("Button", nil, modal)
     advancedBtn:SetSize(200, 20)
-    local advancedText = advancedBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    advancedText = advancedBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     advancedText:SetPoint("LEFT", 0, 0)
     advancedText:SetText("[+] Show Advanced Options")
     advancedText:SetTextColor(0.6, 0.8, 1)
 
-    -- Advanced options
+    -- Advanced options frame
+    advancedFrame = CreateFrame("Frame", nil, modal)
+    advancedFrame:SetSize(MODAL_WIDTH - 40, ADVANCED_HEIGHT)
+    advancedFrame:Hide()
+
+    -- Advanced options content
     local advY = 0
 
-    -- Display Name
     local nameLabel = advancedFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     nameLabel:SetPoint("TOPLEFT", 0, advY)
     nameLabel:SetText("Display Name:")
 
-    local nameBox = CreateFrame("EditBox", nil, advancedFrame, "InputBoxTemplate")
+    nameBox = CreateFrame("EditBox", nil, advancedFrame, "InputBoxTemplate")
     nameBox:SetSize(150, 18)
     nameBox:SetPoint("LEFT", nameLabel, "RIGHT", 5, 0)
     nameBox:SetAutoFocus(false)
@@ -3694,12 +3745,11 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
 
     advY = advY - 25
 
-    -- Missing Text
     local missingLabel = advancedFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     missingLabel:SetPoint("TOPLEFT", 0, advY)
     missingLabel:SetText("Missing Text:")
 
-    local missingBox = CreateFrame("EditBox", nil, advancedFrame, "InputBoxTemplate")
+    missingBox = CreateFrame("EditBox", nil, advancedFrame, "InputBoxTemplate")
     missingBox:SetSize(80, 18)
     missingBox:SetPoint("LEFT", missingLabel, "RIGHT", 5, 0)
     missingBox:SetAutoFocus(false)
@@ -3713,7 +3763,6 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
 
     advY = advY - 25
 
-    -- Class Filter
     local classLabel = advancedFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     classLabel:SetPoint("TOPLEFT", 0, advY)
     classLabel:SetText("Only for class:")
@@ -3734,14 +3783,14 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         { value = "DEMONHUNTER", label = "Demon Hunter" },
         { value = "EVOKER", label = "Evoker" },
     }
-    local selectedClass = editingBuff and editingBuff.class or nil
+    selectedClass = editingBuff and editingBuff.class or nil
 
     local classDropdown =
         CreateFrame("Frame", "BuffRemindersCustomClassDropdown", advancedFrame, "UIDropDownMenuTemplate")
     classDropdown:SetPoint("LEFT", classLabel, "RIGHT", -10, -2)
     UIDropDownMenu_SetWidth(classDropdown, 100)
 
-    local function ClassDropdown_Initialize(self, level)
+    UIDropDownMenu_Initialize(classDropdown, function(_, level)
         for _, cls in ipairs(classOptions) do
             local info = UIDropDownMenu_CreateInfo()
             info.text = cls.label
@@ -3754,9 +3803,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             end
             UIDropDownMenu_AddButton(info, level)
         end
-    end
-
-    UIDropDownMenu_Initialize(classDropdown, ClassDropdown_Initialize)
+    end)
     UIDropDownMenu_SetSelectedValue(classDropdown, selectedClass)
     for _, cls in ipairs(classOptions) do
         if cls.value == selectedClass then
@@ -3765,20 +3812,27 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         end
     end
 
+    -- Advanced toggle handler
     advancedBtn:SetScript("OnClick", function()
         advancedShown = not advancedShown
         if advancedShown then
             advancedText:SetText("[-] Hide Advanced Options")
             advancedFrame:Show()
-            modal:SetHeight(MODAL_HEIGHT + 85)
         else
             advancedText:SetText("[+] Show Advanced Options")
             advancedFrame:Hide()
-            modal:SetHeight(MODAL_HEIGHT)
         end
+        UpdateLayout()
     end)
 
-    -- Buttons at bottom
+    -- Error message
+    local saveError = modal:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    saveError:SetPoint("BOTTOMLEFT", 20, 42)
+    saveError:SetWidth(MODAL_WIDTH - 120)
+    saveError:SetJustifyH("LEFT")
+    saveError:SetTextColor(1, 0.3, 0.3)
+
+    -- Cancel button
     local cancelBtn = CreateFrame("Button", nil, modal, "UIPanelButtonTemplate")
     cancelBtn:SetSize(80, 22)
     cancelBtn:SetPoint("BOTTOMRIGHT", -20, 15)
@@ -3787,53 +3841,67 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         modal:Hide()
     end)
 
+    -- Save button
     local saveBtn = CreateFrame("Button", nil, modal, "UIPanelButtonTemplate")
     saveBtn:SetSize(80, 22)
     saveBtn:SetPoint("RIGHT", cancelBtn, "LEFT", -10, 0)
     saveBtn:SetText("Save")
     saveBtn:SetScript("OnClick", function()
-        if not validatedSpellID then
-            previewError:SetText("Please validate a spell ID first")
-            previewError:SetTextColor(1, 0.3, 0.3)
-            previewError:Show()
+        -- Collect validated spell IDs
+        local validatedIDs = {}
+        local firstName = nil
+        for _, rowData in ipairs(spellRows) do
+            if rowData.validated and rowData.spellID then
+                table.insert(validatedIDs, rowData.spellID)
+                if not firstName then
+                    firstName = rowData.spellName
+                end
+            end
+        end
+
+        if #validatedIDs == 0 then
+            saveError:SetText("Please validate at least one spell ID")
             return
         end
+        saveError:SetText("")
 
-        local key = existingKey or GenerateCustomBuffKey(validatedSpellID)
+        -- Store as single number if only one, array if multiple
+        local spellIDValue = #validatedIDs == 1 and validatedIDs[1] or validatedIDs
+
+        local key = existingKey or GenerateCustomBuffKey(spellIDValue)
         local displayName = nameBox:GetText()
         if displayName == "" then
-            displayName = validatedSpellName or ("Spell " .. validatedSpellID)
+            displayName = firstName or ("Spell " .. validatedIDs[1])
         end
 
-        local missingText = missingBox:GetText()
-        if missingText ~= "" then
-            missingText = missingText:gsub("\\n", "\n")
+        local missingTextValue = missingBox:GetText()
+        if missingTextValue ~= "" then
+            missingTextValue = missingTextValue:gsub("\\n", "\n")
         else
-            missingText = nil
+            missingTextValue = nil
         end
 
         local customBuff = {
-            spellID = validatedSpellID,
+            spellID = spellIDValue,
             key = key,
             name = displayName,
-            missingText = missingText,
+            missingText = missingTextValue,
             class = selectedClass,
         }
 
         BuffRemindersDB.customBuffs[key] = customBuff
 
-        -- Create frame if new
         if not existingKey then
             CreateCustomBuffFrameRuntime(customBuff)
         else
-            -- Update existing frame's icon
             local frame = buffFrames[key]
             if frame then
-                local texture = GetBuffTexture(validatedSpellID)
+                local texture = GetBuffTexture(spellIDValue)
                 if texture then
                     frame.icon:SetTexture(texture)
                 end
                 frame.displayName = displayName
+                frame.spellIDs = spellIDValue
             end
         end
 
@@ -3843,6 +3911,18 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         end
         UpdateDisplay()
     end)
+
+    -- Initialize rows
+    if #existingSpellIDs > 0 then
+        for _, spellID in ipairs(existingSpellIDs) do
+            CreateSpellRow(spellID)
+        end
+    else
+        CreateSpellRow(nil)
+    end
+
+    -- Initial layout
+    UpdateLayout()
 
     customBuffModal = modal
     modal:Show()

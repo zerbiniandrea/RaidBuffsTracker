@@ -61,7 +61,7 @@
 ---@field missingText? string
 
 ---@class CustomBuff
----@field spellID number
+---@field spellID SpellID
 ---@field key string
 ---@field name string
 ---@field missingText? string
