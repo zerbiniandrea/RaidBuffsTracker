@@ -31,7 +31,13 @@ local RaidBuffs = {
 
 ---@type PresenceBuff[]
 local PresenceBuffs = {
-    { spellID = 381637, key = "atrophicPoison", name = "Atrophic Poison", class = "ROGUE", missingText = "NO\nPOISON" },
+    {
+        spellID = { 381637, 5761 },
+        key = "atrophicNumbingPoison",
+        name = "Atrophic/Numbing Poison",
+        class = "ROGUE",
+        missingText = "NO\nPOISON",
+    },
     { spellID = 465, key = "devotionAura", name = "Devotion Aura", class = "PALADIN", missingText = "NO\nAURA" },
     {
         spellID = 20707,
