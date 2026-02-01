@@ -1808,6 +1808,9 @@ local function SetupDragging()
     end)
 end
 
+-- Forward declaration for ReparentBuffFrames (defined after InitializeFrames)
+local ReparentBuffFrames
+
 -- Initialize main frame
 local function InitializeFrames()
     mainFrame = CreateFrame("Frame", "BuffRemindersFrame", UIParent)
@@ -1896,6 +1899,9 @@ local function InitializeFrames()
         end
     end
 
+    -- Reparent frames based on split category settings
+    ReparentBuffFrames()
+
     mainFrame:Hide()
 end
 
@@ -1911,7 +1917,6 @@ local function CreateCustomBuffFrameRuntime(customBuff)
 end
 
 -- Reparent all buff frames to appropriate parent based on split status
-local ReparentBuffFrames
 ReparentBuffFrames = function()
     for _, frame in pairs(buffFrames) do
         local category = frame.buffCategory
