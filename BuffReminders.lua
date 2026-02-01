@@ -1193,7 +1193,7 @@ local function CreateBuffFrame(buff, category)
 
     -- "TEST" text (shown above icon in test mode)
     frame.testText = frame:CreateFontString(nil, "OVERLAY")
-    frame.testText:SetPoint("BOTTOM", frame, "TOP", 0, 8)
+    frame.testText:SetPoint("BOTTOM", frame, "TOP", 0, 25)
     frame.testText:SetFont(STANDARD_TEXT_FONT, GetFontSize(0.6), "OUTLINE")
     frame.testText:SetTextColor(1, 0.8, 0, 1)
     frame.testText:SetText("TEST")
