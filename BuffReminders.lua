@@ -1,5 +1,9 @@
 local addonName, _ = ...
 
+-- Global API table for external addon integration
+BuffReminders = {}
+local EXPORT_PREFIX = "!BR_"
+
 ---@type RaidBuff[]
 local RaidBuffs = {
     { spellID = 1459, key = "intellect", name = "Arcane Intellect", class = "MAGE" },
@@ -2215,6 +2219,38 @@ local function ImportSettings(str)
 end
 
 -- ============================================================================
+-- PUBLIC API (for external addon integration)
+-- ============================================================================
+
+--- Export settings to a prefixed string that can be imported by other addons
+--- @param profileKey string|nil Optional profile name (ignored - BuffReminders uses single profile)
+--- @return string Encoded settings string with !BR_ prefix
+function BuffReminders:Export(profileKey)
+    local exportString = ExportSettings()
+    return EXPORT_PREFIX .. exportString
+end
+
+--- Import settings from a prefixed string
+--- @param importString string The encoded settings string (must start with !BR_)
+--- @param profileKey string|nil Optional profile name (ignored - BuffReminders uses single profile)
+--- @return boolean success Whether the import succeeded
+--- @return string|nil error Error message if import failed
+function BuffReminders:Import(importString, profileKey)
+    if not importString or type(importString) ~= "string" then
+        return false, "Invalid import string"
+    end
+
+    -- Validate prefix
+    if importString:sub(1, #EXPORT_PREFIX) ~= EXPORT_PREFIX then
+        return false, "Invalid import string (missing prefix)"
+    end
+
+    -- Strip prefix and import
+    local dataString = importString:sub(#EXPORT_PREFIX + 1)
+    return ImportSettings(dataString)
+end
+
+-- ============================================================================
 -- OPTIONS PANEL (Two-Column Layout)
 -- ============================================================================
 
@@ -2519,7 +2555,7 @@ local function CreateOptionsPanel()
 
     -- Export button
     local exportButton = CreateButton(profilesContent, 100, 22, "Export", function()
-        local exportString = ExportSettings()
+        local exportString = BuffReminders:Export()
         exportEditBox:SetText(exportString)
         exportEditBox:HighlightText()
         exportEditBox:SetFocus()
@@ -2607,7 +2643,7 @@ local function CreateOptionsPanel()
 
     local importButton = CreateButton(profilesContent, 100, 22, "Import", function()
         local importString = importEditBox:GetText()
-        local success, err = ImportSettings(importString)
+        local success, err = BuffReminders:Import(importString)
 
         if success then
             importStatus:SetText("|cff00ff00Settings imported successfully!|r")

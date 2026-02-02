@@ -6,10 +6,12 @@ codes = true
 ignore = {
 	"21./_",
 	"212/self",
+	"212/profileKey",
 }
 
 globals = {
 	"_",
+	"BuffReminders",
 	"BuffRemindersDB",
 	"SLASH_BUFFREMINDERS1",
 	"SLASH_BUFFREMINDERS2",
