@@ -62,6 +62,7 @@
 ---@field spellID? SpellID
 ---@field key string
 ---@field name string
+---@field missingText string
 ---@field groupId? string
 ---@field checkWeaponEnchant? boolean Check if any weapon enchant exists (oils, stones, imbues)
 ---@field excludeIfSpellKnown? number[] Don't show if player knows any of these spells
@@ -90,11 +91,6 @@
 ---@field buffText? FontString
 ---@field testText FontString
 ---@field isPlayerBuff? boolean
----@field isPresenceBuff? boolean
----@field isTargetedBuff? boolean
----@field isSelfBuff? boolean
----@field isConsumableBuff? boolean
----@field isCustomBuff? boolean
 ---@field buffCategory? CategoryName
 ---@field glowTexture? Texture
 ---@field glowAnim? AnimationGroup
