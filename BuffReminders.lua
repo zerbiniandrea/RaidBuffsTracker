@@ -237,6 +237,78 @@ local BuffGroups = {
     shamanImbues = { displayName = "Shaman Imbues" },
     paladinRites = { displayName = "Paladin Rites" },
     shamanShields = { displayName = "Shaman Shields" },
+    -- Consumable groups
+    flask = { displayName = "Flask" },
+    food = { displayName = "Food" },
+    rune = { displayName = "Augment Rune" },
+    weaponBuff = { displayName = "Weapon Buff" },
+}
+
+---@type ConsumableBuff[]
+local Consumables = {
+    -- Augment Rune (The War Within + Midnight)
+    {
+        spellID = {
+            453250, -- Crystallized Augment Rune (TWW)
+            1264426, -- Void-Touched Augment Rune (Midnight)
+        },
+        displaySpellIDs = { 453250 }, -- Show only TWW icon in UI
+        key = "rune",
+        name = "Rune",
+        groupId = "rune",
+    },
+    -- Flasks (The War Within + Midnight)
+    {
+        spellID = {
+            -- The War Within
+            432021, -- Flask of Alchemical Chaos
+            431971, -- Flask of Tempered Aggression
+            431972, -- Flask of Tempered Swiftness
+            431973, -- Flask of Tempered Versatility
+            431974, -- Flask of Tempered Mastery
+            -- Midnight
+            1235057, -- Flask of Thalassian Resistance (Versatility)
+            1235108, -- Flask of the Magisters (Mastery)
+            1235110, -- Flask of the Blood Knights (Haste)
+            1235111, -- Flask of the Shattered Sun (Critical Strike)
+        },
+        displaySpellIDs = {
+            -- Show only TWW flask icons in UI
+            432021, -- Flask of Alchemical Chaos
+            431971, -- Flask of Tempered Aggression
+            431972, -- Flask of Tempered Swiftness
+            431973, -- Flask of Tempered Versatility
+            431974, -- Flask of Tempered Mastery
+        },
+        key = "flask",
+        name = "Flask",
+        groupId = "flask",
+    },
+    -- Food (all expansions - detected by icon ID)
+    {
+        buffIconID = 136000, -- All food buffs use this icon
+        key = "food",
+        name = "Food",
+        groupId = "food",
+        iconOverride = 136000,
+    },
+    -- Weapon Buffs (oils, stones - but not for classes with imbues)
+    {
+        checkWeaponEnchant = true, -- Check if any weapon enchant exists
+        key = "weaponBuff",
+        name = "Weapon",
+        groupId = "weaponBuff",
+        iconOverride = { 609892, 3622195, 3622196 }, -- Oil, Whetstone, Weightstone/Razorstone
+        excludeIfSpellKnown = {
+            -- Shaman imbues
+            382021, -- Earthliving Weapon
+            318038, -- Flametongue Weapon
+            33757, -- Windfury Weapon
+            -- Paladin rites
+            433583, -- Rite of Adjuration
+            433568, -- Rite of Sanctification
+        },
+    },
 }
 
 -- Build icon override lookup table (for spells replaced by talents)
@@ -453,8 +525,10 @@ local defaults = {
         presence = false,
         targeted = false,
         self = false,
+        consumable = false,
         custom = false,
-    },
+    }, ---@type SplitCategories
+    ---@type AllCategorySettings
     categorySettings = { -- Per-category settings (main = non-split buffs, others = when split)
         main = {
             position = { point = "CENTER", x = 0, y = 0 },
@@ -496,8 +570,16 @@ local defaults = {
             iconZoom = 8,
             borderSize = 2,
         },
-        custom = {
+        consumable = {
             position = { point = "CENTER", x = 0, y = -100 },
+            iconSize = 64,
+            spacing = 0.2,
+            growDirection = "CENTER",
+            iconZoom = 8,
+            borderSize = 2,
+        },
+        custom = {
+            position = { point = "CENTER", x = 0, y = -140 },
             iconSize = 64,
             spacing = 0.2,
             growDirection = "CENTER",
@@ -527,12 +609,13 @@ local optionsPanel
 
 -- Category frame system
 local categoryFrames = {}
-local CATEGORIES = { "raid", "presence", "targeted", "self", "custom" }
+local CATEGORIES = { "raid", "presence", "targeted", "self", "consumable", "custom" }
 local CATEGORY_LABELS = {
     raid = "Raid",
     presence = "Presence",
     targeted = "Targeted",
     self = "Self",
+    consumable = "Consumable",
     custom = "Custom",
 }
 
@@ -933,6 +1016,52 @@ local function ShouldShowSelfBuff(
     return not hasBuff
 end
 
+---Check if player is missing a consumable buff or weapon enchant (returns true if missing)
+---@param spellIDs? SpellID
+---@param buffIconID? number
+---@param checkWeaponEnchant? boolean
+---@return boolean
+local function ShouldShowConsumableBuff(spellIDs, buffIconID, checkWeaponEnchant)
+    -- Check buff auras by spell ID
+    if spellIDs then
+        local spellList = type(spellIDs) == "table" and spellIDs or { spellIDs }
+        for _, id in ipairs(spellList) do
+            local hasBuff, _ = UnitHasBuff("player", id)
+            if hasBuff then
+                return false -- Has at least one of the consumable buffs
+            end
+        end
+    end
+
+    -- Check buff auras by icon ID (e.g., food buffs all use icon 136000)
+    if buffIconID then
+        for i = 1, 40 do
+            local auraData = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
+            if not auraData then
+                break
+            end
+            if auraData.icon == buffIconID then
+                return false -- Has a buff with this icon
+            end
+        end
+    end
+
+    -- Check if any weapon enchant exists (oils, stones, shaman imbues, etc.)
+    if checkWeaponEnchant then
+        local hasMainHandEnchant = GetWeaponEnchantInfo()
+        if hasMainHandEnchant then
+            return false -- Has a weapon enchant
+        end
+    end
+
+    -- If we have nothing to check, return false
+    if not spellIDs and not buffIconID and not checkWeaponEnchant then
+        return false
+    end
+
+    return true -- Missing all consumable buffs/enchants
+end
+
 -- Forward declarations
 local UpdateDisplay, UpdateAnchor, ShowGlowDemo, ToggleTestMode, RefreshTestDisplay
 local ShowCustomBuffModal
@@ -1169,7 +1298,11 @@ local function CreateBuffFrame(buff, category)
     frame.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
     frame.icon:SetDesaturated(false)
     frame.icon:SetVertexColor(1, 1, 1, 1)
-    local texture = GetBuffTexture(buff.spellID, buff.iconByRole)
+    local iconOverride = buff.iconOverride
+    if type(iconOverride) == "table" then
+        iconOverride = iconOverride[1] -- Use first icon for buff frame
+    end
+    local texture = iconOverride or GetBuffTexture(buff.spellID, buff.iconByRole)
     if texture then
         frame.icon:SetTexture(texture)
     end
@@ -1278,6 +1411,7 @@ local function PositionBuffFramesWithSplits()
         presence = {},
         targeted = {},
         self = {},
+        consumable = {},
         custom = {},
     }
 
@@ -1306,6 +1440,13 @@ local function PositionBuffFramesWithSplits()
         local frame = buffFrames[buff.key]
         if frame and frame:IsShown() then
             table.insert(framesByCategory.self, frame)
+        end
+    end
+
+    for _, buff in ipairs(Consumables) do
+        local frame = buffFrames[buff.key]
+        if frame and frame:IsShown() then
+            table.insert(framesByCategory.consumable, frame)
         end
     end
 
@@ -1484,6 +1625,20 @@ RefreshTestDisplay = function()
         local frame = buffFrames[buff.key]
         if frame then
             frame.count:SetText(buff.missingText or "")
+            frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
+            if frame.testText and testModeData.showLabels then
+                frame.testText:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, 0.6), "OUTLINE")
+                frame.testText:Show()
+            end
+            frame:Show()
+        end
+    end
+
+    -- Show ALL consumable buffs
+    for _, buff in ipairs(Consumables) do
+        local frame = buffFrames[buff.key]
+        if frame then
+            frame.count:SetText("NO\n" .. string.upper(buff.name))
             frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
             if frame.testText and testModeData.showLabels then
                 frame.testText:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, 0.6), "OUTLINE")
@@ -1763,6 +1918,40 @@ UpdateDisplay = function()
         end
     end
 
+    -- Process consumable buffs (food, flasks, runes)
+    for _, buff in ipairs(Consumables) do
+        local frame = buffFrames[buff.key]
+        local settingKey = buff.groupId or buff.key
+
+        -- Skip if player knows an excluded spell (e.g., shamans/paladins with imbues)
+        local excluded = false
+        if buff.excludeIfSpellKnown then
+            for _, spellID in ipairs(buff.excludeIfSpellKnown) do
+                if IsPlayerSpell(spellID) then
+                    excluded = true
+                    break
+                end
+            end
+        end
+
+        if frame and IsBuffEnabled(settingKey) and not excluded then
+            local shouldShow = ShouldShowConsumableBuff(buff.spellID, buff.buffIconID, buff.checkWeaponEnchant)
+            if shouldShow then
+                frame.icon:SetAllPoints()
+                frame.icon:SetTexCoord(TEXCOORD_INSET, 1 - TEXCOORD_INSET, TEXCOORD_INSET, 1 - TEXCOORD_INSET)
+                frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
+                frame.count:SetText("NO\n" .. string.upper(buff.name))
+                frame:Show()
+                anyVisible = true
+                SetExpirationGlow(frame, false)
+            else
+                HideFrame(frame)
+            end
+        elseif frame then
+            HideFrame(frame)
+        end
+    end
+
     -- Process custom buffs (self buffs only - show if player doesn't have the buff)
     if db.customBuffs then
         for _, customBuff in pairs(db.customBuffs) do
@@ -1916,6 +2105,11 @@ local function InitializeFrames()
     for _, buff in ipairs(SelfBuffs) do
         buffFrames[buff.key] = CreateBuffFrame(buff, "self")
         buffFrames[buff.key].isSelfBuff = true
+    end
+
+    for _, buff in ipairs(Consumables) do
+        buffFrames[buff.key] = CreateBuffFrame(buff, "consumable")
+        buffFrames[buff.key].isConsumableBuff = true
     end
 
     -- Create frames for custom buffs (always self buffs)
@@ -2684,27 +2878,39 @@ local function CreateOptionsPanel()
     -- Create buff checkbox (compact, for left column)
     -- spellIDs can be a single ID, a table of IDs (for multi-rank spells), or a table of tables (for grouped buffs with multiple icons)
     -- infoTooltip is optional: "Title|Description" format shows a "?" icon with tooltip
-    local function CreateBuffCheckbox(x, y, spellIDs, key, displayName, infoTooltip)
+    -- iconOverride is optional: single texture ID or array of texture IDs to show instead of deriving icons from spellIDs
+    local function CreateBuffCheckbox(x, y, spellIDs, key, displayName, infoTooltip, iconOverride)
         local cb = CreateFrame("CheckButton", nil, buffsContent, "UICheckButtonTemplate")
         cb:SetSize(20, 20)
         cb:SetPoint("TOPLEFT", x, y)
-        cb:SetChecked(BuffRemindersDB.enabledBuffs[key])
+        cb:SetChecked(BuffRemindersDB.enabledBuffs[key] ~= false)
         cb:SetScript("OnClick", function(self)
             BuffRemindersDB.enabledBuffs[key] = self:GetChecked()
             UpdateDisplay()
         end)
 
-        -- Handle multiple icons for grouped buffs (dedupe by texture)
+        -- Handle icons: either use iconOverride or derive from spellIDs
         local lastAnchor = cb
-        local spellList = type(spellIDs) == "table" and spellIDs or { spellIDs }
-        local seenTextures = {}
-        for _, spellID in ipairs(spellList) do
-            local texture = GetBuffTexture(spellID)
-            if texture and not seenTextures[texture] then
-                seenTextures[texture] = true
-                local icon = CreateBuffIcon(buffsContent, 18, texture)
+        if iconOverride then
+            -- Icon override (single ID or array of IDs)
+            local iconList = type(iconOverride) == "table" and iconOverride or { iconOverride }
+            for _, textureID in ipairs(iconList) do
+                local icon = CreateBuffIcon(buffsContent, 18, textureID)
                 icon:SetPoint("LEFT", lastAnchor, lastAnchor == cb and "RIGHT" or "RIGHT", 2, 0)
                 lastAnchor = icon
+            end
+        elseif spellIDs then
+            -- Multiple icons for grouped buffs (dedupe by texture)
+            local spellList = type(spellIDs) == "table" and spellIDs or { spellIDs }
+            local seenTextures = {}
+            for _, spellID in ipairs(spellList) do
+                local texture = GetBuffTexture(spellID)
+                if texture and not seenTextures[texture] then
+                    seenTextures[texture] = true
+                    local icon = CreateBuffIcon(buffsContent, 18, texture)
+                    icon:SetPoint("LEFT", lastAnchor, lastAnchor == cb and "RIGHT" or "RIGHT", 2, 0)
+                    lastAnchor = icon
+                end
             end
         end
 
@@ -2846,15 +3052,32 @@ local function CreateOptionsPanel()
     -- Render checkboxes for any buff array
     -- Handles grouping automatically if groupId field is present
     local function RenderBuffCheckboxes(x, y, buffArray)
-        -- Pass 1: Collect grouped spell IDs (flatten tables)
+        -- Pass 1: Collect grouped data (flatten tables)
         local groupSpells = {}
+        local groupDisplaySpells = {}
+        local groupIconOverrides = {}
         for _, buff in ipairs(buffArray) do
             if buff.groupId then
                 groupSpells[buff.groupId] = groupSpells[buff.groupId] or {}
+                groupDisplaySpells[buff.groupId] = groupDisplaySpells[buff.groupId] or {}
                 -- Flatten: buff.spellID can be a number or table of numbers
-                local spellList = type(buff.spellID) == "table" and buff.spellID or { buff.spellID }
-                for _, id in ipairs(spellList) do
-                    table.insert(groupSpells[buff.groupId], id)
+                if buff.spellID then
+                    local spellList = type(buff.spellID) == "table" and buff.spellID or { buff.spellID }
+                    for _, id in ipairs(spellList) do
+                        table.insert(groupSpells[buff.groupId], id)
+                    end
+                end
+                -- Flatten displaySpellIDs for UI icons
+                if buff.displaySpellIDs then
+                    local displayList = type(buff.displaySpellIDs) == "table" and buff.displaySpellIDs
+                        or { buff.displaySpellIDs }
+                    for _, id in ipairs(displayList) do
+                        table.insert(groupDisplaySpells[buff.groupId], id)
+                    end
+                end
+                -- Track iconOverride (use first one found for the group)
+                if buff.iconOverride and not groupIconOverrides[buff.groupId] then
+                    groupIconOverrides[buff.groupId] = buff.iconOverride
                 end
             end
         end
@@ -2866,17 +3089,28 @@ local function CreateOptionsPanel()
                 if not seenGroups[buff.groupId] then
                     seenGroups[buff.groupId] = true
                     local groupInfo = BuffGroups[buff.groupId]
+                    local iconOverride = groupIconOverrides[buff.groupId]
+                    -- Use displaySpellIDs if available, otherwise fall back to all spellIDs
+                    local displaySpells = groupDisplaySpells[buff.groupId]
+                    local spells = (#displaySpells > 0) and displaySpells or groupSpells[buff.groupId]
+                    -- If no spellIDs but has iconOverride, pass nil for spells
+                    if #spells == 0 then
+                        spells = nil
+                    end
                     y = CreateBuffCheckbox(
                         x,
                         y,
-                        groupSpells[buff.groupId],
+                        spells,
                         buff.groupId,
                         groupInfo.displayName,
-                        buff.infoTooltip
+                        buff.infoTooltip,
+                        iconOverride
                     )
                 end
             else
-                y = CreateBuffCheckbox(x, y, buff.spellID, buff.key, buff.name, buff.infoTooltip)
+                -- For non-grouped buffs, use displaySpellIDs if available
+                local displaySpells = buff.displaySpellIDs or buff.spellID
+                y = CreateBuffCheckbox(x, y, displaySpells, buff.key, buff.name, buff.infoTooltip, buff.iconOverride)
             end
         end
 
@@ -2910,13 +3144,13 @@ local function CreateOptionsPanel()
 
     buffsLeftY = buffsLeftY - SECTION_SPACING
 
-    -- Consumables header (coming soon)
+    -- Consumables header
     _, buffsLeftY = CreateSectionHeader(buffsContent, "Consumables", buffsLeftX, buffsLeftY)
     local consumablesNote = buffsContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     consumablesNote:SetPoint("TOPLEFT", buffsLeftX + 5, buffsLeftY)
-    consumablesNote:SetText("Coming soon!")
-    consumablesNote:SetTextColor(0.5, 0.5, 0.5)
+    consumablesNote:SetText("(flasks, food, runes, and weapon oils)")
     buffsLeftY = buffsLeftY - 14
+    buffsLeftY = RenderBuffCheckboxes(buffsLeftX, buffsLeftY, Consumables)
 
     -- RIGHT COLUMN: Individual buffs
     -- Targeted Buffs header
@@ -3175,6 +3409,7 @@ local function CreateOptionsPanel()
         presence = "Presence Buffs",
         targeted = "Targeted Buffs",
         self = "Self Buffs",
+        consumable = "Consumables",
         custom = "Custom Buffs",
     }
 

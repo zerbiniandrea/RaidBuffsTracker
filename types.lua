@@ -58,6 +58,17 @@
 ---@field infoTooltip? string
 ---@field customCheck? fun(): boolean?
 
+---@class ConsumableBuff
+---@field spellID? SpellID
+---@field key string
+---@field name string
+---@field groupId? string
+---@field checkWeaponEnchant? boolean Check if any weapon enchant exists (oils, stones, imbues)
+---@field excludeIfSpellKnown? number[] Don't show if player knows any of these spells
+---@field buffIconID? number Check for any buff with this icon ID (e.g., 136000 for food)
+---@field displaySpellIDs? SpellID Spell IDs to show icons for in UI (subset of spellID)
+---@field iconOverride? number|number[] Icon texture ID(s) to use instead of spell icon
+
 ---@class BuffGroup
 ---@field displayName string
 ---@field missingText? string
@@ -82,6 +93,7 @@
 ---@field isPresenceBuff? boolean
 ---@field isTargetedBuff? boolean
 ---@field isSelfBuff? boolean
+---@field isConsumableBuff? boolean
 ---@field isCustomBuff? boolean
 ---@field buffCategory? CategoryName
 ---@field glowTexture? Texture
@@ -89,7 +101,7 @@
 ---@field glowShowing? boolean
 ---@field currentGlowStyle? number
 
----@alias CategoryName "raid"|"presence"|"targeted"|"self"|"custom"
+---@alias CategoryName "raid"|"presence"|"targeted"|"self"|"consumable"|"custom"
 
 ---@class CategoryPosition
 ---@field point string
@@ -103,6 +115,18 @@
 ---@field growDirection string
 ---@field iconZoom number
 ---@field borderSize number
+
+--- All category settings must be defined here. When adding a new category:
+--- 1. Add it to CategoryName alias above
+--- 2. Add a field here with the same name
+---@class AllCategorySettings
+---@field main CategorySetting
+---@field raid CategorySetting
+---@field presence CategorySetting
+---@field targeted CategorySetting
+---@field self CategorySetting
+---@field consumable CategorySetting
+---@field custom CategorySetting
 
 ---@class CategoryFrame: Frame
 ---@field category CategoryName
