@@ -8,4 +8,6 @@
 ## X-Wago-ID: qGYZZjNg
 ## IconTexture: Interface\AddOns\BuffReminders\icon.tga
 
+Core.lua
+Components.lua
 BuffReminders.lua
