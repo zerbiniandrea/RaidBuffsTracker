@@ -101,6 +101,15 @@ local BUFF_TABLES = {
     },
     ---@type SelfBuff[]
     self = {
+        -- Warlock Grimoire of Sacrifice
+        {
+            spellID = 108503,
+            buffIdOverride = 196099,
+            key = "grimoireOfSacrifice",
+            name = "Grimoire of Sacrifice",
+            class = "WARLOCK",
+            missingText = "NO\nGRIM",
+        },
         -- Paladin weapon rites (alphabetical: Adjuration, Sanctification)
         {
             spellID = 433583,
