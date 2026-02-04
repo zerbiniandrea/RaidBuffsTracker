@@ -12,3 +12,4 @@ Core.lua
 Buffs.lua
 Components.lua
 BuffReminders.lua
+Options.lua
