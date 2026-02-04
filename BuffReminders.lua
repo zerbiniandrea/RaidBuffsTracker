@@ -2715,6 +2715,11 @@ local function CreateOptionsPanel()
         end
     end)
 
+    -- Refresh all component values from DB when panel opens (OnShow pattern)
+    panel:SetScript("OnShow", function()
+        Components.RefreshAll()
+    end)
+
     -- Addon icon
     local addonIcon = CreateBuffIcon(panel, 28, "Interface\\AddOns\\BuffReminders\\icon.tga")
     addonIcon:SetPoint("TOPLEFT", 12, -8)
@@ -3355,7 +3360,9 @@ local function CreateOptionsPanel()
         label = "Icon Size",
         min = 16,
         max = 128,
-        value = GetCategorySettings("main").iconSize or 64,
+        get = function()
+            return GetCategorySettings("main").iconSize or 64
+        end,
         onChange = function(val)
             GetOrCreateCategorySettings("main").iconSize = val
             UpdateVisuals()
@@ -3371,7 +3378,9 @@ local function CreateOptionsPanel()
         label = "Spacing",
         min = 0,
         max = 50,
-        value = math.floor((GetCategorySettings("main").spacing or 0.2) * 100),
+        get = function()
+            return math.floor((GetCategorySettings("main").spacing or 0.2) * 100)
+        end,
         suffix = "%",
         onChange = function(val)
             GetOrCreateCategorySettings("main").spacing = val / 100
@@ -3392,7 +3401,9 @@ local function CreateOptionsPanel()
         label = "Icon Zoom",
         min = 0,
         max = 15,
-        value = GetCategorySettings("main").iconZoom or DEFAULT_ICON_ZOOM,
+        get = function()
+            return GetCategorySettings("main").iconZoom or DEFAULT_ICON_ZOOM
+        end,
         suffix = "%",
         onChange = function(val)
             GetOrCreateCategorySettings("main").iconZoom = val
@@ -3409,7 +3420,9 @@ local function CreateOptionsPanel()
         label = "Border Size",
         min = 0,
         max = 8,
-        value = GetCategorySettings("main").borderSize or DEFAULT_BORDER_SIZE,
+        get = function()
+            return GetCategorySettings("main").borderSize or DEFAULT_BORDER_SIZE
+        end,
         suffix = "px",
         onChange = function(val)
             GetOrCreateCategorySettings("main").borderSize = val
@@ -3423,7 +3436,9 @@ local function CreateOptionsPanel()
 
     -- Row 5: Direction buttons
     local mainDirHolder = Components.DirectionButtons(appearanceContent, {
-        selected = GetCategorySettings("main").growDirection or "CENTER",
+        get = function()
+            return GetCategorySettings("main").growDirection or "CENTER"
+        end,
         onChange = function(dir)
             GetOrCreateCategorySettings("main").growDirection = dir
             if testMode then
@@ -3553,13 +3568,16 @@ local function CreateOptionsPanel()
         local setX = 4
 
         -- Icon Size slider
+        local cat = category -- Capture for closures
         local catSizeHolder = Components.Slider(settingsFrame, {
             label = "Icon Size",
             min = 16,
             max = 128,
-            value = GetCategorySettings(category).iconSize or 64,
+            get = function()
+                return GetCategorySettings(cat).iconSize or 64
+            end,
             onChange = function(val)
-                GetOrCreateCategorySettings(category).iconSize = val
+                GetOrCreateCategorySettings(cat).iconSize = val
                 UpdateVisuals()
             end,
         })
@@ -3573,10 +3591,12 @@ local function CreateOptionsPanel()
             label = "Spacing",
             min = 0,
             max = 50,
-            value = math.floor((GetCategorySettings(category).spacing or 0.2) * 100),
+            get = function()
+                return math.floor((GetCategorySettings(cat).spacing or 0.2) * 100)
+            end,
             suffix = "%",
             onChange = function(val)
-                GetOrCreateCategorySettings(category).spacing = val / 100
+                GetOrCreateCategorySettings(cat).spacing = val / 100
                 if testMode then
                     RefreshTestDisplay()
                 else
@@ -3594,10 +3614,12 @@ local function CreateOptionsPanel()
             label = "Icon Zoom",
             min = 0,
             max = 15,
-            value = GetCategorySettings(category).iconZoom or DEFAULT_ICON_ZOOM,
+            get = function()
+                return GetCategorySettings(cat).iconZoom or DEFAULT_ICON_ZOOM
+            end,
             suffix = "%",
             onChange = function(val)
-                GetOrCreateCategorySettings(category).iconZoom = val
+                GetOrCreateCategorySettings(cat).iconZoom = val
                 UpdateVisuals()
             end,
         })
@@ -3611,10 +3633,12 @@ local function CreateOptionsPanel()
             label = "Border Size",
             min = 0,
             max = 8,
-            value = GetCategorySettings(category).borderSize or DEFAULT_BORDER_SIZE,
+            get = function()
+                return GetCategorySettings(cat).borderSize or DEFAULT_BORDER_SIZE
+            end,
             suffix = "px",
             onChange = function(val)
-                GetOrCreateCategorySettings(category).borderSize = val
+                GetOrCreateCategorySettings(cat).borderSize = val
                 UpdateVisuals()
             end,
         })
@@ -3625,9 +3649,11 @@ local function CreateOptionsPanel()
 
         -- Direction buttons
         local catDirHolder = Components.DirectionButtons(settingsFrame, {
-            selected = GetCategorySettings(category).growDirection or "CENTER",
+            get = function()
+                return GetCategorySettings(cat).growDirection or "CENTER"
+            end,
             onChange = function(dir)
-                GetOrCreateCategorySettings(category).growDirection = dir
+                GetOrCreateCategorySettings(cat).growDirection = dir
                 if testMode then
                     RefreshTestDisplay()
                 else
@@ -3888,7 +3914,9 @@ local function CreateOptionsPanel()
         label = "Duration",
         min = 10,
         max = 30,
-        value = BuffRemindersDB.readyCheckDuration or 15,
+        get = function()
+            return BuffRemindersDB.readyCheckDuration or 15
+        end,
         suffix = "s",
         onChange = function(val)
             BuffRemindersDB.readyCheckDuration = val
@@ -4009,7 +4037,9 @@ local function CreateOptionsPanel()
         label = "Threshold",
         min = 1,
         max = 15,
-        value = BuffRemindersDB.expirationThreshold or 5,
+        get = function()
+            return BuffRemindersDB.expirationThreshold or 5
+        end,
         suffix = " min",
         onChange = function(val)
             BuffRemindersDB.expirationThreshold = val
@@ -4035,7 +4065,9 @@ local function CreateOptionsPanel()
     local styleHolder = Components.Dropdown(expirationContainer, {
         label = "Style:",
         options = styleOptions,
-        selected = BuffRemindersDB.glowStyle or 1,
+        get = function()
+            return BuffRemindersDB.glowStyle or 1
+        end,
         width = 100,
         onChange = function(val)
             BuffRemindersDB.glowStyle = val

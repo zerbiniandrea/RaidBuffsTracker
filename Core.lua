@@ -9,6 +9,10 @@ local _, BR = ...
 -- Component factory table (populated by Components.lua)
 BR.Components = {}
 
+-- Registry of refreshable components (for OnShow refresh pattern)
+-- Components with a get() function register here automatically
+BR.RefreshableComponents = {}
+
 -- ============================================================================
 -- SHARED UI UTILITIES
 -- ============================================================================

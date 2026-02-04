@@ -8,6 +8,7 @@ local _, BR = ...
 
 local Components = BR.Components
 local SetupTooltip = BR.SetupTooltip
+local RefreshableComponents = BR.RefreshableComponents
 
 ---@class ComponentConfig
 ---@class SliderConfig : ComponentConfig
@@ -15,7 +16,8 @@ local SetupTooltip = BR.SetupTooltip
 ---@field min number Minimum value
 ---@field max number Maximum value
 ---@field step? number Step increment (default 1)
----@field value number Initial value
+---@field value? number Initial value (deprecated: prefer get)
+---@field get? fun(): number Getter for initial value and refresh (preferred over value)
 ---@field suffix? string Value suffix (e.g., "px", "%")
 ---@field onChange fun(val: number) Callback when value changes
 ---@field labelWidth? number Width of label (default 70)
@@ -23,13 +25,15 @@ local SetupTooltip = BR.SetupTooltip
 
 ---@class CheckboxConfig : ComponentConfig
 ---@field label string Display label
----@field checked boolean Initial checked state
+---@field checked? boolean Initial checked state (deprecated: prefer get)
+---@field get? fun(): boolean Getter for initial value and refresh (preferred over checked)
 ---@field tooltip? string Tooltip description
 ---@field onChange fun(checked: boolean) Callback when checked state changes
 
 ---@class DirectionButtonsConfig : ComponentConfig
 ---@field label? string Optional label (default "Direction:")
----@field selected string Currently selected direction ("LEFT"|"CENTER"|"RIGHT"|"UP"|"DOWN")
+---@field selected? string Initial direction (deprecated: prefer get)
+---@field get? fun(): string Getter for initial value and refresh (preferred over selected)
 ---@field onChange fun(dir: string) Callback when direction changes
 ---@field width? number Dropdown width (default 90)
 
@@ -72,7 +76,8 @@ function Components.Slider(parent, config)
     slider:SetMinMaxValues(config.min, config.max)
     slider:SetValueStep(step)
     slider:SetObeyStepOnDrag(true)
-    slider:SetValue(config.value)
+    local initialValue = config.get and config.get() or config.value
+    slider:SetValue(initialValue)
     slider.Low:SetText("")
     slider.High:SetText("")
     slider.Text:SetText("")
@@ -86,7 +91,7 @@ function Components.Slider(parent, config)
     local valueText = valueBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     valueText:SetAllPoints()
     valueText:SetJustifyH("LEFT")
-    valueText:SetText(config.value .. suffix)
+    valueText:SetText(initialValue .. suffix)
     holder.valueText = valueText
 
     -- Edit box (hidden by default)
@@ -163,6 +168,18 @@ function Components.Slider(parent, config)
         valueText:SetTextColor(color, color, color)
     end
 
+    -- Refresh method for OnShow pattern (re-reads value from DB)
+    function holder:Refresh()
+        if config.get then
+            slider:SetValue(config.get())
+        end
+    end
+
+    -- Auto-register if refreshable
+    if config.get then
+        table.insert(RefreshableComponents, holder)
+    end
+
     return holder
 end
 
@@ -178,7 +195,8 @@ function Components.Checkbox(parent, config)
     local cb = CreateFrame("CheckButton", nil, holder, "UICheckButtonTemplate")
     cb:SetSize(20, 20)
     cb:SetPoint("LEFT", 0, 0)
-    cb:SetChecked(config.checked)
+    local initialChecked = config.get and config.get() or config.checked
+    cb:SetChecked(initialChecked)
     cb:SetScript("OnClick", function(self)
         config.onChange(self:GetChecked())
     end)
@@ -210,6 +228,18 @@ function Components.Checkbox(parent, config)
         else
             label:SetTextColor(0.5, 0.5, 0.5)
         end
+    end
+
+    -- Refresh method for OnShow pattern
+    function holder:Refresh()
+        if config.get then
+            cb:SetChecked(config.get())
+        end
+    end
+
+    -- Auto-register if refreshable
+    if config.get then
+        table.insert(RefreshableComponents, holder)
     end
 
     return holder
@@ -244,8 +274,8 @@ function Components.DirectionButtons(parent, config)
     UIDropDownMenu_SetWidth(dropdown, width)
     holder.dropdown = dropdown
 
-    -- Store current value
-    local currentValue = config.selected
+    -- Store current value (use get() if available for initial value)
+    local currentValue = config.get and config.get() or config.selected
 
     -- Initialize dropdown
     local function InitializeDropdown(_, level)
@@ -265,14 +295,29 @@ function Components.DirectionButtons(parent, config)
     end
 
     UIDropDownMenu_Initialize(dropdown, InitializeDropdown)
-    UIDropDownMenu_SetSelectedValue(dropdown, config.selected)
-    UIDropDownMenu_SetText(dropdown, dirLabels[config.selected] or config.selected)
+    UIDropDownMenu_SetSelectedValue(dropdown, currentValue)
+    UIDropDownMenu_SetText(dropdown, dirLabels[currentValue] or currentValue)
 
     -- Public method to update selection (backwards compatible)
     function holder:SetDirection(dir)
         currentValue = dir
         UIDropDownMenu_SetSelectedValue(dropdown, dir)
         UIDropDownMenu_SetText(dropdown, dirLabels[dir] or dir)
+    end
+
+    -- Refresh method for OnShow pattern
+    function holder:Refresh()
+        if config.get then
+            local dir = config.get()
+            currentValue = dir
+            UIDropDownMenu_SetSelectedValue(dropdown, dir)
+            UIDropDownMenu_SetText(dropdown, dirLabels[dir] or dir)
+        end
+    end
+
+    -- Auto-register if refreshable
+    if config.get then
+        table.insert(RefreshableComponents, holder)
     end
 
     -- Backwards compatibility: empty buttons table (no longer used)
@@ -367,7 +412,8 @@ end
 ---@class DropdownConfig : ComponentConfig
 ---@field label string Label text
 ---@field options DropdownOption[] Available options
----@field selected any Currently selected value
+---@field selected? any Initial selected value (deprecated: prefer get)
+---@field get? fun(): any Getter for initial value and refresh (preferred over selected)
 ---@field width? number Dropdown width (default 100)
 ---@field onChange fun(value: any) Callback when selection changes
 
@@ -395,8 +441,8 @@ function Components.Dropdown(parent, config, uniqueName)
     UIDropDownMenu_SetWidth(dropdown, width)
     holder.dropdown = dropdown
 
-    -- Store current value
-    local currentValue = config.selected
+    -- Store current value (use get() if available for initial value)
+    local currentValue = config.get and config.get() or config.selected
 
     -- Initialize dropdown
     local function InitializeDropdown(_, level)
@@ -450,6 +496,26 @@ function Components.Dropdown(parent, config, uniqueName)
         else
             UIDropDownMenu_DisableDropDown(dropdown)
         end
+    end
+
+    -- Refresh method for OnShow pattern
+    function holder:Refresh()
+        if config.get then
+            local value = config.get()
+            currentValue = value
+            UIDropDownMenu_SetSelectedValue(dropdown, value)
+            for _, opt in ipairs(config.options) do
+                if opt.value == value then
+                    UIDropDownMenu_SetText(dropdown, opt.label)
+                    break
+                end
+            end
+        end
+    end
+
+    -- Auto-register if refreshable
+    if config.get then
+        table.insert(RefreshableComponents, holder)
     end
 
     return holder
@@ -525,7 +591,8 @@ end
 
 ---@class TextInputConfig : ComponentConfig
 ---@field label string Display label
----@field value? string Initial value
+---@field value? string Initial value (deprecated: prefer get)
+---@field get? fun(): string Getter for initial value and refresh (preferred over value)
 ---@field width? number Input width (default 150)
 ---@field labelWidth? number Label width (default 80)
 ---@field numeric? boolean Numeric only input
@@ -558,8 +625,9 @@ function Components.TextInput(parent, config)
     if config.numeric then
         editBox:SetNumeric(true)
     end
-    if config.value then
-        editBox:SetText(config.value)
+    local initialText = config.get and config.get() or config.value
+    if initialText then
+        editBox:SetText(initialText)
     end
     holder.editBox = editBox
 
@@ -601,6 +669,18 @@ function Components.TextInput(parent, config)
         label:SetTextColor(color, color, color)
     end
 
+    -- Refresh method for OnShow pattern
+    function holder:Refresh()
+        if config.get then
+            editBox:SetText(config.get() or "")
+        end
+    end
+
+    -- Auto-register if refreshable
+    if config.get then
+        table.insert(RefreshableComponents, holder)
+    end
+
     return holder
 end
 
@@ -608,4 +688,20 @@ end
 ---@param editBoxes table[] The editboxes array from the options panel
 function Components.SetEditBoxesRef(editBoxes)
     panelEditBoxes = editBoxes
+end
+
+---Refresh all registered components (call on panel OnShow)
+function Components.RefreshAll()
+    for _, component in ipairs(RefreshableComponents) do
+        if component.Refresh then
+            component:Refresh()
+        end
+    end
+end
+
+---Clear refreshable components registry (call before recreating panel)
+function Components.ClearRegistry()
+    for i = #RefreshableComponents, 1, -1 do
+        RefreshableComponents[i] = nil
+    end
 end
