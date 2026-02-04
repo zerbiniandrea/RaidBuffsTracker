@@ -58,6 +58,11 @@ read_globals = {
 
 	"tinsert",
 
+	-- WoW Mixins
+	"Mixin",
+	"CreateFromMixins",
+	"CallbackRegistryMixin",
+
 	-- WoW UI globals
 	"DynamicResizeButton_Resize",
 	"GameTooltip",

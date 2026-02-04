@@ -1,9 +1,18 @@
 local addonName, BR = ...
 
--- Aliases for shared namespace (populated by Core.lua and Components.lua)
+-- Aliases for shared namespace (populated by Core.lua, Buffs.lua, Components.lua)
 local Components = BR.Components
 local SetupTooltip = BR.SetupTooltip
 local CreateButton = BR.CreateButton
+local CreatePanel = BR.CreatePanel
+local CreateSectionHeader = BR.CreateSectionHeader
+local CreateBuffIcon = BR.CreateBuffIcon
+
+-- Shared constants
+local TEXCOORD_INSET = BR.TEXCOORD_INSET
+local DEFAULT_BORDER_SIZE = BR.DEFAULT_BORDER_SIZE
+local DEFAULT_ICON_ZOOM = BR.DEFAULT_ICON_ZOOM
+local OPTIONS_BASE_SCALE = BR.OPTIONS_BASE_SCALE
 
 -- Global API table for external addon integration
 BuffReminders = {}
@@ -31,78 +40,6 @@ for _, buffArray in ipairs({ PresenceBuffs, TargetedBuffs, SelfBuffs }) do
             end
         end
     end
-end
-
--- UI Constants (needed by helper functions below)
-local TEXCOORD_INSET = 0.08
-
--- ============================================================================
--- UI HELPER FUNCTIONS
--- ============================================================================
-
----Create a draggable panel with standard backdrop
----@param name string? Frame name (nil for anonymous)
----@param width number
----@param height number
----@param options? {bgColor?: table, borderColor?: table, strata?: string, level?: number, escClose?: boolean}
----@return table
-local function CreatePanel(name, width, height, options)
-    options = options or {}
-    local bgColor = options.bgColor or { 0.1, 0.1, 0.1, 0.95 }
-    local borderColor = options.borderColor or { 0.3, 0.3, 0.3, 1 }
-
-    local panel = CreateFrame("Frame", name, UIParent, "BackdropTemplate")
-    panel:SetSize(width, height)
-    panel:SetPoint("CENTER")
-    panel:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 2,
-    })
-    panel:SetBackdropColor(unpack(bgColor))
-    panel:SetBackdropBorderColor(unpack(borderColor))
-    panel:SetMovable(true)
-    panel:EnableMouse(true)
-    panel:RegisterForDrag("LeftButton")
-    panel:SetScript("OnDragStart", panel.StartMoving)
-    panel:SetScript("OnDragStop", panel.StopMovingOrSizing)
-    panel:SetFrameStrata(options.strata or "DIALOG")
-    if options.level then
-        panel:SetFrameLevel(options.level)
-    end
-    if options.escClose and name then
-        tinsert(UISpecialFrames, name)
-    end
-    return panel
-end
-
----Create a section header with yellow text
----@param parent table
----@param text string
----@param x number
----@param y number
----@return table header
----@return number newY
-local function CreateSectionHeader(parent, text, x, y)
-    local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    header:SetPoint("TOPLEFT", x, y)
-    header:SetText("|cffffcc00" .. text .. "|r")
-    return header, y - 18
-end
-
----Create a buff icon texture with standard formatting
----@param parent table
----@param size number
----@param textureID? number|string
----@return table
-local function CreateBuffIcon(parent, size, textureID)
-    local icon = parent:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(size, size)
-    icon:SetTexCoord(TEXCOORD_INSET, 1 - TEXCOORD_INSET, TEXCOORD_INSET, 1 - TEXCOORD_INSET)
-    if textureID then
-        icon:SetTexture(textureID)
-    end
-    return icon
 end
 
 -- ============================================================================
@@ -244,10 +181,7 @@ local defaults = {
 }
 
 -- Constants
-local DEFAULT_BORDER_SIZE = 2
-local DEFAULT_ICON_ZOOM = 8 -- percentage (0.08 as inset)
 local MISSING_TEXT_SCALE = 0.6 -- scale for "NO X" warning text
-local OPTIONS_BASE_SCALE = 1.2
 
 -- Locals
 local mainFrame
@@ -305,16 +239,6 @@ local function GetCategorySettings(category)
         return db.categorySettings[category]
     end
     return defaults.categorySettings[category] or defaults.categorySettings.main
-end
-
----Get or create category settings entry in DB (reduces boilerplate in onChange handlers)
----@param category string
----@return table settings The category settings table
-local function GetOrCreateCategorySettings(category)
-    local db = BuffRemindersDB
-    db.categorySettings = db.categorySettings or {}
-    db.categorySettings[category] = db.categorySettings[category] or {}
-    return db.categorySettings[category]
 end
 
 ---Get the effective category for a frame (its own category if split, otherwise "main")
@@ -2213,6 +2137,43 @@ local function UpdateVisuals()
 end
 
 -- ============================================================================
+-- CALLBACK REGISTRY SUBSCRIPTIONS
+-- ============================================================================
+-- Subscribe to config change events for automatic UI updates.
+-- This decouples the options panel from the display system.
+
+local CallbackRegistry = BR.CallbackRegistry
+
+-- Visual changes (icon size, zoom, border, text visibility)
+CallbackRegistry:RegisterCallback("VisualsRefresh", function()
+    UpdateVisuals()
+end)
+
+-- Layout changes (spacing, grow direction)
+CallbackRegistry:RegisterCallback("LayoutRefresh", function()
+    if testMode then
+        RefreshTestDisplay()
+    else
+        UpdateDisplay()
+    end
+end)
+
+-- Display changes (enabled buffs, visibility settings)
+CallbackRegistry:RegisterCallback("DisplayRefresh", function()
+    if testMode then
+        RefreshTestDisplay()
+    else
+        UpdateDisplay()
+    end
+end)
+
+-- Structural changes (split categories)
+CallbackRegistry:RegisterCallback("FramesReparent", function()
+    ReparentBuffFrames()
+    UpdateVisuals()
+end)
+
+-- ============================================================================
 -- IMPORT/EXPORT FUNCTIONS
 -- ============================================================================
 
@@ -3010,8 +2971,7 @@ local function CreateOptionsPanel()
             return GetCategorySettings("main").iconSize or 64
         end,
         onChange = function(val)
-            GetOrCreateCategorySettings("main").iconSize = val
-            UpdateVisuals()
+            BR.Config.Set("categorySettings.main.iconSize", val)
         end,
     })
     sizeHolder:SetPoint("TOPLEFT", framesX, framesY)
@@ -3029,12 +2989,7 @@ local function CreateOptionsPanel()
         end,
         suffix = "%",
         onChange = function(val)
-            GetOrCreateCategorySettings("main").spacing = val / 100
-            if testMode then
-                RefreshTestDisplay()
-            else
-                UpdateDisplay()
-            end
+            BR.Config.Set("categorySettings.main.spacing", val / 100)
         end,
     })
     spacingHolder:SetPoint("TOPLEFT", framesX, framesY)
@@ -3052,8 +3007,7 @@ local function CreateOptionsPanel()
         end,
         suffix = "%",
         onChange = function(val)
-            GetOrCreateCategorySettings("main").iconZoom = val
-            UpdateVisuals()
+            BR.Config.Set("categorySettings.main.iconZoom", val)
         end,
     })
     zoomHolder:SetPoint("TOPLEFT", framesX, framesY)
@@ -3071,8 +3025,7 @@ local function CreateOptionsPanel()
         end,
         suffix = "px",
         onChange = function(val)
-            GetOrCreateCategorySettings("main").borderSize = val
-            UpdateVisuals()
+            BR.Config.Set("categorySettings.main.borderSize", val)
         end,
     })
     borderHolder:SetPoint("TOPLEFT", framesX, framesY)
@@ -3086,12 +3039,7 @@ local function CreateOptionsPanel()
             return GetCategorySettings("main").growDirection or "CENTER"
         end,
         onChange = function(dir)
-            GetOrCreateCategorySettings("main").growDirection = dir
-            if testMode then
-                RefreshTestDisplay()
-            else
-                UpdateDisplay()
-            end
+            BR.Config.Set("categorySettings.main.growDirection", dir)
         end,
     })
     mainDirHolder:SetPoint("TOPLEFT", framesX, framesY)
@@ -3223,8 +3171,7 @@ local function CreateOptionsPanel()
                 return GetCategorySettings(cat).iconSize or 64
             end,
             onChange = function(val)
-                GetOrCreateCategorySettings(cat).iconSize = val
-                UpdateVisuals()
+                BR.Config.Set("categorySettings." .. cat .. ".iconSize", val)
             end,
         })
         catSizeHolder:SetPoint("TOPLEFT", setX, setY)
@@ -3242,12 +3189,7 @@ local function CreateOptionsPanel()
             end,
             suffix = "%",
             onChange = function(val)
-                GetOrCreateCategorySettings(cat).spacing = val / 100
-                if testMode then
-                    RefreshTestDisplay()
-                else
-                    UpdateDisplay()
-                end
+                BR.Config.Set("categorySettings." .. cat .. ".spacing", val / 100)
             end,
         })
         catSpacingHolder:SetPoint("TOPLEFT", setX, setY)
@@ -3265,8 +3207,7 @@ local function CreateOptionsPanel()
             end,
             suffix = "%",
             onChange = function(val)
-                GetOrCreateCategorySettings(cat).iconZoom = val
-                UpdateVisuals()
+                BR.Config.Set("categorySettings." .. cat .. ".iconZoom", val)
             end,
         })
         catZoomHolder:SetPoint("TOPLEFT", setX, setY)
@@ -3284,8 +3225,7 @@ local function CreateOptionsPanel()
             end,
             suffix = "px",
             onChange = function(val)
-                GetOrCreateCategorySettings(cat).borderSize = val
-                UpdateVisuals()
+                BR.Config.Set("categorySettings." .. cat .. ".borderSize", val)
             end,
         })
         catBorderHolder:SetPoint("TOPLEFT", setX, setY)
@@ -3299,12 +3239,7 @@ local function CreateOptionsPanel()
                 return GetCategorySettings(cat).growDirection or "CENTER"
             end,
             onChange = function(dir)
-                GetOrCreateCategorySettings(cat).growDirection = dir
-                if testMode then
-                    RefreshTestDisplay()
-                else
-                    UpdateDisplay()
-                end
+                BR.Config.Set("categorySettings." .. cat .. ".growDirection", dir)
             end,
         })
         catDirHolder:SetPoint("TOPLEFT", setX, setY)
