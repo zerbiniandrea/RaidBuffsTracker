@@ -552,7 +552,7 @@ local defaults = {
     showExpirationGlow = true,
     expirationThreshold = 15, -- minutes
     glowStyle = 1, -- 1=Orange, 2=Gold, 3=Yellow, 4=White, 5=Red
-    useGlowFallback = false, -- EXPERIMENTAL: Show own raid buff via action bar glow during combat/M+
+    useGlowFallback = false, -- EXPERIMENTAL: Show own raid buff via action bar glow during M+
     optionsPanelScale = 1.2, -- base scale (displayed as 100%)
     splitCategories = { -- Which categories are split into their own frame (false = in main frame)
         raid = false,
@@ -2021,7 +2021,7 @@ local function HideAllDisplayFrames()
     end
 end
 
--- Update the fallback display (shows player's own raid buff via glow during combat/M+/PvP)
+-- Update the fallback display (shows player's own raid buff via glow during M+/PvP)
 -- Assumes caller has already determined we're in restricted mode and called HideAllDisplayFrames()
 UpdateFallbackDisplay = function()
     if not mainFrame or not BuffRemindersDB.useGlowFallback then
@@ -4312,13 +4312,13 @@ local function CreateOptionsPanel()
         behaviorContainer,
         0,
         behY,
-        "Show own raid buff during combat/M+",
+        "Show own raid buff during M+",
         BuffRemindersDB.useGlowFallback == true,
         function(self)
             BuffRemindersDB.useGlowFallback = self:GetChecked()
             UpdateFallbackDisplay()
         end,
-        "Uses WoW's action bar glow to detect when someone needs your raid buff, even during combat or in Mythic+ where normal tracking is disabled.\n\nRequires the spell to be on your action bars."
+        "Uses WoW's action bar glow to detect when someone needs your raid buff, in Mythic+ where normal tracking is disabled.\n\nRequires the spell to be on your action bars."
     )
     panel.glowFallbackCheckbox = glowFallbackCb
 
