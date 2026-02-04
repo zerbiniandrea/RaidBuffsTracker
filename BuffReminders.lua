@@ -2290,76 +2290,32 @@ local function DeepCopy(orig)
     return copy
 end
 
--- Serialize a Lua table to a string representation
-local function SerializeTable(tbl, indent)
-    indent = indent or 0
-    local result = {}
-    local indentStr = string.rep("  ", indent)
-
-    table.insert(result, "{\n")
-
-    for k, v in pairs(tbl) do
-        local keyStr
-        if type(k) == "number" then
-            keyStr = string.format("%s[%d] = ", indentStr .. "  ", k)
-        else
-            keyStr = string.format('%s["%s"] = ', indentStr .. "  ", k)
-        end
-
-        if type(v) == "table" then
-            table.insert(result, keyStr .. SerializeTable(v, indent + 1))
-        elseif type(v) == "string" then
-            table.insert(result, string.format('%s"%s",\n', keyStr, v:gsub('"', '\\"')))
-        elseif type(v) == "boolean" then
-            table.insert(result, string.format("%s%s,\n", keyStr, tostring(v)))
-        elseif type(v) == "number" then
-            table.insert(result, string.format("%s%s,\n", keyStr, tostring(v)))
-        end
+-- Serialize a Lua table to a base64-encoded CBOR string
+local function SerializeTable(tbl)
+    local success, cbor = pcall(C_EncodingUtil.SerializeCBOR, tbl)
+    if not success then
+        return nil
     end
-
-    -- Only add trailing comma for nested tables (not root level)
-    if indent > 0 then
-        table.insert(result, indentStr .. "},\n")
-    else
-        table.insert(result, indentStr .. "}")
-    end
-    return table.concat(result)
+    return C_EncodingUtil.EncodeBase64(cbor)
 end
 
--- Deserialize a string back to a Lua table (sandboxed)
+-- Deserialize a base64-encoded CBOR string back to a Lua table
 local function DeserializeTable(str)
     if not str or str:trim() == "" then
         return nil, "Empty input"
     end
 
-    -- Wrap in return statement if not already present
-    if not str:match("^%s*return%s+") then
-        str = "return " .. str
+    local success, decoded = pcall(C_EncodingUtil.DecodeBase64, str)
+    if not success or not decoded then
+        return nil, "Invalid format: not valid base64"
     end
 
-    -- Create sandboxed environment (no access to globals)
-    local env = {}
-
-    -- Try to load the string as Lua code
-    local func, err = loadstring(str)
-    if not func then
-        return nil, "Invalid format: " .. (err or "syntax error")
+    local ok, data = pcall(C_EncodingUtil.DeserializeCBOR, decoded)
+    if not ok or type(data) ~= "table" then
+        return nil, "Invalid data: failed to deserialize"
     end
 
-    -- Set sandboxed environment
-    setfenv(func, env)
-
-    -- Execute and return the table
-    local success, result = pcall(func)
-    if not success then
-        return nil, "Failed to parse: " .. (result or "unknown error")
-    end
-
-    if type(result) ~= "table" then
-        return nil, "Invalid data: expected table, got " .. type(result)
-    end
-
-    return result
+    return data
 end
 
 -- Export current settings to a serialized string (only includes valid settings from defaults + customBuffs)
@@ -2378,7 +2334,11 @@ local function ExportSettings()
         export.customBuffs = DeepCopy(BuffRemindersDB.customBuffs)
     end
 
-    return SerializeTable(export)
+    local result = SerializeTable(export)
+    if not result then
+        return nil, "Failed to serialize settings"
+    end
+    return result
 end
 
 -- Import settings from a serialized string (preserves locked state)
@@ -2408,9 +2368,13 @@ end
 
 --- Export settings to a prefixed string that can be imported by other addons
 --- @param profileKey string|nil Optional profile name (ignored - BuffReminders uses single profile)
---- @return string Encoded settings string with !BR_ prefix
+--- @return string|nil Encoded settings string with !BR_ prefix, or nil on error
+--- @return string|nil Error message if export failed
 function BuffReminders:Export(profileKey)
-    local exportString = ExportSettings()
+    local exportString, err = ExportSettings()
+    if not exportString then
+        return nil, err
+    end
     return EXPORT_PREFIX .. exportString
 end
 
@@ -2684,6 +2648,14 @@ local function CreateOptionsPanel()
     -- Import/Export UI
     local yOffset = -10
 
+    -- Format change warning
+    local formatWarning = profilesContent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    formatWarning:SetPoint("TOPLEFT", COL_PADDING, yOffset)
+    formatWarning:SetText("|cffff9900Note:|r Export string format changed in v2.6.1. Old strings are incompatible.")
+    formatWarning:SetWidth(PANEL_WIDTH - COL_PADDING * 2)
+    formatWarning:SetJustifyH("LEFT")
+    yOffset = yOffset - 20
+
     -- Export section
     local exportHeader = profilesContent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     exportHeader:SetPoint("TOPLEFT", COL_PADDING, yOffset)
@@ -2739,10 +2711,14 @@ local function CreateOptionsPanel()
 
     -- Export button
     local exportButton = CreateButton(profilesContent, 100, 22, "Export", function()
-        local exportString = BuffReminders:Export()
-        exportEditBox:SetText(exportString)
-        exportEditBox:HighlightText()
-        exportEditBox:SetFocus()
+        local exportString, err = BuffReminders:Export()
+        if exportString then
+            exportEditBox:SetText(exportString)
+            exportEditBox:HighlightText()
+            exportEditBox:SetFocus()
+        else
+            exportEditBox:SetText("Error: " .. (err or "Failed to export"))
+        end
     end)
     exportButton:SetPoint("TOPLEFT", COL_PADDING, yOffset - 90)
 
