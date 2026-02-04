@@ -4274,27 +4274,28 @@ local function CreateOptionsPanel()
     btnHolder:SetPoint("TOP", 0, -20)
     btnHolder:SetSize(1, 22)
 
-    local lockBtn = CreateButton(btnHolder, BuffRemindersDB.locked and "Unlock" or "Lock", function(self)
+    -- Size buttons for longest text to prevent resizing on click
+    local lockBtn = CreateButton(btnHolder, "Unlock", function(self)
         BuffRemindersDB.locked = not BuffRemindersDB.locked
         self:SetText(BuffRemindersDB.locked and "Unlock" or "Lock")
-        DynamicResizeButton_Resize(self)
         if testMode then
             RefreshTestDisplay()
         else
             UpdateDisplay()
         end
     end, { title = "Lock/Unlock", desc = "Unlock to drag and reposition the buff frames." })
+    lockBtn:SetText(BuffRemindersDB.locked and "Unlock" or "Lock")
     lockBtn:SetPoint("RIGHT", btnHolder, "CENTER", -4, 0)
     panel.lockBtn = lockBtn
 
-    local testBtn = CreateButton(btnHolder, "Test", function(self)
+    local testBtn = CreateButton(btnHolder, "Stop Test", function(self)
         local isOn = ToggleTestMode()
         self:SetText(isOn and "Stop Test" or "Test")
-        DynamicResizeButton_Resize(self)
     end, {
         title = "Test icon's appearance",
         desc = "Shows ALL buffs regardless of what you selected in the buffs section.",
     })
+    testBtn:SetText("Test")
     testBtn:SetPoint("LEFT", btnHolder, "CENTER", 4, 0)
     panel.testBtn = testBtn
 
