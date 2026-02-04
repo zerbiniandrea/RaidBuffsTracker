@@ -1,6 +1,7 @@
 # BuffReminders
 
 [![](https://shields.io/badge/github-gray?logo=github&style=for-the-badge&logoColor=white)](https://github.com/zerbiniandrea/BuffReminders)
+[![](https://shields.io/badge/discord-5865F2?logo=discord&style=for-the-badge&logoColor=white)](https://discord.gg/qGHQr2DP7F)
 
 A lightweight World of Warcraft addon that tracks missing buffs with a clean icon display.
 
