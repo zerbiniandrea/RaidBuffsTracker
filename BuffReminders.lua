@@ -3814,7 +3814,7 @@ local function CreateOptionsPanel()
         end
 
         -- Add button
-        local addBtn = CreateButton(customBuffsContainer, "+ Add Custom Buff", function()
+        local addBtn = CreateButton(customBuffsContainer, "+ Add", function()
             ShowCustomBuffModal(nil, RenderCustomBuffRows)
         end)
         addBtn:SetPoint("TOPLEFT", 0, rowY - 4)
