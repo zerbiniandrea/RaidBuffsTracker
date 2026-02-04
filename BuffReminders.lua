@@ -1442,10 +1442,10 @@ local function PassesPreChecks(buff, presentClasses, db)
     return true
 end
 
--- Anchor point for each growth direction (icons grow away from anchor)
+-- Anchor point for each growth direction (anchor is the fixed point, icons grow away from it)
 local DIRECTION_ANCHORS = {
-    LEFT = "LEFT",
-    RIGHT = "RIGHT",
+    LEFT = "RIGHT", -- grow left: anchor on right, icons expand leftward
+    RIGHT = "LEFT", -- grow right: anchor on left, icons expand rightward
     UP = "BOTTOM",
     DOWN = "TOP",
     CENTER = "CENTER",
@@ -1670,9 +1670,11 @@ local function PositionFramesInContainer(container, frames, iconSize, spacing, d
     for i, frame in ipairs(frames) do
         frame:ClearAllPoints()
         if direction == "LEFT" then
-            frame:SetPoint("LEFT", container, "LEFT", (i - 1) * (iconSize + spacing), 0)
-        elseif direction == "RIGHT" then
+            -- Grow left: first icon at right edge, subsequent icons to the left
             frame:SetPoint("RIGHT", container, "RIGHT", -((i - 1) * (iconSize + spacing)), 0)
+        elseif direction == "RIGHT" then
+            -- Grow right: first icon at left edge, subsequent icons to the right
+            frame:SetPoint("LEFT", container, "LEFT", (i - 1) * (iconSize + spacing), 0)
         elseif direction == "UP" then
             frame:SetPoint("BOTTOM", container, "BOTTOM", 0, (i - 1) * (iconSize + spacing))
         elseif direction == "DOWN" then
