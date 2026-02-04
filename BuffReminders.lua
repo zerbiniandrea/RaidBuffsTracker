@@ -300,6 +300,17 @@ local BUFF_TABLES = {
                 433568, -- Rite of Sanctification
             },
         },
+        -- Healthstone (ready check only - checks inventory)
+        {
+            itemID = { 5512, 224464 }, -- Healthstone, Demonic Healthstone
+            key = "healthstone",
+            name = "Healthstone",
+            missingText = "NO\nSTONE",
+            groupId = "healthstone",
+            iconOverride = 538745, -- Healthstone icon
+            readyCheckOnly = true,
+            infoTooltip = "Ready Check Only|This is only shown during ready checks.",
+        },
     },
 }
 
@@ -321,6 +332,7 @@ local BuffGroups = {
     food = { displayName = "Food" },
     rune = { displayName = "Augment Rune" },
     weaponBuff = { displayName = "Weapon Buff" },
+    healthstone = { displayName = "Healthstone!" },
 }
 
 -- Build icon override lookup table (for spells replaced by talents)
@@ -1028,12 +1040,13 @@ local function ShouldShowSelfBuff(
     return not hasBuff
 end
 
----Check if player is missing a consumable buff or weapon enchant (returns true if missing)
+---Check if player is missing a consumable buff, weapon enchant, or inventory item (returns true if missing)
 ---@param spellIDs? SpellID
 ---@param buffIconID? number
 ---@param checkWeaponEnchant? boolean
+---@param itemID? number|number[]
 ---@return boolean
-local function ShouldShowConsumableBuff(spellIDs, buffIconID, checkWeaponEnchant)
+local function ShouldShowConsumableBuff(spellIDs, buffIconID, checkWeaponEnchant, itemID)
     -- Check buff auras by spell ID
     if spellIDs then
         local spellList = type(spellIDs) == "table" and spellIDs or { spellIDs }
@@ -1066,12 +1079,23 @@ local function ShouldShowConsumableBuff(spellIDs, buffIconID, checkWeaponEnchant
         end
     end
 
+    -- Check inventory for item
+    if itemID then
+        local itemList = type(itemID) == "table" and itemID or { itemID }
+        for _, id in ipairs(itemList) do
+            local ok, count = pcall(C_Item.GetItemCount, id, false, true)
+            if ok and count and count > 0 then
+                return false -- Has the item in inventory
+            end
+        end
+    end
+
     -- If we have nothing to check, return false
-    if not spellIDs and not buffIconID and not checkWeaponEnchant then
+    if not spellIDs and not buffIconID and not checkWeaponEnchant and not itemID then
         return false
     end
 
-    return true -- Missing all consumable buffs/enchants
+    return true -- Missing all consumable buffs/enchants/items
 end
 
 -- Forward declarations
@@ -1913,7 +1937,7 @@ UpdateDisplay = function()
         end
     end
 
-    -- Process consumable buffs (food, flasks, runes)
+    -- Process consumable buffs (food, flasks, runes, healthstones)
     for _, buff in ipairs(Consumables) do
         local frame = buffFrames[buff.key]
         local settingKey = buff.groupId or buff.key
@@ -1929,8 +1953,13 @@ UpdateDisplay = function()
             end
         end
 
-        if frame and IsBuffEnabled(settingKey) and not excluded then
-            local shouldShow = ShouldShowConsumableBuff(buff.spellID, buff.buffIconID, buff.checkWeaponEnchant)
+        -- Skip ready check only buffs when not in ready check
+        local readyCheckOnly = buff.readyCheckOnly
+        local showBuff = not readyCheckOnly or inReadyCheck
+
+        if frame and IsBuffEnabled(settingKey) and not excluded and showBuff then
+            local shouldShow =
+                ShouldShowConsumableBuff(buff.spellID, buff.buffIconID, buff.checkWeaponEnchant, buff.itemID)
             if shouldShow then
                 frame.icon:SetAllPoints()
                 frame.icon:SetTexCoord(TEXCOORD_INSET, 1 - TEXCOORD_INSET, TEXCOORD_INSET, 1 - TEXCOORD_INSET)

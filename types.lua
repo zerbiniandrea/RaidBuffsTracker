@@ -69,6 +69,9 @@
 ---@field buffIconID? number Check for any buff with this icon ID (e.g., 136000 for food)
 ---@field displaySpellIDs? SpellID Spell IDs to show icons for in UI (subset of spellID)
 ---@field iconOverride? number|number[] Icon texture ID(s) to use instead of spell icon
+---@field itemID? number|number[] Check if player has this item in inventory
+---@field readyCheckOnly? boolean Only show during ready checks
+---@field infoTooltip? string Tooltip text shown on hover (pipe-separated: title|description)
 
 ---@class BuffGroup
 ---@field displayName string
