@@ -144,3 +144,11 @@
 ---@field editLabel? FontString
 
 ---@alias SplitCategories table<CategoryName, boolean>
+
+---@class ContentVisibility
+---@field openWorld boolean
+---@field dungeon boolean
+---@field scenario boolean
+---@field raid boolean
+
+---@alias CategoryVisibility table<CategoryName, ContentVisibility>

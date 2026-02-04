@@ -553,6 +553,15 @@ local defaults = {
         consumable = false,
         custom = false,
     }, ---@type SplitCategories
+    ---@type CategoryVisibility
+    categoryVisibility = { -- Which content types each category shows in
+        raid = { openWorld = true, dungeon = true, scenario = true, raid = true },
+        presence = { openWorld = true, dungeon = true, scenario = true, raid = true },
+        targeted = { openWorld = false, dungeon = true, scenario = true, raid = true },
+        self = { openWorld = true, dungeon = true, scenario = true, raid = true },
+        consumable = { openWorld = false, dungeon = true, scenario = true, raid = true },
+        custom = { openWorld = true, dungeon = true, scenario = true, raid = true },
+    },
     ---@type AllCategorySettings
     categorySettings = { -- Per-category settings (main = non-split buffs, others = when split)
         main = {
@@ -694,6 +703,40 @@ end
 local function IsBuffEnabled(key)
     local db = BuffRemindersDB
     return db.enabledBuffs[key] ~= false
+end
+
+---Get the current content type based on instance/zone
+---@return "openWorld"|"dungeon"|"scenario"|"raid"
+local function GetCurrentContentType()
+    local inInstance, instanceType = IsInInstance()
+    if not inInstance then
+        return "openWorld"
+    end
+    if instanceType == "raid" then
+        return "raid"
+    end
+    if instanceType == "scenario" then
+        return "scenario"
+    end
+    -- Treat party/dungeon and any unknown instanced content as dungeon
+    -- PvP/arena are already filtered out in UpdateDisplay before this is called
+    return "dungeon"
+end
+
+---Check if a category should be visible for the current content type
+---@param category CategoryName
+---@return boolean
+local function IsCategoryVisibleForContent(category)
+    local db = BuffRemindersDB
+    if not db.categoryVisibility then
+        return true
+    end
+    local visibility = db.categoryVisibility[category]
+    if not visibility then
+        return true
+    end
+    local contentType = GetCurrentContentType()
+    return visibility[contentType] ~= false
 end
 
 ---Check if a unit is a valid group member for buff tracking
@@ -2046,9 +2089,11 @@ UpdateDisplay = function()
 
     -- Process coverage buffs (need everyone to have them)
     local playerOnly = db.showOnlyPlayerMissing
+    local raidVisible = IsCategoryVisibleForContent("raid")
     for _, buff in ipairs(RaidBuffs) do
         local frame = buffFrames[buff.key]
-        local showBuff = (not db.showOnlyPlayerClassBuff or buff.class == playerClass)
+        local showBuff = raidVisible
+            and (not db.showOnlyPlayerClassBuff or buff.class == playerClass)
             and (not presentClasses or presentClasses[buff.class])
 
         if frame and IsBuffEnabled(buff.key) and showBuff then
@@ -2076,10 +2121,12 @@ UpdateDisplay = function()
     end
 
     -- Process presence buffs (need at least 1 person to have them)
+    local presenceVisible = IsCategoryVisibleForContent("presence")
     for _, buff in ipairs(PresenceBuffs) do
         local frame = buffFrames[buff.key]
         local readyCheckOnly = buff.infoTooltip and buff.infoTooltip:match("^Ready Check Only")
-        local showBuff = (not readyCheckOnly or inReadyCheck)
+        local showBuff = presenceVisible
+            and (not readyCheckOnly or inReadyCheck)
             and (not db.showOnlyPlayerClassBuff or buff.class == playerClass)
             and (not presentClasses or presentClasses[buff.class])
 
@@ -2107,12 +2154,13 @@ UpdateDisplay = function()
     end
 
     -- Process targeted buffs (player's own buff responsibility)
+    local targetedVisible = IsCategoryVisibleForContent("targeted")
     local visibleGroups = {} -- Track visible buffs by groupId for merging
     for _, buff in ipairs(TargetedBuffs) do
         local frame = buffFrames[buff.key]
         local settingKey = GetBuffSettingKey(buff)
 
-        if frame and IsBuffEnabled(settingKey) and PassesPreChecks(buff, nil, db) then
+        if frame and IsBuffEnabled(settingKey) and targetedVisible and PassesPreChecks(buff, nil, db) then
             local shouldShow = ShouldShowTargetedBuff(buff.spellID, buff.class, buff.beneficiaryRole)
             if shouldShow then
                 anyVisible = ShowMissingFrame(frame, buff.missingText) or anyVisible
@@ -2143,11 +2191,12 @@ UpdateDisplay = function()
     end
 
     -- Process self buffs (player's own buff on themselves, including weapon imbues)
+    local selfVisible = IsCategoryVisibleForContent("self")
     for _, buff in ipairs(SelfBuffs) do
         local frame = buffFrames[buff.key]
         local settingKey = buff.groupId or buff.key
 
-        if frame and IsBuffEnabled(settingKey) then
+        if frame and IsBuffEnabled(settingKey) and selfVisible then
             local shouldShow = ShouldShowSelfBuff(
                 buff.spellID,
                 buff.class,
@@ -2175,11 +2224,12 @@ UpdateDisplay = function()
     end
 
     -- Process consumable buffs (food, flasks, runes, healthstones)
+    local consumableVisible = IsCategoryVisibleForContent("consumable")
     for _, buff in ipairs(Consumables) do
         local frame = buffFrames[buff.key]
         local settingKey = buff.groupId or buff.key
 
-        if frame and IsBuffEnabled(settingKey) and PassesPreChecks(buff, nil, db) then
+        if frame and IsBuffEnabled(settingKey) and consumableVisible and PassesPreChecks(buff, nil, db) then
             local shouldShow =
                 ShouldShowConsumableBuff(buff.spellID, buff.buffIconID, buff.checkWeaponEnchant, buff.itemID)
             if shouldShow then
@@ -2193,12 +2243,13 @@ UpdateDisplay = function()
     end
 
     -- Process custom buffs (self buffs only - show if player doesn't have the buff)
+    local customVisible = IsCategoryVisibleForContent("custom")
     if db.customBuffs then
         for _, customBuff in pairs(db.customBuffs) do
             local frame = buffFrames[customBuff.key]
             -- Check class filter (nil means any class)
             local classMatch = not customBuff.class or customBuff.class == playerClass
-            if frame and IsBuffEnabled(customBuff.key) and classMatch then
+            if frame and IsBuffEnabled(customBuff.key) and customVisible and classMatch then
                 local hasBuff = UnitHasBuff("player", customBuff.spellID)
                 if not hasBuff then
                     anyVisible = ShowMissingFrame(frame, customBuff.missingText or "NO\nBUFF") or anyVisible
@@ -3177,6 +3228,96 @@ local function CreateOptionsPanel()
         return cb, y - ITEM_HEIGHT
     end
 
+    -- Create category header with content visibility toggles [W][D][R]
+    ---@param parent table
+    ---@param text string
+    ---@param category CategoryName
+    ---@param x number
+    ---@param y number
+    ---@return table header
+    ---@return number newY
+    local function CreateCategoryHeader(parent, text, category, x, y)
+        local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        header:SetPoint("TOPLEFT", x, y)
+        header:SetText("|cffffcc00" .. text .. "|r")
+
+        -- Content visibility toggle buttons
+        local toggles = {
+            { key = "openWorld", label = "W", tooltip = "Open World" },
+            { key = "scenario", label = "S", tooltip = "Scenarios (Delves, Torghast, etc.)" },
+            { key = "dungeon", label = "D", tooltip = "Dungeons (including M+)" },
+            { key = "raid", label = "R", tooltip = "Raids" },
+        }
+
+        local lastToggle
+        for i, toggle in ipairs(toggles) do
+            local btn = CreateFrame("Button", nil, parent)
+            btn:SetSize(18, 14)
+            if i == 1 then
+                btn:SetPoint("LEFT", header, "RIGHT", 8, 0)
+            else
+                btn:SetPoint("LEFT", lastToggle, "RIGHT", 2, 0)
+            end
+
+            -- Background texture
+            local bg = btn:CreateTexture(nil, "BACKGROUND")
+            bg:SetAllPoints()
+            bg.key = toggle.key
+
+            -- Label text
+            local label = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            label:SetPoint("CENTER", 0, 0)
+            label:SetText(toggle.label)
+
+            -- Update visual state based on setting
+            local function UpdateToggleVisual()
+                local db = BuffRemindersDB
+                local visibility = db.categoryVisibility and db.categoryVisibility[category]
+                local enabled = not visibility or visibility[toggle.key] ~= false
+                if enabled then
+                    bg:SetColorTexture(0.2, 0.6, 0.2, 0.8) -- Green
+                    label:SetTextColor(1, 1, 1)
+                else
+                    bg:SetColorTexture(0.4, 0.2, 0.2, 0.8) -- Dim red
+                    label:SetTextColor(0.6, 0.6, 0.6)
+                end
+            end
+            btn.UpdateVisual = UpdateToggleVisual
+            UpdateToggleVisual()
+
+            btn:SetScript("OnClick", function()
+                local db = BuffRemindersDB
+                if not db.categoryVisibility then
+                    db.categoryVisibility = {}
+                end
+                if not db.categoryVisibility[category] then
+                    db.categoryVisibility[category] = { openWorld = true, scenario = true, dungeon = true, raid = true }
+                end
+                db.categoryVisibility[category][toggle.key] = not db.categoryVisibility[category][toggle.key]
+                UpdateToggleVisual()
+                if testMode then
+                    RefreshTestDisplay()
+                else
+                    UpdateDisplay()
+                end
+            end)
+
+            btn:SetScript("OnEnter", function(self)
+                GameTooltip:SetOwner(self, "ANCHOR_TOP")
+                GameTooltip:SetText(toggle.tooltip, 1, 1, 1)
+                GameTooltip:AddLine("Click to toggle visibility in " .. toggle.tooltip:lower(), 0.7, 0.7, 0.7)
+                GameTooltip:Show()
+            end)
+            btn:SetScript("OnLeave", function()
+                GameTooltip:Hide()
+            end)
+
+            lastToggle = btn
+        end
+
+        return header, y - 18
+    end
+
     -- Create compact slider with clickable numeric input
     local function CreateSlider(parent, x, y, labelText, minVal, maxVal, step, initVal, suffix, onChange)
         local label = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -3332,7 +3473,7 @@ local function CreateOptionsPanel()
 
     -- LEFT COLUMN: Group-wide buffs
     -- Raid Buffs header
-    _, buffsLeftY = CreateSectionHeader(buffsContent, "Raid Buffs", buffsLeftX, buffsLeftY)
+    _, buffsLeftY = CreateCategoryHeader(buffsContent, "Raid Buffs", "raid", buffsLeftX, buffsLeftY)
     local raidNote = buffsContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     raidNote:SetPoint("TOPLEFT", buffsLeftX, buffsLeftY)
     raidNote:SetText("(for the whole group)")
@@ -3342,7 +3483,7 @@ local function CreateOptionsPanel()
     buffsLeftY = buffsLeftY - SECTION_SPACING
 
     -- Presence Buffs header
-    _, buffsLeftY = CreateSectionHeader(buffsContent, "Presence Buffs", buffsLeftX, buffsLeftY)
+    _, buffsLeftY = CreateCategoryHeader(buffsContent, "Presence Buffs", "presence", buffsLeftX, buffsLeftY)
     local presenceNote = buffsContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     presenceNote:SetPoint("TOPLEFT", buffsLeftX, buffsLeftY)
     presenceNote:SetText("(at least 1 person needs)")
@@ -3352,7 +3493,7 @@ local function CreateOptionsPanel()
     buffsLeftY = buffsLeftY - SECTION_SPACING
 
     -- Consumables header
-    _, buffsLeftY = CreateSectionHeader(buffsContent, "Consumables", buffsLeftX, buffsLeftY)
+    _, buffsLeftY = CreateCategoryHeader(buffsContent, "Consumables", "consumable", buffsLeftX, buffsLeftY)
     local consumablesNote = buffsContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     consumablesNote:SetPoint("TOPLEFT", buffsLeftX + 5, buffsLeftY)
     consumablesNote:SetText("(flasks, food, runes, and weapon oils)")
@@ -3361,7 +3502,7 @@ local function CreateOptionsPanel()
 
     -- RIGHT COLUMN: Individual buffs
     -- Targeted Buffs header
-    _, buffsRightY = CreateSectionHeader(buffsContent, "Targeted Buffs", buffsRightX, buffsRightY)
+    _, buffsRightY = CreateCategoryHeader(buffsContent, "Targeted Buffs", "targeted", buffsRightX, buffsRightY)
     local targetedNote = buffsContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     targetedNote:SetPoint("TOPLEFT", buffsRightX, buffsRightY)
     targetedNote:SetText("(buffs to maintain on someone else)")
@@ -3371,7 +3512,7 @@ local function CreateOptionsPanel()
     buffsRightY = buffsRightY - SECTION_SPACING
 
     -- Self Buffs header
-    _, buffsRightY = CreateSectionHeader(buffsContent, "Self Buffs", buffsRightX, buffsRightY)
+    _, buffsRightY = CreateCategoryHeader(buffsContent, "Self Buffs", "self", buffsRightX, buffsRightY)
     local selfNote = buffsContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     selfNote:SetPoint("TOPLEFT", buffsRightX, buffsRightY)
     selfNote:SetText("(buffs strictly on yourself)")
@@ -4332,20 +4473,19 @@ local function CreateOptionsPanel()
     -- ========== CUSTOM BUFFS CONTENT ==========
     panel.customBuffRows = {}
 
-    -- Header (same style as General tab sections)
-    local customHeader = customContent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    customHeader:SetPoint("TOPLEFT", COL_PADDING, 0)
-    customHeader:SetText("|cffffcc00Custom Buffs|r")
+    -- Header with visibility toggles
+    local customY = 0
+    _, customY = CreateCategoryHeader(customContent, "Custom Buffs", "custom", COL_PADDING, customY)
 
     local customDesc = customContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    customDesc:SetPoint("TOPLEFT", COL_PADDING, -18)
+    customDesc:SetPoint("TOPLEFT", COL_PADDING, customY)
     customDesc:SetWidth(PANEL_WIDTH - COL_PADDING * 2)
     customDesc:SetJustifyH("LEFT")
     customDesc:SetText("Track any buff by spell ID. Only checks if YOU have the buff (like Self Buffs).")
 
     -- Container for custom buff rows
     local customBuffsContainer = CreateFrame("Frame", nil, customContent)
-    customBuffsContainer:SetPoint("TOPLEFT", COL_PADDING, -32)
+    customBuffsContainer:SetPoint("TOPLEFT", COL_PADDING, customY - 14)
     customBuffsContainer:SetSize(PANEL_WIDTH - COL_PADDING * 2, 300)
     panel.customBuffsContainer = customBuffsContainer
 
@@ -4359,7 +4499,7 @@ local function CreateOptionsPanel()
         panel.customBuffRows = {}
 
         local db = BuffRemindersDB
-        local customY = 0
+        local rowY = 0
 
         -- Sort custom buffs by key for consistent order
         local sortedKeys = {}
@@ -4374,19 +4514,19 @@ local function CreateOptionsPanel()
         if #sortedKeys == 0 then
             local emptyFrame = CreateFrame("Frame", nil, customBuffsContainer)
             emptyFrame:SetSize(300, 30)
-            emptyFrame:SetPoint("TOPLEFT", 0, customY)
+            emptyFrame:SetPoint("TOPLEFT", 0, rowY)
             local emptyMsg = emptyFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
             emptyMsg:SetPoint("TOPLEFT")
             emptyMsg:SetText("No custom buffs added yet.")
             table.insert(panel.customBuffRows, emptyFrame)
-            customY = customY - 22
+            rowY = rowY - 22
         end
 
         for _, key in ipairs(sortedKeys) do
             local customBuff = db.customBuffs[key]
             local row = CreateFrame("Frame", nil, customBuffsContainer)
             row:SetSize(PANEL_WIDTH - COL_PADDING * 2, ITEM_HEIGHT)
-            row:SetPoint("TOPLEFT", 0, customY)
+            row:SetPoint("TOPLEFT", 0, rowY)
 
             -- Checkbox
             local cb = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
@@ -4431,18 +4571,18 @@ local function CreateOptionsPanel()
             deleteBtn:SetPoint("LEFT", editBtn, "RIGHT", 4, 0)
 
             table.insert(panel.customBuffRows, row)
-            customY = customY - ITEM_HEIGHT
+            rowY = rowY - ITEM_HEIGHT
         end
 
         -- Add button
         local addBtn = CreateButton(customBuffsContainer, 110, 18, "+ Add Custom Buff", function()
             ShowCustomBuffModal(nil, RenderCustomBuffRows)
         end)
-        addBtn:SetPoint("TOPLEFT", 0, customY - 4)
+        addBtn:SetPoint("TOPLEFT", 0, rowY - 4)
         table.insert(panel.customBuffRows, addBtn)
 
         -- Update container height
-        customBuffsContainer:SetHeight(math.abs(customY) + 30)
+        customBuffsContainer:SetHeight(math.abs(rowY) + 30)
     end
 
     panel.RenderCustomBuffRows = RenderCustomBuffRows
@@ -5217,6 +5357,22 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
                 x = db.position.x,
                 y = db.position.y,
             }
+        end
+
+        -- Initialize categoryVisibility with defaults for each category
+        if not db.categoryVisibility then
+            db.categoryVisibility = {}
+        end
+        for _, category in ipairs(CATEGORIES) do
+            if not db.categoryVisibility[category] then
+                local defaultVis = defaults.categoryVisibility[category]
+                db.categoryVisibility[category] = {
+                    openWorld = defaultVis and defaultVis.openWorld ~= false,
+                    dungeon = defaultVis and defaultVis.dungeon ~= false,
+                    scenario = defaultVis and defaultVis.scenario ~= false,
+                    raid = defaultVis and defaultVis.raid ~= false,
+                }
+            end
         end
 
         SLASH_BUFFREMINDERS1 = "/br"
