@@ -1384,6 +1384,29 @@ local function PassesPreChecks(buff, presentClasses, db)
     return true
 end
 
+-- Anchor point for each growth direction (icons grow away from anchor)
+local DIRECTION_ANCHORS = {
+    LEFT = "LEFT",
+    RIGHT = "RIGHT",
+    UP = "BOTTOM",
+    DOWN = "TOP",
+    CENTER = "CENTER",
+}
+
+-- Get anchor position offset from frame center based on anchor type and frame size
+local function GetAnchorOffset(anchor, width, height)
+    if anchor == "LEFT" then
+        return -width / 2, 0
+    elseif anchor == "RIGHT" then
+        return width / 2, 0
+    elseif anchor == "TOP" then
+        return 0, height / 2
+    elseif anchor == "BOTTOM" then
+        return 0, -height / 2
+    end
+    return 0, 0 -- CENTER
+end
+
 -- Create a category frame for grouped display mode
 local function CreateCategoryFrame(category)
     local db = BuffRemindersDB
@@ -1437,14 +1460,22 @@ local function CreateCategoryFrame(category)
 
     frame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
-        local point, _, _, x, y = self:GetPoint()
+        -- Save anchor position (based on growth direction) relative to UIParent CENTER
+        local dragCatSettings = GetCategorySettings(category)
+        local direction = dragCatSettings.growDirection or "CENTER"
+        local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
+        local cx, cy = self:GetCenter()
+        local px, py = UIParent:GetCenter()
+        local w, h = self:GetSize()
+        local offsetX, offsetY = GetAnchorOffset(anchor, w, h)
+        local x, y = (cx - px) + offsetX, (cy - py) + offsetY
         if not BuffRemindersDB.categorySettings then
             BuffRemindersDB.categorySettings = {}
         end
         if not BuffRemindersDB.categorySettings[category] then
             BuffRemindersDB.categorySettings[category] = {}
         end
-        BuffRemindersDB.categorySettings[category].position = { point = point, x = x, y = y }
+        BuffRemindersDB.categorySettings[category].position = { point = "CENTER", x = x, y = y }
     end)
 
     frame:Hide()
@@ -1533,8 +1564,17 @@ local function CreateBuffFrame(buff, category)
             return
         end
         parent:StopMovingOrSizing()
-        local point, _, _, x, y = parent:GetPoint()
+        -- Save anchor position (based on growth direction) relative to UIParent CENTER
         local settings = BuffRemindersDB
+        local catKey = parent.category or "main"
+        local dragCatSettings = GetCategorySettings(catKey)
+        local direction = dragCatSettings.growDirection or "CENTER"
+        local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
+        local cx, cy = parent:GetCenter()
+        local px, py = UIParent:GetCenter()
+        local w, h = parent:GetSize()
+        local offsetX, offsetY = GetAnchorOffset(anchor, w, h)
+        local x, y = (cx - px) + offsetX, (cy - py) + offsetY
         if parent.category then
             -- Save to category-specific position (this is a split category frame)
             if not settings.categorySettings then
@@ -1543,10 +1583,13 @@ local function CreateBuffFrame(buff, category)
             if not settings.categorySettings[parent.category] then
                 settings.categorySettings[parent.category] = {}
             end
-            settings.categorySettings[parent.category].position = { point = point, x = x, y = y }
+            settings.categorySettings[parent.category].position = { point = "CENTER", x = x, y = y }
         else
-            -- Save to main frame position
-            settings.position = { point = point, x = x, y = y }
+            -- Save to main frame position (both legacy and new locations)
+            settings.position = { point = "CENTER", x = x, y = y }
+            if settings.categorySettings and settings.categorySettings.main then
+                settings.categorySettings.main.position = { point = "CENTER", x = x, y = y }
+            end
         end
     end)
 
@@ -1648,12 +1691,26 @@ local function PositionBuffFramesWithSplits()
             mainFrame:SetSize(math.max(totalSize, iconSize), iconSize)
         end
 
+        -- Re-anchor based on growth direction so first icon stays at anchor position
+        -- pos is already the anchor position relative to UIParent CENTER
+        local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
+        local pos = db.position
+        mainFrame:ClearAllPoints()
+        mainFrame:SetPoint(anchor, UIParent, "CENTER", pos.x or 0, pos.y or 0)
+
         PositionFramesInContainer(mainFrame, mainFrameBuffs, iconSize, spacing, direction)
         mainFrame:Show()
     elseif not db.locked then
         -- Keep mainFrame visible when unlocked for positioning
         local mainSettings = GetCategorySettings("main")
-        mainFrame:SetSize(mainSettings.iconSize or 64, mainSettings.iconSize or 64)
+        local iconSize = mainSettings.iconSize or 64
+        local direction = mainSettings.growDirection or "CENTER"
+        local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
+        local pos = db.position
+        mainFrame:SetSize(iconSize, iconSize)
+        -- pos is already the anchor position relative to UIParent CENTER
+        mainFrame:ClearAllPoints()
+        mainFrame:SetPoint(anchor, UIParent, "CENTER", pos.x or 0, pos.y or 0)
         mainFrame:Show()
     else
         mainFrame:Hide()
@@ -1666,11 +1723,14 @@ local function PositionBuffFramesWithSplits()
         local isSplit = IsCategorySplit(category)
 
         if catFrame and isSplit then
+            local catSettings = GetCategorySettings(category)
+            local direction = catSettings.growDirection or "CENTER"
+            local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
+            local pos = catSettings.position
+
             if #frames > 0 then
-                local catSettings = GetCategorySettings(category)
                 local iconSize = catSettings.iconSize or 64
                 local spacing = math.floor(iconSize * (catSettings.spacing or 0.2))
-                local direction = catSettings.growDirection or "CENTER"
 
                 -- Resize individual buff frames to category's icon size
                 for _, frame in ipairs(frames) do
@@ -1686,13 +1746,20 @@ local function PositionBuffFramesWithSplits()
                     catFrame:SetSize(math.max(totalSize, iconSize), iconSize)
                 end
 
+                -- Re-anchor based on growth direction so first icon stays at anchor position
+                -- pos is already the anchor position relative to UIParent CENTER
+                catFrame:ClearAllPoints()
+                catFrame:SetPoint(anchor, UIParent, "CENTER", pos.x or 0, pos.y or 0)
+
                 PositionFramesInContainer(catFrame, frames, iconSize, spacing, direction)
                 catFrame:Show()
             elseif not db.locked then
                 -- Keep split frame visible when unlocked for positioning
-                local catSettings = GetCategorySettings(category)
                 local iconSize = catSettings.iconSize or 64
                 catFrame:SetSize(iconSize, iconSize)
+                -- pos is already the anchor position relative to UIParent CENTER
+                catFrame:ClearAllPoints()
+                catFrame:SetPoint(anchor, UIParent, "CENTER", pos.x or 0, pos.y or 0)
                 catFrame:Show()
             else
                 catFrame:Hide()
@@ -1902,7 +1969,7 @@ UpdateFallbackDisplay = function()
     if IsSpellGlowing(playerBuff.spellID) then
         ShowMissingFrame(frame, "NO\nBUFF!")
         PositionBuffFramesWithSplits()
-        mainFrame:Show()
+        UpdateAnchor() -- Ensure edit mode visuals are updated
     end
     -- No else branch - HideAllDisplayFrames was already called by caller
 end
@@ -2131,6 +2198,7 @@ UpdateDisplay = function()
     else
         -- Hide everything when locked and no buffs visible
         HideAllDisplayFrames()
+        UpdateAnchor() -- Ensure edit mode visuals are cleared
     end
 end
 
@@ -2165,8 +2233,19 @@ local function SetupDragging()
 
     mainFrame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
-        local point, _, _, x, y = self:GetPoint()
-        BuffRemindersDB.position = { point = point, x = x, y = y }
+        -- Save anchor position (based on growth direction) relative to UIParent CENTER
+        local mainSettings = GetCategorySettings("main")
+        local direction = mainSettings.growDirection or "CENTER"
+        local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
+        local cx, cy = self:GetCenter()
+        local px, py = UIParent:GetCenter()
+        local w, h = self:GetSize()
+        local offsetX, offsetY = GetAnchorOffset(anchor, w, h)
+        local x, y = (cx - px) + offsetX, (cy - py) + offsetY
+        BuffRemindersDB.position = { point = "CENTER", x = x, y = y }
+        if BuffRemindersDB.categorySettings and BuffRemindersDB.categorySettings.main then
+            BuffRemindersDB.categorySettings.main.position = { point = "CENTER", x = x, y = y }
+        end
     end)
 end
 
@@ -3494,7 +3573,12 @@ local function CreateOptionsPanel()
         for _, btn in ipairs(growBtns) do
             btn:SetEnabled(btn.direction ~= defaults.categorySettings.main.growDirection)
         end
-        -- Reset position
+        -- Reset position (update both legacy and new locations)
+        db.position = {
+            point = defaults.categorySettings.main.position.point,
+            x = defaults.categorySettings.main.position.x,
+            y = defaults.categorySettings.main.position.y,
+        }
         mainFrame:ClearAllPoints()
         mainFrame:SetPoint(
             defaults.categorySettings.main.position.point,
