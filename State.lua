@@ -49,6 +49,14 @@ local cachedGroupClasses = nil
 -- Talent/spell knowledge cache (invalidated on PLAYER_SPECIALIZATION_CHANGED)
 local cachedSpellKnowledge = {}
 
+-- Weapon enchant info for current refresh cycle (set once per BuffState.Refresh())
+local currentWeaponEnchants = {
+    hasMainHand = false,
+    mainHandID = nil,
+    hasOffHand = false,
+    offHandID = nil,
+}
+
 ---Check if player knows a spell (cached version of IsPlayerSpell)
 ---@param spellID number
 ---@return boolean
@@ -409,8 +417,7 @@ local function ShouldShowSelfBuff(
 
     -- Weapon imbue: check if this specific enchant is on either weapon
     if enchantID then
-        local _, _, _, mainHandEnchantID, _, _, _, offHandEnchantID = GetWeaponEnchantInfo()
-        return mainHandEnchantID ~= enchantID and offHandEnchantID ~= enchantID
+        return currentWeaponEnchants.mainHandID ~= enchantID and currentWeaponEnchants.offHandID ~= enchantID
     end
 
     -- Regular buff check - use buffIdOverride if provided, otherwise use spellID
@@ -454,8 +461,7 @@ local function ShouldShowConsumableBuff(spellIDs, buffIconID, checkWeaponEnchant
 
     -- Check if any weapon enchant exists (oils, stones, shaman imbues, etc.)
     if checkWeaponEnchant then
-        local hasMainHandEnchant = GetWeaponEnchantInfo()
-        if hasMainHandEnchant then
+        if currentWeaponEnchants.hasMainHand then
             return false -- Has a weapon enchant
         end
     end
@@ -587,6 +593,13 @@ function BuffState.Refresh()
         entry.missingText = nil
         entry.expiringTime = nil
     end
+
+    -- Fetch weapon enchant info once per refresh cycle
+    local hasMain, _, _, mainID, hasOff, _, _, offID = GetWeaponEnchantInfo()
+    currentWeaponEnchants.hasMainHand = hasMain or false
+    currentWeaponEnchants.mainHandID = mainID
+    currentWeaponEnchants.hasOffHand = hasOff or false
+    currentWeaponEnchants.offHandID = offID
 
     local presentClasses = GetGroupClasses()
     local playerOnly = db.showOnlyPlayerMissing
