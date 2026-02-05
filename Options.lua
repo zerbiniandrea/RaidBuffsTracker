@@ -1225,16 +1225,17 @@ ShowGlowDemo = function()
 
     local demoPanel =
         CreatePanel("BuffRemindersGlowDemo", numStyles * (ICON_SIZE + SPACING) + SPACING, ICON_SIZE + 70, {
-            bgColor = { 0.12, 0.08, 0.18, 0.98 },
-            borderColor = { 0.6, 0.4, 0.8, 1 },
             strata = "TOOLTIP",
         })
 
     local demoTitle = demoPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     demoTitle:SetPoint("TOP", 0, -8)
-    demoTitle:SetText("Glow Styles Preview")
+    demoTitle:SetText("|cffffcc00Glow Styles Preview|r")
 
-    local demoCloseBtn = CreateFrame("Button", nil, demoPanel, "UIPanelCloseButton")
+    local demoCloseBtn = CreateButton(demoPanel, "x", function()
+        demoPanel:Hide()
+    end)
+    demoCloseBtn:SetSize(22, 22)
     demoCloseBtn:SetPoint("TOPRIGHT", -5, -5)
 
     for i, style in ipairs(GlowStyles) do
@@ -1259,7 +1260,7 @@ ShowGlowDemo = function()
 
         local styleLabel = demoPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         styleLabel:SetPoint("TOP", iconFrame, "BOTTOM", 0, -4)
-        styleLabel:SetText(i .. ". " .. style.name)
+        styleLabel:SetText(style.name)
         styleLabel:SetWidth(ICON_SIZE + 10)
     end
 
