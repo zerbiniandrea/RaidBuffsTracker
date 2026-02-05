@@ -1,6 +1,6 @@
 ## Interface: 120000
 ## Title: BuffReminders
-## Notes: Shows missing buffs with count overlay
+## Notes: Track missing buffs at a glance
 ## Author: zerbi
 ## Version: @project-version@
 ## SavedVariables: BuffRemindersDB
