@@ -1830,6 +1830,18 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
             )
         end
 
+        -- Notify users about recent rewrite (delayed, can be disabled)
+        if BuffRemindersDB.showLoginMessages ~= false then
+            C_Timer.After(3, function()
+                print(
+                    "|cff00ccffBuffReminders:|r Heads up! Recent versions include a near-complete rewrite of the addon."
+                )
+                print(
+                    "|cff00ccffBuffReminders:|r Sorry if something broke! Please report issues on Discord (preferred), GitHub, or CurseForge."
+                )
+            end)
+        end
+
         for k, v in pairs(defaults) do
             if BuffRemindersDB[k] == nil then
                 if type(v) == "table" then

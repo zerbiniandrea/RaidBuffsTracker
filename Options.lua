@@ -1161,6 +1161,20 @@ local function CreateOptionsPanel()
     )
     panel.reminderCheckbox = reminderCb
 
+    local loginMsgCb
+    loginMsgCb, settingsY = CreateCheckbox(
+        settingsContent,
+        settingsX,
+        settingsY,
+        "Show login messages",
+        BuffRemindersDB.showLoginMessages ~= false,
+        function(self)
+            BuffRemindersDB.showLoginMessages = self:GetChecked()
+        end,
+        "I only use login messages for important notices and remove them when no longer relevant."
+    )
+    panel.loginMsgCheckbox = loginMsgCb
+
     settingsY = settingsY - SECTION_SPACING
 
     -- ========== SECTION: BEHAVIOR ==========
