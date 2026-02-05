@@ -205,12 +205,8 @@ end
 ---Check if all categories are split (mainFrame would be empty)
 ---@return boolean
 local function AreAllCategoriesSplit()
-    local db = BuffRemindersDB
-    if not db.splitCategories then
-        return false
-    end
     for _, category in ipairs(CATEGORIES) do
-        if not db.splitCategories[category] then
+        if not IsCategorySplit(category) then
             return false
         end
     end
@@ -1932,21 +1928,25 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         local db = BuffRemindersDB
 
         -- Migrate from old schema to new schema (v3.0 migration)
-        -- Detect old schema by checking if defaults table exists
-        if not db.defaults then
-            db.defaults = {}
+        -- Detect old schema by checking for OLD root-level keys (not absence of new table,
+        -- because DeepCopyDefault already fills in db.defaults before we get here)
+        local isOldSchema = db.iconSize ~= nil
+            or db.spacing ~= nil
+            or db.growDirection ~= nil
+            or db.showExpirationGlow ~= nil
+        if isOldSchema then
             -- Migrate global appearance settings to defaults
             db.defaults.iconSize = db.iconSize or defaults.defaults.iconSize
             db.defaults.spacing = db.spacing or defaults.defaults.spacing
             db.defaults.growDirection = db.growDirection or defaults.defaults.growDirection
-            db.defaults.iconZoom = DEFAULT_ICON_ZOOM
-            db.defaults.borderSize = DEFAULT_BORDER_SIZE
-            db.defaults.textSize = 12
             -- Migrate global behavior settings to defaults
-            db.defaults.showBuffReminder = db.showBuffReminder ~= false
             db.defaults.showExpirationGlow = db.showExpirationGlow ~= false
             db.defaults.expirationThreshold = db.expirationThreshold or defaults.defaults.expirationThreshold
             db.defaults.glowStyle = db.glowStyle or defaults.defaults.glowStyle
+            -- Clean up old root-level keys
+            db.iconSize = nil
+            db.spacing = nil
+            db.growDirection = nil
         end
 
         -- Migrate splitCategories to categorySettings.{cat}.split
@@ -1958,21 +1958,26 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
                 if not db.categorySettings[cat] then
                     db.categorySettings[cat] = {}
                 end
-                if db.categorySettings[cat].split == nil then
-                    db.categorySettings[cat].split = isSplit
+                db.categorySettings[cat].split = isSplit
+            end
+            db.splitCategories = nil
+        end
+
+        -- Migrate old categorySettings with appearance values to use useCustomAppearance
+        -- Only enable custom appearance for categories that were actually split,
+        -- since non-split categories used main frame settings in old schema
+        if isOldSchema and db.categorySettings then
+            for cat, catSettings in pairs(db.categorySettings) do
+                if cat ~= "main" and catSettings.iconSize then
+                    catSettings.useCustomAppearance = catSettings.split == true
                 end
             end
         end
 
-        -- Migrate old categorySettings with appearance values to use useCustomAppearance
-        if db.categorySettings then
-            for cat, catSettings in pairs(db.categorySettings) do
-                if cat ~= "main" and catSettings.iconSize then
-                    -- Old schema had explicit appearance values, enable custom appearance
-                    if catSettings.useCustomAppearance == nil then
-                        catSettings.useCustomAppearance = true
-                    end
-                end
+        -- Migrate root-level showBuffReminder to raid category (v2.8.1 users)
+        if db.showBuffReminder ~= nil then
+            if db.categorySettings and db.categorySettings.raid then
+                db.categorySettings.raid.showBuffReminder = db.showBuffReminder
             end
         end
 
@@ -1999,22 +2004,18 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         end
 
         -- Migrate legacy root-level glow settings to defaults
+        -- Unconditionally overwrite: DeepCopyDefault may have filled db.defaults with
+        -- code defaults, but the user's old root-level value should take priority
         if db.showExpirationGlow ~= nil then
-            if db.defaults and db.defaults.showExpirationGlow == nil then
-                db.defaults.showExpirationGlow = db.showExpirationGlow
-            end
+            db.defaults.showExpirationGlow = db.showExpirationGlow
             db.showExpirationGlow = nil
         end
         if db.expirationThreshold ~= nil then
-            if db.defaults and db.defaults.expirationThreshold == nil then
-                db.defaults.expirationThreshold = db.expirationThreshold
-            end
+            db.defaults.expirationThreshold = db.expirationThreshold
             db.expirationThreshold = nil
         end
         if db.glowStyle ~= nil then
-            if db.defaults and db.defaults.glowStyle == nil then
-                db.defaults.glowStyle = db.glowStyle
-            end
+            db.defaults.glowStyle = db.glowStyle
             db.glowStyle = nil
         end
 
@@ -2022,6 +2023,8 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         if db.defaults then
             db.defaults.showBuffReminder = nil
         end
+        -- Clean up old root-level showBuffReminder (migrated to categorySettings.raid above)
+        db.showBuffReminder = nil
 
         -- Remove showOnlyInInstance (replaced by per-category W/S/D/R visibility toggles)
         db.showOnlyInInstance = nil
