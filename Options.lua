@@ -784,11 +784,24 @@ local function CreateOptionsPanel()
         splitHolder:SetPoint("TOPLEFT", 0, catY)
         catY = catY - 22
 
+        -- Shared enabled predicates for this category
+        local function isCategorySplitEnabled()
+            return IsCategorySplit(category)
+        end
+
+        local function isCustomAppearanceEnabled()
+            return IsCategorySplit(category)
+                and db.categorySettings
+                and db.categorySettings[category]
+                and db.categorySettings[category].useCustomAppearance == true
+        end
+
         -- Direction and Reset button on same line
         local dirHolder = Components.DirectionButtons(catContent, {
             get = function()
                 return GetCategorySettings(category).growDirection or "CENTER"
             end,
+            enabled = isCategorySplitEnabled,
             onChange = function(dir)
                 BR.Config.Set("categorySettings." .. category .. ".growDirection", dir)
             end,
@@ -818,20 +831,15 @@ local function CreateOptionsPanel()
             end
         end)
         resetBtn:SetPoint("LEFT", dirHolder, "RIGHT", 10, 0)
-
-        local function UpdateSplitEnabled()
-            local isSplit = IsCategorySplit(category)
-            dirHolder:SetEnabled(isSplit)
-            resetBtn:SetEnabled(isSplit)
-        end
-        UpdateSplitEnabled()
+        resetBtn:SetEnabled(IsCategorySplit(category))
 
         local origSplitClick = splitHolder.checkbox:GetScript("OnClick")
         splitHolder.checkbox:SetScript("OnClick", function(self)
             if origSplitClick then
                 origSplitClick(self)
             end
-            C_Timer.After(0, UpdateSplitEnabled)
+            resetBtn:SetEnabled(IsCategorySplit(category))
+            Components.RefreshAll()
         end)
         catY = catY - 32
 
@@ -843,6 +851,7 @@ local function CreateOptionsPanel()
                     and db.categorySettings[category]
                     and db.categorySettings[category].useCustomAppearance == true
             end,
+            enabled = isCategorySplitEnabled,
             tooltip = "When disabled, this category inherits appearance settings from Global Defaults",
             onChange = function(checked)
                 if not db.categorySettings then
@@ -853,6 +862,7 @@ local function CreateOptionsPanel()
                 end
                 db.categorySettings[category].useCustomAppearance = checked
                 UpdateVisuals()
+                Components.RefreshAll()
             end,
         })
         useCustomAppHolder:SetPoint("TOPLEFT", 0, catY)
@@ -871,6 +881,7 @@ local function CreateOptionsPanel()
             get = function()
                 return BR.Config.GetCategorySetting(category, "iconSize") or 64
             end,
+            enabled = isCustomAppearanceEnabled,
             onChange = function(val)
                 BR.Config.Set("categorySettings." .. category .. ".iconSize", val)
             end,
@@ -885,6 +896,7 @@ local function CreateOptionsPanel()
             get = function()
                 return math.floor((BR.Config.GetCategorySetting(category, "spacing") or 0.2) * 100)
             end,
+            enabled = isCustomAppearanceEnabled,
             suffix = "%",
             onChange = function(val)
                 BR.Config.Set("categorySettings." .. category .. ".spacing", val / 100)
@@ -900,6 +912,7 @@ local function CreateOptionsPanel()
             get = function()
                 return BR.Config.GetCategorySetting(category, "iconZoom") or DEFAULT_ICON_ZOOM
             end,
+            enabled = isCustomAppearanceEnabled,
             suffix = "%",
             onChange = function(val)
                 BR.Config.Set("categorySettings." .. category .. ".iconZoom", val)
@@ -915,6 +928,7 @@ local function CreateOptionsPanel()
             get = function()
                 return BR.Config.GetCategorySetting(category, "borderSize") or DEFAULT_BORDER_SIZE
             end,
+            enabled = isCustomAppearanceEnabled,
             suffix = "px",
             onChange = function(val)
                 BR.Config.Set("categorySettings." .. category .. ".borderSize", val)
@@ -922,24 +936,6 @@ local function CreateOptionsPanel()
         })
         borderHolder:SetPoint("LEFT", zoomHolder, "RIGHT", 10, 0)
 
-        local function UpdateAppearanceEnabled()
-            local enabled = db.categorySettings
-                and db.categorySettings[category]
-                and db.categorySettings[category].useCustomAppearance == true
-            sizeHolder:SetEnabled(enabled)
-            spacingHolder:SetEnabled(enabled)
-            zoomHolder:SetEnabled(enabled)
-            borderHolder:SetEnabled(enabled)
-        end
-        UpdateAppearanceEnabled()
-
-        local origAppClick = useCustomAppHolder.checkbox:GetScript("OnClick")
-        useCustomAppHolder.checkbox:SetScript("OnClick", function(self)
-            if origAppClick then
-                origAppClick(self)
-            end
-            UpdateAppearanceEnabled()
-        end)
         catY = catY - 52
 
         section:SetContentHeight(math.abs(catY) + 10)

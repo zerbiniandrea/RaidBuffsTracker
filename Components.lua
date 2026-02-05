@@ -18,6 +18,7 @@ local RefreshableComponents = BR.RefreshableComponents
 ---@field step? number Step increment (default 1)
 ---@field value? number Initial value (deprecated: prefer get)
 ---@field get? fun(): number Getter for initial value and refresh (preferred over value)
+---@field enabled? fun(): boolean Getter for enabled state, evaluated on Refresh()
 ---@field suffix? string Value suffix (e.g., "px", "%")
 ---@field onChange fun(val: number) Callback when value changes
 ---@field labelWidth? number Width of label (default 70)
@@ -27,6 +28,7 @@ local RefreshableComponents = BR.RefreshableComponents
 ---@field label? string Optional label (default "Direction:")
 ---@field selected? string Initial direction (deprecated: prefer get)
 ---@field get? fun(): string Getter for initial value and refresh (preferred over selected)
+---@field enabled? fun(): boolean Getter for enabled state, evaluated on Refresh()
 ---@field onChange fun(dir: string) Callback when direction changes
 ---@field width? number Dropdown width (default 90)
 
@@ -310,17 +312,20 @@ function Components.Slider(parent, config)
         return isEnabled
     end
 
-    -- Refresh method for OnShow pattern (re-reads value from DB)
+    -- Refresh method for OnShow pattern (re-reads value and enabled state from DB)
     function holder:Refresh()
         if config.get then
             currentValue = config.get()
             valueText:SetText(math.floor(currentValue) .. suffix)
             UpdateVisual()
         end
+        if config.enabled then
+            holder:SetEnabled(config.enabled())
+        end
     end
 
     -- Auto-register if refreshable
-    if config.get then
+    if config.get or config.enabled then
         table.insert(RefreshableComponents, holder)
     end
 
@@ -455,6 +460,7 @@ end
 ---@field label string Display label
 ---@field checked? boolean Initial checked state (deprecated: prefer get)
 ---@field get? fun(): boolean Getter for initial value and refresh (preferred over checked)
+---@field enabled? fun(): boolean Getter for enabled state, evaluated on Refresh()
 ---@field tooltip? string Tooltip description (shown on hover)
 ---@field onChange fun(checked: boolean) Callback when checked state changes
 ---@field icons? number[] Optional texture ID(s) to show between checkbox and label
@@ -571,10 +577,13 @@ function Components.Checkbox(parent, config)
         if config.get then
             cb:SetChecked(config.get())
         end
+        if config.enabled then
+            holder:SetEnabled(config.enabled())
+        end
     end
 
     -- Auto-register if refreshable
-    if config.get then
+    if config.get or config.enabled then
         table.insert(RefreshableComponents, holder)
     end
 
@@ -882,27 +891,30 @@ function Components.DirectionButtons(parent, config)
         dropdown:SetValue(dir)
     end
 
-    -- Refresh method for OnShow pattern
-    function holder:Refresh()
-        if config.get then
-            dropdown:SetValue(config.get())
-        end
-    end
-
-    -- Auto-register if refreshable
-    if config.get then
-        table.insert(RefreshableComponents, holder)
-    end
-
-    -- Backwards compatibility: empty buttons table (no longer used)
-    holder.buttons = {}
-
     -- SetEnabled method for toggling interactivity
     function holder:SetEnabled(enabled)
         dropdown:SetEnabled(enabled)
         local color = enabled and 1 or 0.5
         label:SetTextColor(color, color, color)
     end
+
+    -- Refresh method for OnShow pattern
+    function holder:Refresh()
+        if config.get then
+            dropdown:SetValue(config.get())
+        end
+        if config.enabled then
+            holder:SetEnabled(config.enabled())
+        end
+    end
+
+    -- Auto-register if refreshable
+    if config.get or config.enabled then
+        table.insert(RefreshableComponents, holder)
+    end
+
+    -- Backwards compatibility: empty buttons table (no longer used)
+    holder.buttons = {}
 
     return holder
 end
@@ -1094,6 +1106,7 @@ end
 ---@field options DropdownOption[] Available options
 ---@field selected? any Initial selected value (deprecated: prefer get)
 ---@field get? fun(): any Getter for initial value and refresh (preferred over selected)
+---@field enabled? fun(): boolean Getter for enabled state, evaluated on Refresh()
 ---@field width? number Dropdown width (default 100)
 ---@field onChange fun(value: any) Callback when selection changes
 
@@ -1145,10 +1158,13 @@ function Components.Dropdown(parent, config, _)
         if config.get then
             dropdown:SetValue(config.get())
         end
+        if config.enabled then
+            holder:SetEnabled(config.enabled())
+        end
     end
 
     -- Auto-register if refreshable
-    if config.get then
+    if config.get or config.enabled then
         table.insert(RefreshableComponents, holder)
     end
 

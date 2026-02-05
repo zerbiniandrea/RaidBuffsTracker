@@ -1,7 +1,6 @@
 local addonName, BR = ...
 
 -- Shared constants (from Core.lua)
-local TEXCOORD_INSET = BR.TEXCOORD_INSET
 local DEFAULT_BORDER_SIZE = BR.DEFAULT_BORDER_SIZE
 local DEFAULT_ICON_ZOOM = BR.DEFAULT_ICON_ZOOM
 
@@ -616,8 +615,6 @@ end
 ---@param missingText? string
 ---@return boolean true (for anyVisible chaining)
 local function ShowMissingFrame(frame, missingText)
-    frame.icon:SetAllPoints()
-    frame.icon:SetTexCoord(TEXCOORD_INSET, 1 - TEXCOORD_INSET, TEXCOORD_INSET, 1 - TEXCOORD_INSET)
     frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
     frame.count:SetText(missingText or "")
     frame:Show()
