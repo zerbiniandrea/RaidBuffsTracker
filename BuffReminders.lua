@@ -187,6 +187,9 @@ local glowingSpells = {} -- Track which spell IDs are currently glowing (for act
 local AURA_THROTTLE = 0.2 -- seconds
 local lastAuraUpdate = 0
 
+-- Track combat state via events (InCombatLockdown() can lag behind PLAYER_REGEN_DISABLED)
+local inCombat = false
+
 -- Category frame system
 local categoryFrames = {}
 local CATEGORIES = { "raid", "presence", "targeted", "self", "consumable", "custom" }
@@ -1192,17 +1195,15 @@ UpdateDisplay = function()
             (C_Housing.IsInsideHouseOrPlot and C_Housing.IsInsideHouseOrPlot())
             or (C_Housing.IsOnNeighborhoodMap and C_Housing.IsOnNeighborhoodMap())
         )
-    if
-        UnitIsDeadOrGhost("player")
-        or InCombatLockdown()
-        or inMythicPlus
-        or inHousing
-        or instanceType == "pvp"
-        or instanceType == "arena"
-    then
+
+    local isDead = UnitIsDeadOrGhost("player")
+    -- Use both our event-tracked flag AND the API (event fires before API updates)
+    local combatCheck = inCombat or InCombatLockdown()
+
+    if isDead or combatCheck or inMythicPlus or inHousing or instanceType == "pvp" or instanceType == "arena" then
         HideAllDisplayFrames()
         -- Fallback only when alive (dead players can't cast)
-        if not UnitIsDeadOrGhost("player") then
+        if not isDead then
             UpdateFallbackDisplay()
         end
         return
@@ -1957,10 +1958,12 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     elseif event == "PLAYER_ENTERING_WORLD" then
         -- Invalidate content type cache on zone change
         BR.BuffState.InvalidateContentTypeCache()
+        -- Sync combat flag with current state (in case of reload while in combat)
+        inCombat = InCombatLockdown()
         if not mainFrame then
             InitializeFrames()
         end
-        if not InCombatLockdown() then
+        if not inCombat then
             StartUpdates()
         end
         -- Delayed update to catch glow events that fire after reload
@@ -1970,8 +1973,10 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     elseif event == "GROUP_ROSTER_UPDATE" then
         UpdateDisplay()
     elseif event == "PLAYER_REGEN_ENABLED" then
+        inCombat = false
         StartUpdates()
     elseif event == "PLAYER_REGEN_DISABLED" then
+        inCombat = true
         StopUpdates()
         UpdateDisplay()
     elseif event == "PLAYER_DEAD" then
