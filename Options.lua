@@ -981,9 +981,11 @@ local function CreateOptionsPanel()
         onChange = function(checked)
             BuffRemindersDB.showOnlyOnReadyCheck = checked
             UpdateDisplay()
+            Components.RefreshAll()
         end,
     })
     readyCheckHolder:SetPoint("TOPLEFT", setX, setY)
+    setY = setY - 22
 
     local readyDurationHolder = Components.Slider(settingsContent, {
         label = "Duration",
@@ -992,6 +994,9 @@ local function CreateOptionsPanel()
         get = function()
             return BuffRemindersDB.readyCheckDuration or 15
         end,
+        enabled = function()
+            return BuffRemindersDB.showOnlyOnReadyCheck == true
+        end,
         suffix = "s",
         labelWidth = 55,
         sliderWidth = 70,
@@ -999,7 +1004,7 @@ local function CreateOptionsPanel()
             BuffRemindersDB.readyCheckDuration = val
         end,
     })
-    readyDurationHolder:SetPoint("LEFT", readyCheckHolder, "RIGHT", 30, 0)
+    readyDurationHolder:SetPoint("TOPLEFT", setX + 20, setY)
     setY = setY - 22
 
     local playerClassHolder = Components.Checkbox(settingsContent, {
