@@ -180,6 +180,7 @@ local readyCheckTimer = nil
 local testMode = false
 local testModeData = nil -- Stores seeded fake values for consistent test display
 local playerClass = nil -- Cached player class, set once on init
+local playerRole = nil -- Cached player role, invalidated on spec change
 local glowingSpells = {} -- Track which spell IDs are currently glowing (for action bar glow fallback)
 
 -- Throttle for UNIT_AURA events (can fire rapidly during raid-wide buffs)
@@ -274,14 +275,23 @@ end
 -- Use functions from State.lua
 local FormatRemainingTime = BR.StateHelpers.FormatRemainingTime
 
----Get player's current role
+---Get player's current role (cached, invalidated on spec change)
 ---@return RoleType?
 local function GetPlayerRole()
+    if playerRole then
+        return playerRole
+    end
     local spec = GetSpecialization()
     if spec then
-        return GetSpecializationRole(spec)
+        playerRole = GetSpecializationRole(spec)
+        return playerRole
     end
     return nil
+end
+
+---Invalidate player role cache (call on PLAYER_SPECIALIZATION_CHANGED)
+local function InvalidatePlayerRoleCache()
+    playerRole = nil
 end
 
 ---Get spell texture (handles table of spellIDs and role-based icons)
@@ -1818,6 +1828,8 @@ eventFrame:RegisterEvent("UNIT_AURA")
 eventFrame:RegisterEvent("READY_CHECK")
 eventFrame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW")
 eventFrame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE")
+eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+eventFrame:RegisterEvent("TRAIT_CONFIG_UPDATED")
 
 eventFrame:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" and arg1 == addonName then
@@ -1943,6 +1955,8 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         local category = Settings.RegisterCanvasLayoutCategory(settingsPanel, settingsPanel.name)
         Settings.RegisterAddOnCategory(category)
     elseif event == "PLAYER_ENTERING_WORLD" then
+        -- Invalidate content type cache on zone change
+        BR.BuffState.InvalidateContentTypeCache()
         if not mainFrame then
             InitializeFrames()
         end
@@ -1954,6 +1968,8 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
             UpdateDisplay()
         end)
     elseif event == "GROUP_ROSTER_UPDATE" then
+        -- Invalidate group composition cache when roster changes
+        BR.BuffState.InvalidateGroupCache()
         UpdateDisplay()
     elseif event == "PLAYER_REGEN_ENABLED" then
         StartUpdates()
@@ -1996,6 +2012,15 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE" then
         local spellID = arg1
         glowingSpells[spellID] = nil
+        UpdateDisplay()
+    elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
+        -- Invalidate caches when player changes spec
+        InvalidatePlayerRoleCache()
+        BR.BuffState.InvalidateSpellCache()
+        UpdateDisplay()
+    elseif event == "TRAIT_CONFIG_UPDATED" then
+        -- Invalidate spell cache when talents change (within same spec)
+        BR.BuffState.InvalidateSpellCache()
         UpdateDisplay()
     end
 end)

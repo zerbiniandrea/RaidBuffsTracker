@@ -37,6 +37,31 @@ local playerClass = nil
 local inReadyCheck = false
 
 -- ============================================================================
+-- CACHED VALUES (invalidated by specific events)
+-- ============================================================================
+
+-- Content type cache (invalidated on PLAYER_ENTERING_WORLD)
+local cachedContentType = nil
+
+-- Group composition cache (invalidated on GROUP_ROSTER_UPDATE)
+local cachedGroupClasses = nil
+
+-- Talent/spell knowledge cache (invalidated on PLAYER_SPECIALIZATION_CHANGED)
+local cachedSpellKnowledge = {}
+
+---Check if player knows a spell (cached version of IsPlayerSpell)
+---@param spellID number
+---@return boolean
+local function IsPlayerSpellCached(spellID)
+    if cachedSpellKnowledge[spellID] ~= nil then
+        return cachedSpellKnowledge[spellID]
+    end
+    local knows = IsPlayerSpell(spellID)
+    cachedSpellKnowledge[spellID] = knows
+    return knows
+end
+
+-- ============================================================================
 -- UTILITY FUNCTIONS
 -- ============================================================================
 
@@ -77,15 +102,20 @@ local function IterateGroupMembers(callback)
     end
 end
 
----Get classes present in the group (players only, excludes NPCs)
+---Get classes present in the group (players only, excludes NPCs) - cached
 ---@return table<ClassName, boolean>
 local function GetGroupClasses()
+    if cachedGroupClasses then
+        return cachedGroupClasses
+    end
+
     local classes = {}
 
     if GetNumGroupMembers() == 0 then
         if playerClass then
             classes[playerClass] = true
         end
+        cachedGroupClasses = classes
         return classes
     end
 
@@ -98,6 +128,7 @@ local function GetGroupClasses()
             end
         end
     end)
+    cachedGroupClasses = classes
     return classes
 end
 
@@ -156,20 +187,25 @@ local function IsBuffEnabled(key)
     return db.enabledBuffs[key] ~= false
 end
 
----Get the current content type based on instance/zone
+---Get the current content type based on instance/zone (cached)
 ---@return "openWorld"|"dungeon"|"scenario"|"raid"
 local function GetCurrentContentType()
+    if cachedContentType then
+        return cachedContentType
+    end
+
     local inInstance, instanceType = IsInInstance()
     if not inInstance then
-        return "openWorld"
+        cachedContentType = "openWorld"
+    elseif instanceType == "raid" then
+        cachedContentType = "raid"
+    elseif instanceType == "scenario" then
+        cachedContentType = "scenario"
+    else
+        cachedContentType = "dungeon"
     end
-    if instanceType == "raid" then
-        return "raid"
-    end
-    if instanceType == "scenario" then
-        return "scenario"
-    end
-    return "dungeon"
+
+    return cachedContentType
 end
 
 ---Check if a category should be visible for the current content type
@@ -305,7 +341,7 @@ local function ShouldShowTargetedBuff(spellIDs, requiredClass, beneficiaryRole)
     end
 
     local spellID = (type(spellIDs) == "table" and spellIDs[1] or spellIDs) --[[@as number]]
-    if not IsPlayerSpell(spellID) then
+    if not IsPlayerSpellCached(spellID) then
         return nil
     end
 
@@ -340,10 +376,10 @@ local function ShouldShowSelfBuff(
     end
 
     -- Talent checks (before spell availability check for talent-gated buffs)
-    if requiresTalent and not IsPlayerSpell(requiresTalent) then
+    if requiresTalent and not IsPlayerSpellCached(requiresTalent) then
         return nil
     end
-    if excludeTalent and IsPlayerSpell(excludeTalent) then
+    if excludeTalent and IsPlayerSpellCached(excludeTalent) then
         return nil
     end
 
@@ -353,10 +389,16 @@ local function ShouldShowSelfBuff(
     end
 
     -- For buffs with multiple spellIDs (like shields), check if player knows ANY of them
-    local spellIDs = type(spellID) == "table" and spellID or { spellID }
+    ---@type number[]
+    local spellIDs
+    if type(spellID) == "table" then
+        spellIDs = spellID
+    else
+        spellIDs = { spellID }
+    end
     local knowsAnySpell = false
     for _, id in ipairs(spellIDs) do
-        if IsPlayerSpell(id) then
+        if IsPlayerSpellCached(id) then
             knowsAnySpell = true
             break
         end
@@ -460,14 +502,14 @@ local function PassesPreChecks(buff, presentClasses, db)
     end
 
     -- Talent exclusion
-    if buff.excludeTalentSpellID and IsPlayerSpell(buff.excludeTalentSpellID) then
+    if buff.excludeTalentSpellID and IsPlayerSpellCached(buff.excludeTalentSpellID) then
         return false
     end
 
     -- Spell knowledge exclusion
     if buff.excludeIfSpellKnown then
         for _, spellID in ipairs(buff.excludeIfSpellKnown) do
-            if IsPlayerSpell(spellID) then
+            if IsPlayerSpellCached(spellID) then
                 return false
             end
         end
@@ -729,6 +771,25 @@ end
 ---@return boolean
 function BuffState.GetReadyCheckState()
     return inReadyCheck
+end
+
+-- ============================================================================
+-- CACHE INVALIDATION
+-- ============================================================================
+
+---Invalidate content type cache (call on PLAYER_ENTERING_WORLD)
+function BuffState.InvalidateContentTypeCache()
+    cachedContentType = nil
+end
+
+---Invalidate group composition cache (call on GROUP_ROSTER_UPDATE)
+function BuffState.InvalidateGroupCache()
+    cachedGroupClasses = nil
+end
+
+---Invalidate spell knowledge cache (call on PLAYER_SPECIALIZATION_CHANGED)
+function BuffState.InvalidateSpellCache()
+    cachedSpellKnowledge = {}
 end
 
 -- Export utility functions that display layer still needs
