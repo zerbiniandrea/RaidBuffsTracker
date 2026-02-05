@@ -1968,8 +1968,6 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
             UpdateDisplay()
         end)
     elseif event == "GROUP_ROSTER_UPDATE" then
-        -- Invalidate group composition cache when roster changes
-        BR.BuffState.InvalidateGroupCache()
         UpdateDisplay()
     elseif event == "PLAYER_REGEN_ENABLED" then
         StartUpdates()

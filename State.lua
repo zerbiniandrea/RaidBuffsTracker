@@ -43,9 +43,6 @@ local inReadyCheck = false
 -- Content type cache (invalidated on PLAYER_ENTERING_WORLD)
 local cachedContentType = nil
 
--- Group composition cache (invalidated on GROUP_ROSTER_UPDATE)
-local cachedGroupClasses = nil
-
 -- Talent/spell knowledge cache (invalidated on PLAYER_SPECIALIZATION_CHANGED)
 local cachedSpellKnowledge = {}
 
@@ -56,6 +53,11 @@ local currentWeaponEnchants = {
     hasOffHand = false,
     offHandID = nil,
 }
+
+-- Valid group members for current refresh cycle (set once per BuffState.Refresh())
+-- Each entry: { unit = "raid1", class = "WARRIOR", isPlayer = true }
+---@type {unit: string, class: string, isPlayer: boolean}[]
+local currentValidUnits = {}
 
 ---Check if player knows a spell (cached version of IsPlayerSpell)
 ---@param spellID number
@@ -110,33 +112,60 @@ local function IterateGroupMembers(callback)
     end
 end
 
----Get classes present in the group (players only, excludes NPCs) - cached
----@return table<ClassName, boolean>
-local function GetGroupClasses()
-    if cachedGroupClasses then
-        return cachedGroupClasses
+---Build the list of valid units for the current refresh cycle
+---Called once at the start of BuffState.Refresh()
+local function BuildValidUnitCache()
+    currentValidUnits = {}
+
+    local inRaid = IsInRaid()
+    local groupSize = GetNumGroupMembers()
+
+    if groupSize == 0 then
+        -- Solo player
+        local _, class = UnitClass("player")
+        table.insert(currentValidUnits, {
+            unit = "player",
+            class = class,
+            isPlayer = true,
+        })
+        return
     end
 
-    local classes = {}
-
-    if GetNumGroupMembers() == 0 then
-        if playerClass then
-            classes[playerClass] = true
-        end
-        cachedGroupClasses = classes
-        return classes
-    end
-
-    IterateGroupMembers(function(unit)
-        -- Only count actual players as potential buffers (NPCs won't cast buffs like Skyfury)
-        if UnitIsPlayer(unit) then
-            local _, class = UnitClass(unit)
-            if class then
-                classes[class] = true
+    for i = 1, groupSize do
+        local unit
+        if inRaid then
+            unit = "raid" .. i
+        else
+            if i == 1 then
+                unit = "player"
+            else
+                unit = "party" .. (i - 1)
             end
         end
-    end)
-    cachedGroupClasses = classes
+
+        if IsValidGroupMember(unit) then
+            local _, class = UnitClass(unit)
+            local isPlayer = UnitIsPlayer(unit)
+            table.insert(currentValidUnits, {
+                unit = unit,
+                class = class,
+                isPlayer = isPlayer,
+            })
+        end
+    end
+end
+
+---Get classes present in the group (players only, excludes NPCs)
+---Uses currentValidUnits cache built at start of refresh cycle
+---@return table<ClassName, boolean>
+local function GetGroupClasses()
+    local classes = {}
+    for _, data in ipairs(currentValidUnits) do
+        -- Only count actual players as potential buffers (NPCs won't cast buffs like Skyfury)
+        if data.isPlayer and data.class then
+            classes[data.class] = true
+        end
+    end
     return classes
 end
 
@@ -237,6 +266,7 @@ end
 -- ============================================================================
 
 ---Count group members missing a buff
+---Uses currentValidUnits cache built at start of refresh cycle
 ---@param spellIDs SpellID
 ---@param buffKey? string Used for class benefit filtering
 ---@param playerOnly? boolean Only check the player, not the group
@@ -249,7 +279,7 @@ local function CountMissingBuff(spellIDs, buffKey, playerOnly)
     local minRemaining = nil
     local beneficiaries = BuffBeneficiaries[buffKey]
 
-    if playerOnly or GetNumGroupMembers() == 0 then
+    if playerOnly or #currentValidUnits <= 1 then
         -- Solo/player-only: check if player benefits
         if beneficiaries and not beneficiaries[playerClass] then
             return 0, 0, nil -- player doesn't benefit, skip
@@ -264,12 +294,11 @@ local function CountMissingBuff(spellIDs, buffKey, playerOnly)
         return missing, total, minRemaining
     end
 
-    IterateGroupMembers(function(unit)
+    for _, data in ipairs(currentValidUnits) do
         -- Check if unit's class benefits from this buff
-        local _, unitClass = UnitClass(unit)
-        if not beneficiaries or beneficiaries[unitClass] then
+        if not beneficiaries or beneficiaries[data.class] then
             total = total + 1
-            local hasBuff, remaining = UnitHasBuff(unit, spellIDs)
+            local hasBuff, remaining = UnitHasBuff(data.unit, spellIDs)
             if not hasBuff then
                 missing = missing + 1
             elseif remaining then
@@ -278,12 +307,13 @@ local function CountMissingBuff(spellIDs, buffKey, playerOnly)
                 end
             end
         end
-    end)
+    end
 
     return missing, total, minRemaining
 end
 
 ---Count group members with a presence buff
+---Uses currentValidUnits cache built at start of refresh cycle
 ---@param spellIDs SpellID
 ---@param playerOnly? boolean Only check the player, not the group
 ---@return number count
@@ -292,7 +322,7 @@ local function CountPresenceBuff(spellIDs, playerOnly)
     local found = 0
     local minRemaining = nil
 
-    if playerOnly or GetNumGroupMembers() == 0 then
+    if playerOnly or #currentValidUnits <= 1 then
         local hasBuff, remaining = UnitHasBuff("player", spellIDs)
         if hasBuff then
             found = 1
@@ -301,8 +331,8 @@ local function CountPresenceBuff(spellIDs, playerOnly)
         return found, minRemaining
     end
 
-    IterateGroupMembers(function(unit)
-        local hasBuff, remaining = UnitHasBuff(unit, spellIDs)
+    for _, data in ipairs(currentValidUnits) do
+        local hasBuff, remaining = UnitHasBuff(data.unit, spellIDs)
         if hasBuff then
             found = found + 1
             if remaining then
@@ -311,31 +341,26 @@ local function CountPresenceBuff(spellIDs, playerOnly)
                 end
             end
         end
-    end)
+    end
 
     return found, minRemaining
 end
 
 ---Check if player's buff is active on anyone in the group
+---Uses currentValidUnits cache built at start of refresh cycle
 ---@param spellID number
 ---@param role? RoleType Only check units with this role
 ---@return boolean
 local function IsPlayerBuffActive(spellID, role)
-    local found = false
-
-    IterateGroupMembers(function(unit)
-        if found then
-            return
-        end
-        if not role or UnitGroupRolesAssigned(unit) == role then
-            local hasBuff, _, sourceUnit = UnitHasBuff(unit, spellID)
+    for _, data in ipairs(currentValidUnits) do
+        if not role or UnitGroupRolesAssigned(data.unit) == role then
+            local hasBuff, _, sourceUnit = UnitHasBuff(data.unit, spellID)
             if hasBuff and sourceUnit and UnitIsUnit(sourceUnit, "player") then
-                found = true
+                return true
             end
         end
-    end)
-
-    return found
+    end
+    return false
 end
 
 ---Check if player should cast their targeted buff (returns true if a beneficiary needs it)
@@ -594,6 +619,9 @@ function BuffState.Refresh()
         entry.expiringTime = nil
     end
 
+    -- Build valid unit cache once per refresh cycle
+    BuildValidUnitCache()
+
     -- Fetch weapon enchant info once per refresh cycle
     local hasMain, _, _, mainID, hasOff, _, _, offID = GetWeaponEnchantInfo()
     currentWeaponEnchants.hasMainHand = hasMain or false
@@ -793,11 +821,6 @@ end
 ---Invalidate content type cache (call on PLAYER_ENTERING_WORLD)
 function BuffState.InvalidateContentTypeCache()
     cachedContentType = nil
-end
-
----Invalidate group composition cache (call on GROUP_ROSTER_UPDATE)
-function BuffState.InvalidateGroupCache()
-    cachedGroupClasses = nil
 end
 
 ---Invalidate spell knowledge cache (call on PLAYER_SPECIALIZATION_CHANGED)
