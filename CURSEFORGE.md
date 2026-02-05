@@ -61,3 +61,5 @@ Got a bug to report, a feature idea, or just want to see what's coming next? Joi
 ## Credits
 
 Huge thanks to [Time Spiral Tracker](https://www.curseforge.com/wow/addons/time-spiral-tracker) for the idea of using action bar spell glows to detect missing buffs.
+
+Huge thanks to [plusmouse](https://plusmouse.com/) (author of [Platynator](https://www.curseforge.com/wow/addons/platynator), [Auctionator](https://www.curseforge.com/wow/addons/auctionator), and more) for the clean, well-organized code that helped me learn WoW addon development patterns.
