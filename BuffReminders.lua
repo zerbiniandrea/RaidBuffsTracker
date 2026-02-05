@@ -652,7 +652,7 @@ end
 local function CreateCategoryFrame(category)
     local db = BuffRemindersDB
     local catSettings = db.categorySettings and db.categorySettings[category] or defaults.categorySettings[category]
-    local pos = catSettings.position
+    local pos = catSettings.position or defaults.categorySettings[category].position
 
     local frame = CreateFrame("Frame", "BuffReminders_Category_" .. category, UIParent)
     frame:SetSize(200, 50)
@@ -980,7 +980,7 @@ local function PositionBuffFramesWithSplits()
             local catSettings = GetCategorySettings(category)
             local direction = catSettings.growDirection or "CENTER"
             local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
-            local pos = catSettings.position
+            local pos = catSettings.position or { point = "CENTER", x = 0, y = 0 }
 
             if #frames > 0 then
                 local iconSize = catSettings.iconSize or 64
