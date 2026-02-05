@@ -59,6 +59,10 @@ local currentWeaponEnchants = {
 ---@type {unit: string, class: string, isPlayer: boolean}[]
 local currentValidUnits = {}
 
+-- Max level per class for current refresh cycle (players only, for caster availability checks)
+---@type table<ClassName, number>
+local classMaxLevels = {}
+
 ---Check if player knows a spell (cached version of IsPlayerSpell)
 ---@param spellID number
 ---@return boolean
@@ -116,6 +120,7 @@ end
 ---Called once at the start of BuffState.Refresh()
 local function BuildValidUnitCache()
     currentValidUnits = {}
+    classMaxLevels = {}
 
     local inRaid = IsInRaid()
     local groupSize = GetNumGroupMembers()
@@ -128,6 +133,7 @@ local function BuildValidUnitCache()
             class = class,
             isPlayer = true,
         })
+        classMaxLevels[class] = UnitLevel("player")
         return
     end
 
@@ -151,8 +157,28 @@ local function BuildValidUnitCache()
                 class = class,
                 isPlayer = isPlayer,
             })
+            -- Track max level per class (players only, for buff caster checks)
+            if isPlayer and class then
+                local level = UnitLevel(unit)
+                if not classMaxLevels[class] or level > classMaxLevels[class] then
+                    classMaxLevels[class] = level
+                end
+            end
         end
     end
+end
+
+---Check if any group member of the given class meets the level requirement
+---Uses classMaxLevels cache built at start of refresh cycle
+---@param requiredClass ClassName
+---@param levelRequired? number
+---@return boolean
+local function HasCasterForBuff(requiredClass, levelRequired)
+    local maxLevel = classMaxLevels[requiredClass]
+    if not maxLevel then
+        return false
+    end
+    return not levelRequired or maxLevel >= levelRequired
 end
 
 ---Get classes present in the group (players only, excludes NPCs)
@@ -629,7 +655,6 @@ function BuffState.Refresh()
     currentWeaponEnchants.hasOffHand = hasOff or false
     currentWeaponEnchants.offHandID = offID
 
-    local presentClasses = GetGroupClasses()
     local playerOnly = db.showOnlyPlayerMissing
     local expirationThreshold = (db.expirationThreshold or 15) * 60
 
@@ -637,9 +662,8 @@ function BuffState.Refresh()
     local raidVisible = IsCategoryVisibleForContent("raid")
     for _, buff in ipairs(RaidBuffs) do
         local entry = GetOrCreateEntry(buff.key, "raid")
-        local showBuff = raidVisible
-            and (not db.showOnlyPlayerClassBuff or buff.class == playerClass)
-            and presentClasses[buff.class]
+        local hasCaster = HasCasterForBuff(buff.class, buff.levelRequired)
+        local showBuff = raidVisible and (not db.showOnlyPlayerClassBuff or buff.class == playerClass) and hasCaster
 
         if IsBuffEnabled(buff.key) and showBuff then
             local missing, total, minRemaining = CountMissingBuff(buff.spellID, buff.key, playerOnly)
@@ -669,10 +693,11 @@ function BuffState.Refresh()
     for _, buff in ipairs(PresenceBuffs) do
         local entry = GetOrCreateEntry(buff.key, "presence")
         local readyCheckOnly = buff.infoTooltip and buff.infoTooltip:match("^Ready Check Only")
+        local hasCaster = HasCasterForBuff(buff.class, buff.levelRequired)
         local showBuff = presenceVisible
             and (not readyCheckOnly or inReadyCheck)
             and (not db.showOnlyPlayerClassBuff or buff.class == playerClass)
-            and presentClasses[buff.class]
+            and hasCaster
 
         if IsBuffEnabled(buff.key) and showBuff then
             local count, minRemaining = CountPresenceBuff(buff.spellID, playerOnly)

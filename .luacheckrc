@@ -56,6 +56,7 @@ read_globals = {
 	"UnitIsPlayer",
 	"UnitIsUnit",
 	"UnitIsVisible",
+	"UnitLevel",
 
 	"tinsert",
 

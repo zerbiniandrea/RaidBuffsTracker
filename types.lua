@@ -27,12 +27,14 @@
 ---@field key string
 ---@field name string
 ---@field class ClassName
+---@field levelRequired? number
 
 ---@class PresenceBuff
 ---@field spellID SpellID
 ---@field key string
 ---@field name string
 ---@field class ClassName
+---@field levelRequired? number
 ---@field missingText string
 ---@field groupId? string
 ---@field excludeTalentSpellID? number

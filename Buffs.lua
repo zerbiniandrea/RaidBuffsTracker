@@ -10,8 +10,8 @@ local _, BR = ...
 BR.BUFF_TABLES = {
     ---@type RaidBuff[]
     raid = {
-        { spellID = { 1459, 432778 }, key = "intellect", name = "Arcane Intellect", class = "MAGE" }, -- 432778 = NPC version
-        { spellID = 6673, key = "attackPower", name = "Battle Shout", class = "WARRIOR" },
+        { spellID = { 1459, 432778 }, key = "intellect", name = "Arcane Intellect", class = "MAGE", levelRequired = 8 }, -- 432778 = NPC version
+        { spellID = 6673, key = "attackPower", name = "Battle Shout", class = "WARRIOR", levelRequired = 10 },
         {
             spellID = {
                 381732,
@@ -31,10 +31,17 @@ BR.BUFF_TABLES = {
             key = "bronze",
             name = "Blessing of the Bronze",
             class = "EVOKER",
+            levelRequired = 30,
         },
-        { spellID = { 1126, 432661 }, key = "versatility", name = "Mark of the Wild", class = "DRUID" }, -- 432661 = NPC version
-        { spellID = 21562, key = "stamina", name = "Power Word: Fortitude", class = "PRIEST" },
-        { spellID = 462854, key = "skyfury", name = "Skyfury", class = "SHAMAN" },
+        {
+            spellID = { 1126, 432661 },
+            key = "versatility",
+            name = "Mark of the Wild",
+            class = "DRUID",
+            levelRequired = 10,
+        }, -- 432661 = NPC version
+        { spellID = 21562, key = "stamina", name = "Power Word: Fortitude", class = "PRIEST", levelRequired = 10 },
+        { spellID = 462854, key = "skyfury", name = "Skyfury", class = "SHAMAN", levelRequired = 16 },
     },
     ---@type PresenceBuff[]
     presence = {
@@ -43,14 +50,23 @@ BR.BUFF_TABLES = {
             key = "atrophicNumbingPoison",
             name = "Atrophic/Numbing Poison",
             class = "ROGUE",
+            levelRequired = 80,
             missingText = "NO\nPOISON",
         },
-        { spellID = 465, key = "devotionAura", name = "Devotion Aura", class = "PALADIN", missingText = "NO\nAURA" },
+        {
+            spellID = 465,
+            key = "devotionAura",
+            name = "Devotion Aura",
+            class = "PALADIN",
+            levelRequired = 10,
+            missingText = "NO\nAURA",
+        },
         {
             spellID = 20707,
             key = "soulstone",
             name = "Soulstone",
             class = "WARLOCK",
+            levelRequired = 13,
             missingText = "NO\nSTONE",
             infoTooltip = "Ready Check Only|This buff is only shown during ready checks.",
             noGlow = true,
