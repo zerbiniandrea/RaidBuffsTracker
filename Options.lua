@@ -36,7 +36,6 @@ local GlowStyles = BR.GlowStyles
 local defaults = BR.defaults
 
 -- Helper function aliases
-local IsBuffEnabled = BR.Helpers.IsBuffEnabled
 local GetCategorySettings = BR.Helpers.GetCategorySettings
 local IsCategorySplit = BR.Helpers.IsCategorySplit
 local GetBuffTexture = BR.Helpers.GetBuffTexture
@@ -125,16 +124,35 @@ local function CreateOptionsPanel()
     local addonVersion = C_AddOns.GetAddOnMetadata("BuffReminders", "Version") or ""
     version:SetText(addonVersion)
 
-    -- Scale controls (top right area)
+    -- Scale controls (top right area) - text link style: < 100% >
     local BASE_SCALE = OPTIONS_BASE_SCALE
     local MIN_PCT, MAX_PCT = 80, 150
-    local scaleDown, scaleUp
 
-    local scaleValue = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    scaleValue:SetPoint("TOPRIGHT", -70, -14)
     local currentScale = BuffRemindersDB.optionsPanelScale or BASE_SCALE
     local currentPct = math.floor(currentScale / BASE_SCALE * 100 + 0.5)
+
+    local scaleHolder = CreateFrame("Frame", nil, panel)
+    scaleHolder:SetPoint("TOPRIGHT", -48, -14)
+    scaleHolder:SetSize(60, 16)
+
+    local scaleDown = scaleHolder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    scaleDown:SetPoint("LEFT", 0, 0)
+    scaleDown:SetText("<")
+
+    local scaleValue = scaleHolder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    scaleValue:SetPoint("LEFT", scaleDown, "RIGHT", 4, 0)
     scaleValue:SetText(currentPct .. "%")
+
+    local scaleUp = scaleHolder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    scaleUp:SetPoint("LEFT", scaleValue, "RIGHT", 4, 0)
+    scaleUp:SetText(">")
+
+    local function UpdateScaleText()
+        local pct = math.floor((BuffRemindersDB.optionsPanelScale or BASE_SCALE) / BASE_SCALE * 100 + 0.5)
+        scaleValue:SetText(pct .. "%")
+        scaleDown:SetTextColor(pct > MIN_PCT and 1 or 0.4, pct > MIN_PCT and 1 or 0.4, pct > MIN_PCT and 1 or 0.4)
+        scaleUp:SetTextColor(pct < MAX_PCT and 1 or 0.4, pct < MAX_PCT and 1 or 0.4, pct < MAX_PCT and 1 or 0.4)
+    end
 
     local function UpdateScale(delta)
         local oldPct = math.floor((BuffRemindersDB.optionsPanelScale or BASE_SCALE) / BASE_SCALE * 100 + 0.5)
@@ -142,41 +160,51 @@ local function CreateOptionsPanel()
         local newScale = newPct / 100 * BASE_SCALE
         BuffRemindersDB.optionsPanelScale = newScale
         panel:SetScale(newScale)
-        scaleValue:SetText(newPct .. "%")
-        scaleDown:SetEnabled(newPct > MIN_PCT)
-        scaleUp:SetEnabled(newPct < MAX_PCT)
+        UpdateScaleText()
     end
 
-    scaleDown = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    scaleDown:SetSize(18, 18)
-    scaleDown:SetPoint("RIGHT", scaleValue, "LEFT", -4, 0)
-    scaleDown:SetText("-")
-    scaleDown:SetScript("OnClick", function()
+    -- Clickable regions for < and >
+    local downBtn = CreateFrame("Button", nil, scaleHolder)
+    downBtn:SetAllPoints(scaleDown)
+    downBtn:SetScript("OnClick", function()
         UpdateScale(-10)
     end)
-    scaleDown:SetEnabled(currentPct > MIN_PCT)
+    downBtn:SetScript("OnEnter", function()
+        if currentPct > MIN_PCT then
+            scaleDown:SetTextColor(1, 0.82, 0)
+        end
+    end)
+    downBtn:SetScript("OnLeave", function()
+        UpdateScaleText()
+    end)
 
-    scaleUp = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    scaleUp:SetSize(18, 18)
-    scaleUp:SetPoint("LEFT", scaleValue, "RIGHT", 4, 0)
-    scaleUp:SetText("+")
-    scaleUp:SetScript("OnClick", function()
+    local upBtn = CreateFrame("Button", nil, scaleHolder)
+    upBtn:SetAllPoints(scaleUp)
+    upBtn:SetScript("OnClick", function()
         UpdateScale(10)
     end)
-    scaleUp:SetEnabled(currentPct < MAX_PCT)
+    upBtn:SetScript("OnEnter", function()
+        local pct = math.floor((BuffRemindersDB.optionsPanelScale or BASE_SCALE) / BASE_SCALE * 100 + 0.5)
+        if pct < MAX_PCT then
+            scaleUp:SetTextColor(1, 0.82, 0)
+        end
+    end)
+    upBtn:SetScript("OnLeave", function()
+        UpdateScaleText()
+    end)
+
+    UpdateScaleText()
 
     if BuffRemindersDB.optionsPanelScale then
         panel:SetScale(BuffRemindersDB.optionsPanelScale)
     end
 
     -- Close button
-    local closeBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    closeBtn:SetSize(18, 18)
-    closeBtn:SetPoint("LEFT", scaleUp, "RIGHT", 8, 0)
-    closeBtn:SetText("x")
-    closeBtn:SetScript("OnClick", function()
+    local closeBtn = CreateButton(panel, "x", function()
         panel:Hide()
     end)
+    closeBtn:SetSize(22, 22)
+    closeBtn:SetPoint("LEFT", scaleUp, "RIGHT", 8, 0)
 
     -- ========== TABS ==========
     local tabButtons = {}
@@ -243,69 +271,48 @@ local function CreateOptionsPanel()
 
     -- ========== HELPER FUNCTIONS ==========
 
-    -- Create buff checkbox (compact, for column layout)
-    local function CreateBuffCheckbox(parent, x, y, spellIDs, key, displayName, infoTooltip, iconOverride)
-        local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
-        cb:SetSize(20, 20)
-        cb:SetPoint("TOPLEFT", x, y)
-        cb:SetChecked(BuffRemindersDB.enabledBuffs[key] ~= false)
-        cb:SetScript("OnClick", function(self)
-            BuffRemindersDB.enabledBuffs[key] = self:GetChecked()
-            UpdateDisplay()
-        end)
-
-        local lastAnchor = cb
+    -- Resolve icons from iconOverride or spellIDs
+    local function ResolveBuffIcons(iconOverride, spellIDs)
         if iconOverride then
-            local iconList = type(iconOverride) == "table" and iconOverride or { iconOverride }
-            for _, textureID in ipairs(iconList) do
-                local icon = CreateBuffIcon(parent, 18, textureID)
-                icon:SetPoint("LEFT", lastAnchor, lastAnchor == cb and "RIGHT" or "RIGHT", 2, 0)
-                lastAnchor = icon
+            -- Use override textures directly
+            if type(iconOverride) == "table" then
+                return iconOverride
+            else
+                return { iconOverride }
             end
         elseif spellIDs then
-            local spellList = type(spellIDs) == "table" and spellIDs or { spellIDs }
+            -- Look up textures from spell IDs (deduplicated)
+            local icons = {}
             local seenTextures = {}
+            local spellList = type(spellIDs) == "table" and spellIDs or { spellIDs }
             for _, spellID in ipairs(spellList) do
                 local texture = GetBuffTexture(spellID)
                 if texture and not seenTextures[texture] then
                     seenTextures[texture] = true
-                    local icon = CreateBuffIcon(parent, 18, texture)
-                    icon:SetPoint("LEFT", lastAnchor, lastAnchor == cb and "RIGHT" or "RIGHT", 2, 0)
-                    lastAnchor = icon
+                    table.insert(icons, texture)
                 end
             end
+            return #icons > 0 and icons or nil
         end
+        return nil
+    end
 
-        local label = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        label:SetPoint("LEFT", lastAnchor, "RIGHT", 4, 0)
-        label:SetText(displayName)
-
-        if infoTooltip then
-            local infoIcon = parent:CreateTexture(nil, "ARTWORK")
-            infoIcon:SetSize(14, 14)
-            infoIcon:SetPoint("LEFT", label, "RIGHT", 4, 0)
-            infoIcon:SetAtlas("QuestNormal")
-            local infoBtn = CreateFrame("Button", nil, parent)
-            infoBtn:SetSize(14, 14)
-            infoBtn:SetPoint("CENTER", infoIcon, "CENTER", 0, 0)
-            local tooltipTitle, tooltipDesc = infoTooltip:match("^([^|]+)|(.+)$")
-            if not tooltipTitle then
-                tooltipTitle, tooltipDesc = infoTooltip, nil
-            end
-            infoBtn:SetScript("OnEnter", function(self)
-                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                GameTooltip:SetText(tooltipTitle, 1, 0.82, 0)
-                if tooltipDesc then
-                    GameTooltip:AddLine(tooltipDesc, 1, 1, 1, true)
-                end
-                GameTooltip:Show()
-            end)
-            infoBtn:SetScript("OnLeave", function()
-                GameTooltip:Hide()
-            end)
-        end
-
-        panel.buffCheckboxes[key] = cb
+    -- Create buff checkbox using Components.Checkbox
+    local function CreateBuffCheckbox(parent, x, y, spellIDs, key, displayName, infoTooltip, iconOverride)
+        local holder = Components.Checkbox(parent, {
+            label = displayName,
+            icons = ResolveBuffIcons(iconOverride, spellIDs),
+            infoTooltip = infoTooltip,
+            get = function()
+                return BuffRemindersDB.enabledBuffs[key] ~= false
+            end,
+            onChange = function(checked)
+                BuffRemindersDB.enabledBuffs[key] = checked
+                UpdateDisplay()
+            end,
+        })
+        holder:SetPoint("TOPLEFT", x, y)
+        panel.buffCheckboxes[key] = holder
         return y - ITEM_HEIGHT
     end
 
@@ -513,37 +520,32 @@ local function CreateOptionsPanel()
 
         for _, key in ipairs(sortedKeys) do
             local customBuff = db.customBuffs[key]
-            local row = CreateFrame("Frame", nil, customBuffsContainer)
-            row:SetSize(COL_WIDTH, ITEM_HEIGHT)
-            row:SetPoint("TOPLEFT", 0, rowY)
 
-            local cb = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
-            cb:SetSize(20, 20)
-            cb:SetPoint("LEFT", 0, 0)
-            cb:SetChecked(IsBuffEnabled(key))
-            cb:SetScript("OnClick", function(self)
-                BuffRemindersDB.enabledBuffs[key] = self:GetChecked()
-                UpdateDisplay()
-            end)
-            panel.buffCheckboxes[key] = cb
+            -- Use Components.Checkbox for consistent styling
+            local holder = Components.Checkbox(customBuffsContainer, {
+                label = customBuff.name or ("Spell " .. tostring(customBuff.spellID)),
+                icons = ResolveBuffIcons(nil, customBuff.spellID),
+                get = function()
+                    return BuffRemindersDB.enabledBuffs[key] ~= false
+                end,
+                onChange = function(checked)
+                    BuffRemindersDB.enabledBuffs[key] = checked
+                    UpdateDisplay()
+                end,
+            })
+            holder:SetPoint("TOPLEFT", 0, rowY)
+            panel.buffCheckboxes[key] = holder
 
-            local icon = CreateBuffIcon(row, 18, GetBuffTexture(customBuff.spellID))
-            icon:SetPoint("LEFT", cb, "RIGHT", 2, 0)
-
-            local label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            label:SetPoint("LEFT", icon, "RIGHT", 4, 0)
-            label:SetText(customBuff.name or ("Spell " .. customBuff.spellID))
-
-            -- Right-click to edit
-            row:EnableMouse(true)
-            row:SetScript("OnMouseUp", function(_, button)
+            -- Right-click to edit (on the holder frame)
+            holder:EnableMouse(true)
+            holder:SetScript("OnMouseUp", function(_, button)
                 if button == "RightButton" then
                     ShowCustomBuffModal(key, RenderCustomBuffRows)
                 end
             end)
-            BR.SetupTooltip(row, "Right-click to edit or delete", nil, "ANCHOR_CURSOR")
+            BR.SetupTooltip(holder, "Right-click to edit or delete", nil, "ANCHOR_CURSOR")
 
-            table.insert(panel.customBuffRows, row)
+            table.insert(panel.customBuffRows, holder)
             rowY = rowY - ITEM_HEIGHT
         end
 
@@ -1162,52 +1164,21 @@ local function CreateOptionsPanel()
     exportDesc:SetText("Copy the string below to share your settings with others.")
     profY = profY - 20
 
-    local exportScrollFrame = CreateFrame("ScrollFrame", nil, profilesContent, "UIPanelScrollFrameTemplate")
-    exportScrollFrame:SetPoint("TOPLEFT", profX, profY)
-    exportScrollFrame:SetSize(PANEL_WIDTH - COL_PADDING * 2 - SCROLLBAR_WIDTH, 80)
-
-    local exportEditBox = CreateFrame("EditBox", nil, exportScrollFrame)
-    exportEditBox:SetMultiLine(true)
-    exportEditBox:SetFontObject("GameFontHighlightSmall")
-    exportEditBox:SetSize(PANEL_WIDTH - COL_PADDING * 2 - SCROLLBAR_WIDTH, 80)
-    exportEditBox:SetAutoFocus(false)
-    exportEditBox:SetTextInsets(6, 6, 6, 6)
-    exportEditBox:SetScript("OnEscapePressed", function(self)
-        self:ClearFocus()
-    end)
-    exportEditBox:SetScript("OnTextChanged", function(self)
-        local text = self:GetText()
-        local height =
-            math.max(80, select(2, self:GetFont()) * math.max(1, select(2, string.gsub(text, "\n", "\n")) + 1) + 10)
-        self:SetHeight(height)
-    end)
-    exportEditBox:SetScript("OnEditFocusGained", function(self)
-        self:HighlightText()
-    end)
-    exportScrollFrame:SetScrollChild(exportEditBox)
-
-    local exportBg = exportScrollFrame:CreateTexture(nil, "BACKGROUND")
-    exportBg:SetAllPoints()
-    exportBg:SetColorTexture(0, 0, 0, 0.5)
-
-    local exportBorder = CreateFrame("Frame", nil, exportScrollFrame, "BackdropTemplate")
-    exportBorder:SetAllPoints(exportScrollFrame)
-    exportBorder:SetBackdrop({
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        edgeSize = 12,
-        insets = { left = 2, right = 2, top = 2, bottom = 2 },
+    local exportTextArea = Components.TextArea(profilesContent, {
+        width = PANEL_WIDTH - COL_PADDING * 2 - SCROLLBAR_WIDTH,
+        height = 80,
     })
-    exportBorder:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+    exportTextArea:SetPoint("TOPLEFT", profX, profY)
     profY = profY - 90
 
     local exportButton = CreateButton(profilesContent, "Export", function()
         local exportString, err = BuffReminders:Export()
         if exportString then
-            exportEditBox:SetText(exportString)
-            exportEditBox:HighlightText()
-            exportEditBox:SetFocus()
+            exportTextArea:SetText(exportString)
+            exportTextArea:HighlightText()
+            exportTextArea:SetFocus()
         else
-            exportEditBox:SetText("Error: " .. (err or "Failed to export"))
+            exportTextArea:SetText("Error: " .. (err or "Failed to export"))
         end
     end)
     exportButton:SetPoint("TOPLEFT", profX, profY)
@@ -1221,49 +1192,11 @@ local function CreateOptionsPanel()
     importDesc:SetText("Paste a settings string below. This will overwrite your current settings.")
     profY = profY - 20
 
-    local importScrollFrame = CreateFrame("ScrollFrame", nil, profilesContent, "UIPanelScrollFrameTemplate")
-    importScrollFrame:SetPoint("TOPLEFT", profX, profY)
-    importScrollFrame:SetSize(PANEL_WIDTH - COL_PADDING * 2 - SCROLLBAR_WIDTH, 80)
-
-    local importEditBox = CreateFrame("EditBox", nil, importScrollFrame)
-    importEditBox:SetMultiLine(true)
-    importEditBox:SetFontObject("GameFontHighlightSmall")
-    importEditBox:SetSize(PANEL_WIDTH - COL_PADDING * 2 - SCROLLBAR_WIDTH, 80)
-    importEditBox:SetAutoFocus(false)
-    importEditBox:SetTextInsets(6, 6, 6, 6)
-    importEditBox:EnableMouse(true)
-    importEditBox:SetScript("OnEscapePressed", function(self)
-        self:ClearFocus()
-    end)
-    importEditBox:SetScript("OnTextChanged", function(self)
-        local text = self:GetText()
-        local height =
-            math.max(80, select(2, self:GetFont()) * math.max(1, select(2, string.gsub(text, "\n", "\n")) + 1) + 10)
-        self:SetHeight(height)
-    end)
-    importScrollFrame:SetScrollChild(importEditBox)
-
-    local importBg = importScrollFrame:CreateTexture(nil, "BACKGROUND")
-    importBg:SetAllPoints()
-    importBg:SetColorTexture(0, 0, 0, 0.5)
-
-    local importBorder = CreateFrame("Frame", nil, importScrollFrame, "BackdropTemplate")
-    importBorder:SetAllPoints(importScrollFrame)
-    importBorder:SetBackdrop({
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        edgeSize = 12,
-        insets = { left = 2, right = 2, top = 2, bottom = 2 },
+    local importTextArea = Components.TextArea(profilesContent, {
+        width = PANEL_WIDTH - COL_PADDING * 2 - SCROLLBAR_WIDTH,
+        height = 80,
     })
-    importBorder:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
-
-    importEditBox:SetScript("OnEditFocusGained", function()
-        importBorder:SetBackdropBorderColor(1, 0.82, 0, 1)
-        importBg:SetColorTexture(0.1, 0.1, 0.1, 0.8)
-    end)
-    importEditBox:SetScript("OnEditFocusLost", function()
-        importBorder:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
-        importBg:SetColorTexture(0, 0, 0, 0.5)
-    end)
+    importTextArea:SetPoint("TOPLEFT", profX, profY)
     profY = profY - 90
 
     local importStatus = profilesContent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -1272,7 +1205,7 @@ local function CreateOptionsPanel()
     importStatus:SetText("")
 
     local importButton = CreateButton(profilesContent, "Import", function()
-        local importString = importEditBox:GetText()
+        local importString = importTextArea:GetText()
         local success, err = BuffReminders:Import(importString)
         if success then
             importStatus:SetText("|cff00ff00Settings imported successfully!|r")
@@ -1293,14 +1226,10 @@ local function CreateOptionsPanel()
     bottomFrame:SetHeight(45)
     bottomFrame:SetFrameLevel(panel:GetFrameLevel() + 10)
 
-    local bottomBg = bottomFrame:CreateTexture(nil, "BACKGROUND")
-    bottomBg:SetAllPoints()
-    bottomBg:SetColorTexture(0.1, 0.1, 0.1, 0.95)
-
     local separator = bottomFrame:CreateTexture(nil, "ARTWORK")
     separator:SetSize(PANEL_WIDTH - 40, 1)
     separator:SetPoint("TOP", 0, -5)
-    separator:SetColorTexture(0.5, 0.5, 0.5, 1)
+    separator:SetColorTexture(0.3, 0.3, 0.3, 1)
 
     local btnHolder = CreateFrame("Frame", nil, bottomFrame)
     btnHolder:SetPoint("TOP", 0, -18)

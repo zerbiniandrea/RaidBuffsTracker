@@ -23,13 +23,6 @@ local RefreshableComponents = BR.RefreshableComponents
 ---@field labelWidth? number Width of label (default 70)
 ---@field sliderWidth? number Width of slider (default 100)
 
----@class CheckboxConfig : ComponentConfig
----@field label string Display label
----@field checked? boolean Initial checked state (deprecated: prefer get)
----@field get? fun(): boolean Getter for initial value and refresh (preferred over checked)
----@field tooltip? string Tooltip description
----@field onChange fun(checked: boolean) Callback when checked state changes
-
 ---@class DirectionButtonsConfig : ComponentConfig
 ---@field label? string Optional label (default "Direction:")
 ---@field selected? string Initial direction (deprecated: prefer get)
@@ -44,18 +37,31 @@ local RefreshableComponents = BR.RefreshableComponents
 -- Panel EditBoxes tracking (populated by CreateOptionsPanel, used by Components)
 local panelEditBoxes = nil ---@type table[]?
 
--- Counter for unique dropdown names
-local directionDropdownCounter = 0
+-- Modern slider color constants
+local SliderColors = {
+    track = { 0.2, 0.2, 0.2, 1 },
+    trackFill = { 0.6, 0.5, 0.1, 1 }, -- Subtle gold fill
+    trackDisabled = { 0.15, 0.15, 0.15, 1 },
+    thumb = { 0.4, 0.4, 0.4, 1 },
+    thumbHover = { 1, 0.82, 0, 1 }, -- Golden on hover
+    thumbDisabled = { 0.25, 0.25, 0.25, 1 },
+    text = { 1, 1, 1, 1 },
+    textDisabled = { 0.5, 0.5, 0.5, 1 },
+}
 
----Create a compact slider with clickable numeric input and editbox
+---Create a modern flat-style slider with thin track and small thumb
 ---@param parent table Parent frame
 ---@param config SliderConfig Configuration table
 ---@return table holder Frame containing slider with .slider, .valueText, .SetValue(v), .GetValue()
 function Components.Slider(parent, config)
+    local colors = SliderColors
     local labelWidth = config.labelWidth or 70
     local sliderWidth = config.sliderWidth or 100
     local step = config.step or 1
     local suffix = config.suffix or ""
+    local TRACK_HEIGHT = 4
+    local THUMB_WIDTH = 8
+    local THUMB_HEIGHT = 14
 
     -- Container frame
     local holder = CreateFrame("Frame", nil, parent)
@@ -69,35 +75,160 @@ function Components.Slider(parent, config)
     label:SetText(config.label)
     holder.label = label
 
-    -- Slider
-    local slider = CreateFrame("Slider", nil, holder, "OptionsSliderTemplate")
-    slider:SetPoint("LEFT", label, "RIGHT", 5, 0)
-    slider:SetSize(sliderWidth, 14)
-    slider:SetMinMaxValues(config.min, config.max)
-    slider:SetValueStep(step)
-    slider:SetObeyStepOnDrag(true)
-    local initialValue = config.get and config.get() or config.value
-    slider:SetValue(initialValue)
-    slider.Low:SetText("")
-    slider.High:SetText("")
-    slider.Text:SetText("")
-    holder.slider = slider
+    -- Slider track container
+    local sliderFrame = CreateFrame("Frame", nil, holder)
+    sliderFrame:SetPoint("LEFT", label, "RIGHT", 5, 0)
+    sliderFrame:SetSize(sliderWidth, 16)
+    holder.slider = sliderFrame
 
-    -- Clickable value display button
+    -- Track background
+    local trackBg = sliderFrame:CreateTexture(nil, "BACKGROUND")
+    trackBg:SetHeight(TRACK_HEIGHT)
+    trackBg:SetPoint("LEFT", 0, 0)
+    trackBg:SetPoint("RIGHT", 0, 0)
+    trackBg:SetColorTexture(unpack(colors.track))
+    sliderFrame.trackBg = trackBg
+
+    -- Track fill (shows value progress)
+    local trackFill = sliderFrame:CreateTexture(nil, "ARTWORK")
+    trackFill:SetHeight(TRACK_HEIGHT)
+    trackFill:SetPoint("LEFT", trackBg, "LEFT", 0, 0)
+    trackFill:SetColorTexture(unpack(colors.trackFill))
+    sliderFrame.trackFill = trackFill
+
+    -- Thumb
+    local thumb = CreateFrame("Button", nil, sliderFrame)
+    thumb:SetSize(THUMB_WIDTH, THUMB_HEIGHT)
+    thumb:SetPoint("CENTER", trackBg, "LEFT", 0, 0)
+
+    local thumbTex = thumb:CreateTexture(nil, "OVERLAY")
+    thumbTex:SetAllPoints()
+    thumbTex:SetColorTexture(unpack(colors.thumb))
+    thumb.tex = thumbTex
+
+    -- State
+    local currentValue = config.get and config.get() or config.value or config.min
+    local isEnabled = true
+    local isDragging = false
+    local isThumbHovered = false
+
+    -- Clickable value display button (declared early for event handlers)
     local valueBtn = CreateFrame("Button", nil, holder)
-    valueBtn:SetPoint("LEFT", slider, "RIGHT", 6, 0)
+    valueBtn:SetPoint("LEFT", sliderFrame, "RIGHT", 6, 0)
     valueBtn:SetSize(40, 16)
 
     local valueText = valueBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     valueText:SetAllPoints()
     valueText:SetJustifyH("LEFT")
-    valueText:SetText(initialValue .. suffix)
+    valueText:SetText(math.floor(currentValue) .. suffix)
     holder.valueText = valueText
+
+    local function ValueToPosition(val)
+        local range = config.max - config.min
+        if range == 0 then
+            return 0
+        end
+        local pct = (val - config.min) / range
+        return pct * (sliderWidth - THUMB_WIDTH)
+    end
+
+    local function PositionToValue(pos)
+        local pct = pos / (sliderWidth - THUMB_WIDTH)
+        pct = math.max(0, math.min(1, pct))
+        local val = config.min + pct * (config.max - config.min)
+        -- Round to step
+        val = math.floor((val - config.min) / step + 0.5) * step + config.min
+        return math.max(config.min, math.min(config.max, val))
+    end
+
+    local function UpdateThumbPosition()
+        local pos = ValueToPosition(currentValue)
+        thumb:SetPoint("CENTER", trackBg, "LEFT", pos + THUMB_WIDTH / 2, 0)
+        trackFill:SetWidth(math.max(1, pos + THUMB_WIDTH / 2))
+    end
+
+    local function UpdateVisual()
+        if not isEnabled then
+            thumbTex:SetColorTexture(unpack(colors.thumbDisabled))
+            trackBg:SetColorTexture(unpack(colors.trackDisabled))
+            trackFill:SetColorTexture(0.3, 0.25, 0.05, 1) -- Dimmed fill
+        elseif isThumbHovered or isDragging then
+            thumbTex:SetColorTexture(unpack(colors.thumbHover))
+            trackBg:SetColorTexture(unpack(colors.track))
+            trackFill:SetColorTexture(unpack(colors.trackFill))
+        else
+            thumbTex:SetColorTexture(unpack(colors.thumb))
+            trackBg:SetColorTexture(unpack(colors.track))
+            trackFill:SetColorTexture(unpack(colors.trackFill))
+        end
+        UpdateThumbPosition()
+    end
+
+    thumb:SetScript("OnEnter", function()
+        isThumbHovered = true
+        UpdateVisual()
+    end)
+
+    thumb:SetScript("OnLeave", function()
+        isThumbHovered = false
+        UpdateVisual()
+    end)
+
+    thumb:SetScript("OnMouseDown", function()
+        if isEnabled then
+            isDragging = true
+            UpdateVisual()
+        end
+    end)
+
+    thumb:SetScript("OnMouseUp", function()
+        isDragging = false
+        UpdateVisual()
+    end)
+
+    -- Dragging logic
+    sliderFrame:SetScript("OnUpdate", function()
+        if isDragging and isEnabled then
+            local mouseX = GetCursorPosition()
+            local scale = sliderFrame:GetEffectiveScale()
+            local frameLeft = sliderFrame:GetLeft() * scale
+            local localX = (mouseX - frameLeft) / scale - THUMB_WIDTH / 2
+            local newVal = PositionToValue(localX)
+            if newVal ~= currentValue then
+                currentValue = newVal
+                valueText:SetText(math.floor(currentValue) .. suffix)
+                UpdateThumbPosition()
+                config.onChange(math.floor(currentValue))
+            end
+        end
+    end)
+
+    -- Click on track to jump
+    sliderFrame:EnableMouse(true)
+    sliderFrame:SetScript("OnMouseDown", function(_, button)
+        if button == "LeftButton" and isEnabled then
+            local mouseX = GetCursorPosition()
+            local scale = sliderFrame:GetEffectiveScale()
+            local frameLeft = sliderFrame:GetLeft() * scale
+            local localX = (mouseX - frameLeft) / scale - THUMB_WIDTH / 2
+            local newVal = PositionToValue(localX)
+            currentValue = newVal
+            valueText:SetText(math.floor(currentValue) .. suffix)
+            UpdateVisual()
+            config.onChange(math.floor(currentValue))
+            isDragging = true
+        end
+    end)
+
+    sliderFrame:SetScript("OnMouseUp", function()
+        isDragging = false
+        UpdateVisual()
+    end)
 
     -- Edit box (hidden by default)
     local editBox = CreateFrame("EditBox", nil, holder, "InputBoxTemplate")
     editBox:SetSize(35, 16)
-    editBox:SetPoint("LEFT", slider, "RIGHT", 6, 0)
+    editBox:SetPoint("LEFT", sliderFrame, "RIGHT", 6, 0)
     editBox:SetAutoFocus(false)
     editBox:SetNumeric(true)
     editBox:Hide()
@@ -106,7 +237,10 @@ function Components.Slider(parent, config)
         local num = tonumber(self:GetText())
         if num then
             num = math.max(config.min, math.min(config.max, num))
-            slider:SetValue(num)
+            currentValue = num
+            valueText:SetText(math.floor(currentValue) .. suffix)
+            UpdateVisual()
+            config.onChange(math.floor(currentValue))
         end
         self:Hide()
         valueBtn:Show()
@@ -129,49 +263,59 @@ function Components.Slider(parent, config)
 
     valueBtn:SetScript("OnClick", function()
         valueBtn:Hide()
-        editBox:SetText(tostring(math.floor(slider:GetValue())))
+        editBox:SetText(tostring(math.floor(currentValue)))
         editBox:Show()
         editBox:SetFocus()
         editBox:HighlightText()
     end)
     SetupTooltip(valueBtn, "Click to type a value", nil, "ANCHOR_TOP")
 
-    slider:SetScript("OnValueChanged", function(_, val)
-        val = math.floor(val)
-        valueText:SetText(val .. suffix)
-        config.onChange(val)
-    end)
-
-    -- Mouse wheel support (Platynator pattern)
+    -- Mouse wheel support
     holder:EnableMouseWheel(true)
     holder:SetScript("OnMouseWheel", function(_, delta)
-        if slider:IsEnabled() then
-            local newVal = slider:GetValue() + (delta * step)
+        if isEnabled then
+            local newVal = currentValue + (delta * step)
             newVal = math.max(config.min, math.min(config.max, newVal))
-            slider:SetValue(newVal)
+            currentValue = newVal
+            valueText:SetText(math.floor(currentValue) .. suffix)
+            UpdateVisual()
+            config.onChange(math.floor(currentValue))
         end
     end)
 
+    -- Initial visual
+    UpdateVisual()
+
     -- Public methods
     function holder:SetValue(val)
-        slider:SetValue(val)
+        currentValue = val
+        valueText:SetText(math.floor(currentValue) .. suffix)
+        UpdateVisual()
     end
 
     function holder:GetValue()
-        return slider:GetValue()
+        return currentValue
     end
 
     function holder:SetEnabled(enabled)
+        isEnabled = enabled
         local color = enabled and 1 or 0.5
-        slider:SetEnabled(enabled)
         label:SetTextColor(color, color, color)
         valueText:SetTextColor(color, color, color)
+        UpdateVisual()
+    end
+
+    -- For compatibility with old code checking slider:IsEnabled()
+    function sliderFrame:IsEnabled()
+        return isEnabled
     end
 
     -- Refresh method for OnShow pattern (re-reads value from DB)
     function holder:Refresh()
         if config.get then
-            slider:SetValue(config.get())
+            currentValue = config.get()
+            valueText:SetText(math.floor(currentValue) .. suffix)
+            UpdateVisual()
         end
     end
 
@@ -183,33 +327,225 @@ function Components.Slider(parent, config)
     return holder
 end
 
----Create a checkbox with label and optional tooltip
+-- Modern checkbox color constants
+local CheckboxColors = {
+    bg = { 0.12, 0.12, 0.12, 1 },
+    bgHover = { 0.16, 0.16, 0.16, 1 },
+    bgChecked = { 0.15, 0.13, 0.08, 1 }, -- Subtle warm tint when checked
+    border = { 0.3, 0.3, 0.3, 1 },
+    borderHover = { 0.45, 0.45, 0.45, 1 },
+    borderChecked = { 0.6, 0.5, 0.2, 1 }, -- Subtle golden border when checked
+    borderDisabled = { 0.2, 0.2, 0.2, 1 },
+    checkmark = { 0.9, 0.75, 0.2, 1 }, -- Softer golden checkmark
+    checkmarkDisabled = { 0.5, 0.42, 0.1, 1 },
+    text = { 1, 1, 1, 1 },
+    textDisabled = { 0.5, 0.5, 0.5, 1 },
+}
+
+---Create the core checkbox button frame (reusable by Checkbox component)
+---@param parent table Parent frame
+---@param initialChecked boolean Initial checked state
+---@param onChange fun(checked: boolean) Callback when state changes
+---@return table cb Checkbox button with .SetChecked(v), .GetChecked(), .SetHovered(v), .SetEnabled(v)
+local function CreateCheckboxCore(parent, initialChecked, onChange)
+    local colors = CheckboxColors
+    local CHECKBOX_SIZE = 16 -- Match icon size for alignment
+
+    local cb = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    cb:SetSize(CHECKBOX_SIZE, CHECKBOX_SIZE)
+    cb:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    cb:SetBackdropColor(unpack(colors.bg))
+    cb:SetBackdropBorderColor(unpack(colors.border))
+
+    -- Checkmark texture (sized to fit within checkbox)
+    local checkmark = cb:CreateTexture(nil, "ARTWORK")
+    checkmark:SetPoint("CENTER", 0, 0)
+    checkmark:SetSize(CHECKBOX_SIZE + 4, CHECKBOX_SIZE + 4) -- Slightly larger for visual punch
+    checkmark:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+    checkmark:SetVertexColor(unpack(colors.checkmark))
+    checkmark:Hide()
+    cb.checkmark = checkmark
+
+    -- State
+    local isChecked = initialChecked or false
+    local isEnabled = true
+    local isHovered = false
+
+    local function UpdateVisual()
+        if isChecked then
+            checkmark:Show()
+        else
+            checkmark:Hide()
+        end
+
+        if not isEnabled then
+            cb:SetBackdropBorderColor(unpack(colors.borderDisabled))
+            cb:SetBackdropColor(0.08, 0.08, 0.08, 1)
+            checkmark:SetVertexColor(unpack(colors.checkmarkDisabled))
+        elseif isChecked and isHovered then
+            cb:SetBackdropBorderColor(unpack(colors.borderHover))
+            cb:SetBackdropColor(unpack(colors.bgHover))
+            checkmark:SetVertexColor(unpack(colors.checkmark))
+        elseif isChecked then
+            cb:SetBackdropBorderColor(unpack(colors.borderChecked))
+            cb:SetBackdropColor(unpack(colors.bgChecked))
+            checkmark:SetVertexColor(unpack(colors.checkmark))
+        elseif isHovered then
+            cb:SetBackdropBorderColor(unpack(colors.borderHover))
+            cb:SetBackdropColor(unpack(colors.bgHover))
+        else
+            cb:SetBackdropBorderColor(unpack(colors.border))
+            cb:SetBackdropColor(unpack(colors.bg))
+        end
+    end
+
+    cb:SetScript("OnEnter", function()
+        isHovered = true
+        UpdateVisual()
+    end)
+
+    cb:SetScript("OnLeave", function()
+        isHovered = false
+        UpdateVisual()
+    end)
+
+    cb:SetScript("OnClick", function()
+        if isEnabled then
+            isChecked = not isChecked
+            UpdateVisual()
+            if onChange then
+                onChange(isChecked)
+            end
+        end
+    end)
+
+    -- Public methods
+    function cb:SetChecked(checked)
+        isChecked = checked
+        UpdateVisual()
+    end
+
+    function cb:GetChecked()
+        return isChecked
+    end
+
+    function cb:SetHovered(hovered)
+        isHovered = hovered
+        UpdateVisual()
+    end
+
+    function cb:SetEnabled(enabled)
+        isEnabled = enabled
+        UpdateVisual()
+    end
+
+    function cb:IsEnabled()
+        return isEnabled
+    end
+
+    UpdateVisual()
+    return cb
+end
+
+---@class CheckboxConfig : ComponentConfig
+---@field label string Display label
+---@field checked? boolean Initial checked state (deprecated: prefer get)
+---@field get? fun(): boolean Getter for initial value and refresh (preferred over checked)
+---@field tooltip? string Tooltip description (shown on hover)
+---@field onChange fun(checked: boolean) Callback when checked state changes
+---@field icons? number[] Optional texture ID(s) to show between checkbox and label
+---@field infoTooltip? string Optional info icon tooltip (format: "title|description")
+
+---Create a modern flat-style checkbox with label and optional icons/tooltip
 ---@param parent table Parent frame
 ---@param config CheckboxConfig Configuration table
 ---@return table holder Frame containing checkbox with .checkbox, .SetChecked(v), .GetChecked()
 function Components.Checkbox(parent, config)
+    local colors = CheckboxColors
+    local initialChecked = config.get and config.get() or config.checked or false
+
     -- Container frame
     local holder = CreateFrame("Frame", nil, parent)
     holder:SetSize(200, 20)
 
-    local cb = CreateFrame("CheckButton", nil, holder, "UICheckButtonTemplate")
-    cb:SetSize(20, 20)
+    -- Create checkbox using shared core
+    local cb = CreateCheckboxCore(holder, initialChecked, config.onChange)
     cb:SetPoint("LEFT", 0, 0)
-    local initialChecked = config.get and config.get() or config.checked
-    cb:SetChecked(initialChecked)
-    cb:SetScript("OnClick", function(self)
-        config.onChange(self:GetChecked())
-    end)
     holder.checkbox = cb
 
+    -- Build icon chain (optional)
+    local lastAnchor = cb
+    local ICON_SIZE = 16 -- Match checkbox size
+    local ICON_SPACING = 4 -- Consistent spacing
+    if config.icons then
+        local CreateBuffIcon = BR.CreateBuffIcon
+        for _, textureID in ipairs(config.icons) do
+            local icon = CreateBuffIcon(holder, ICON_SIZE, textureID)
+            icon:SetPoint("LEFT", lastAnchor, "RIGHT", ICON_SPACING, 0)
+            lastAnchor = icon
+        end
+    end
+
+    -- Label
     local label = holder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    label:SetPoint("LEFT", cb, "RIGHT", 4, 0)
+    label:SetPoint("LEFT", lastAnchor, "RIGHT", ICON_SPACING + 1, 0) -- Slightly more space before text
     label:SetText(config.label)
     holder.label = label
-    cb.label = label -- For SetCheckboxEnabled compatibility
+    cb.label = label
 
+    -- Make label clickable too
+    local labelBtn = CreateFrame("Button", nil, holder)
+    labelBtn:SetPoint("TOPLEFT", label, "TOPLEFT", 0, 0)
+    labelBtn:SetPoint("BOTTOMRIGHT", label, "BOTTOMRIGHT", 0, 0)
+    labelBtn:SetScript("OnClick", function()
+        if cb:IsEnabled() then
+            cb:SetChecked(not cb:GetChecked())
+            config.onChange(cb:GetChecked())
+        end
+    end)
+    labelBtn:SetScript("OnEnter", function()
+        cb:SetHovered(true)
+    end)
+    labelBtn:SetScript("OnLeave", function()
+        cb:SetHovered(false)
+    end)
+
+    -- Hover tooltip (on checkbox itself)
     if config.tooltip then
         SetupTooltip(cb, config.label, config.tooltip)
+        SetupTooltip(labelBtn, config.label, config.tooltip)
+    end
+
+    -- Info tooltip icon (optional, shown after label)
+    if config.infoTooltip then
+        local infoIcon = holder:CreateTexture(nil, "ARTWORK")
+        infoIcon:SetSize(14, 14)
+        infoIcon:SetPoint("LEFT", label, "RIGHT", 4, 0)
+        infoIcon:SetAtlas("QuestNormal")
+
+        local infoBtn = CreateFrame("Button", nil, holder)
+        infoBtn:SetSize(14, 14)
+        infoBtn:SetPoint("CENTER", infoIcon, "CENTER", 0, 0)
+
+        local tooltipTitle, tooltipDesc = config.infoTooltip:match("^([^|]+)|(.+)$")
+        if not tooltipTitle then
+            tooltipTitle, tooltipDesc = config.infoTooltip, nil
+        end
+        infoBtn:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(tooltipTitle, 1, 0.82, 0)
+            if tooltipDesc then
+                GameTooltip:AddLine(tooltipDesc, 1, 1, 1, true)
+            end
+            GameTooltip:Show()
+        end)
+        infoBtn:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
     end
 
     -- Public methods
@@ -224,9 +560,9 @@ function Components.Checkbox(parent, config)
     function holder:SetEnabled(enabled)
         cb:SetEnabled(enabled)
         if enabled then
-            label:SetTextColor(1, 1, 1)
+            label:SetTextColor(unpack(colors.text))
         else
-            label:SetTextColor(0.5, 0.5, 0.5)
+            label:SetTextColor(unpack(colors.textDisabled))
         end
     end
 
@@ -245,6 +581,267 @@ function Components.Checkbox(parent, config)
     return holder
 end
 
+-- Modern dropdown styling colors
+local DropdownColors = {
+    bg = { 0.15, 0.15, 0.15, 1 },
+    bgHover = { 0.2, 0.2, 0.2, 1 },
+    bgDisabled = { 0.1, 0.1, 0.1, 1 },
+    border = { 0.3, 0.3, 0.3, 1 },
+    borderHover = { 0.5, 0.5, 0.5, 1 },
+    borderDisabled = { 0.2, 0.2, 0.2, 1 },
+    arrow = { 0.7, 0.7, 0.7, 1 },
+    arrowHover = { 1, 0.82, 0, 1 },
+    arrowDisabled = { 0.4, 0.4, 0.4, 1 },
+    text = { 1, 1, 1, 1 },
+    textDisabled = { 0.5, 0.5, 0.5, 1 },
+    -- Menu colors
+    menuBg = { 0.12, 0.12, 0.12, 0.98 },
+    menuBorder = { 0.3, 0.3, 0.3, 1 },
+    itemBgHover = { 0.25, 0.22, 0.1, 1 },
+    itemText = { 1, 1, 1, 1 },
+    itemTextHover = { 1, 0.82, 0, 1 },
+    checkmark = { 0.9, 0.75, 0.2, 1 },
+}
+
+---Create the core dropdown (button + menu) - reusable by Dropdown and DirectionButtons
+---@param parent table Parent frame
+---@param width number Dropdown width
+---@param options table[] Array of {label, value} options
+---@param initialValue any Initial selected value
+---@param onChange fun(value: any, label: string) Callback when selection changes
+---@return table dropdown Core dropdown with .button, .menu, .SetValue(), .GetValue(), .SetEnabled()
+local function CreateDropdownCore(parent, width, options, initialValue, onChange)
+    local colors = DropdownColors
+    local BUTTON_HEIGHT = 22
+    local ITEM_HEIGHT = 22
+    local MENU_PADDING_V = 4
+
+    -- Find initial label
+    local currentValue = initialValue
+    local currentLabel = ""
+    for _, opt in ipairs(options) do
+        if opt.value == currentValue then
+            currentLabel = opt.label
+            break
+        end
+    end
+
+    -- State
+    local isEnabled = true
+    local isOpen = false
+    local isHovered = false
+
+    -- ==================== BUTTON ====================
+    local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    button:SetSize(width, BUTTON_HEIGHT)
+    button:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+
+    local buttonText = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    buttonText:SetPoint("LEFT", 8, 0)
+    buttonText:SetPoint("RIGHT", -20, 0)
+    buttonText:SetJustifyH("LEFT")
+    buttonText:SetText(currentLabel)
+
+    local arrow = button:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    arrow:SetPoint("RIGHT", -6, 0)
+    arrow:SetText("\226\150\188") -- ▼
+
+    -- ==================== MENU ====================
+    -- Parent to UIParent for proper strata handling
+    local menuHeight = #options * ITEM_HEIGHT + MENU_PADDING_V * 2
+    local menu = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+    menu:SetSize(width, menuHeight)
+    menu:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    menu:SetBackdropColor(unpack(colors.menuBg))
+    menu:SetBackdropBorderColor(unpack(colors.menuBorder))
+    menu:SetFrameStrata("FULLSCREEN_DIALOG")
+    menu:Hide()
+
+    -- Position menu below button (updated when shown)
+    local function PositionMenu()
+        menu:ClearAllPoints()
+        menu:SetPoint("TOPLEFT", button, "BOTTOMLEFT", 0, -2)
+    end
+
+    -- ==================== VISUAL STATE ====================
+    local function UpdateButtonVisual()
+        if not isEnabled then
+            button:SetBackdropColor(unpack(colors.bgDisabled))
+            button:SetBackdropBorderColor(unpack(colors.borderDisabled))
+            buttonText:SetTextColor(unpack(colors.textDisabled))
+            arrow:SetTextColor(unpack(colors.arrowDisabled))
+        elseif isHovered or isOpen then
+            button:SetBackdropColor(unpack(colors.bgHover))
+            button:SetBackdropBorderColor(unpack(colors.borderHover))
+            buttonText:SetTextColor(unpack(colors.text))
+            arrow:SetTextColor(unpack(colors.arrowHover))
+        else
+            button:SetBackdropColor(unpack(colors.bg))
+            button:SetBackdropBorderColor(unpack(colors.border))
+            buttonText:SetTextColor(unpack(colors.text))
+            arrow:SetTextColor(unpack(colors.arrow))
+        end
+    end
+
+    -- Track if mouse was down last frame (for click-outside detection)
+    local wasMouseDown = false
+
+    local function CloseMenu()
+        isOpen = false
+        menu:Hide()
+        wasMouseDown = false
+        UpdateButtonVisual()
+    end
+
+    local function OpenMenu()
+        isOpen = true
+        PositionMenu()
+        menu:Show()
+        wasMouseDown = IsMouseButtonDown("LeftButton") -- Prevent immediate close from the opening click
+        UpdateButtonVisual()
+    end
+
+    -- OnUpdate to detect clicks outside menu (only runs while menu is visible)
+    menu:SetScript("OnUpdate", function()
+        local isMouseDown = IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton")
+
+        -- Detect click (mouse just pressed)
+        if isMouseDown and not wasMouseDown then
+            -- Check if click is outside menu and button
+            if not menu:IsMouseOver() and not button:IsMouseOver() then
+                CloseMenu()
+            end
+        end
+
+        wasMouseDown = isMouseDown
+    end)
+
+    -- ==================== MENU ITEMS ====================
+    local items = {}
+    for i, opt in ipairs(options) do
+        local item = CreateFrame("Button", nil, menu)
+        item:SetSize(width - 2, ITEM_HEIGHT)
+        item:SetPoint("TOPLEFT", 1, -MENU_PADDING_V - (i - 1) * ITEM_HEIGHT)
+
+        local itemBg = item:CreateTexture(nil, "BACKGROUND")
+        itemBg:SetAllPoints()
+        itemBg:SetColorTexture(0, 0, 0, 0)
+
+        local check = item:CreateTexture(nil, "ARTWORK")
+        check:SetSize(14, 14)
+        check:SetPoint("LEFT", 6, 0)
+        check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+        check:SetVertexColor(unpack(colors.checkmark))
+        check:SetShown(opt.value == currentValue)
+
+        local label = item:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        label:SetPoint("LEFT", 24, 0)
+        label:SetPoint("RIGHT", -8, 0)
+        label:SetJustifyH("LEFT")
+        label:SetText(opt.label)
+        label:SetTextColor(unpack(colors.itemText))
+
+        -- Item hover visual
+        local function UpdateItemVisual(hovered)
+            if hovered then
+                itemBg:SetColorTexture(unpack(colors.itemBgHover))
+                label:SetTextColor(unpack(colors.itemTextHover))
+            else
+                itemBg:SetColorTexture(0, 0, 0, 0)
+                label:SetTextColor(unpack(colors.itemText))
+            end
+        end
+
+        item:SetScript("OnEnter", function()
+            UpdateItemVisual(true)
+        end)
+        item:SetScript("OnLeave", function()
+            UpdateItemVisual(false)
+        end)
+        item:SetScript("OnClick", function()
+            currentValue = opt.value
+            currentLabel = opt.label
+            buttonText:SetText(currentLabel)
+            -- Update checkmarks
+            for _, it in ipairs(items) do
+                it.check:SetShown(it.value == currentValue)
+            end
+            CloseMenu()
+            onChange(currentValue, currentLabel)
+        end)
+
+        item.value = opt.value
+        item.check = check
+        items[i] = item
+    end
+
+    -- ==================== BUTTON EVENTS ====================
+    button:SetScript("OnEnter", function()
+        isHovered = true
+        UpdateButtonVisual()
+    end)
+    button:SetScript("OnLeave", function()
+        isHovered = false
+        UpdateButtonVisual()
+    end)
+    button:SetScript("OnClick", function()
+        if isEnabled then
+            if isOpen then
+                CloseMenu()
+            else
+                OpenMenu()
+            end
+        end
+    end)
+
+    -- Initialize visual
+    UpdateButtonVisual()
+
+    -- ==================== PUBLIC API ====================
+    local dropdown = { button = button, menu = menu }
+
+    function dropdown:SetValue(value)
+        currentValue = value
+        for _, opt in ipairs(options) do
+            if opt.value == value then
+                currentLabel = opt.label
+                break
+            end
+        end
+        buttonText:SetText(currentLabel)
+        for _, item in ipairs(items) do
+            item.check:SetShown(item.value == currentValue)
+        end
+    end
+
+    function dropdown:GetValue()
+        return currentValue
+    end
+
+    function dropdown:SetEnabled(enabled)
+        isEnabled = enabled
+        button:EnableMouse(enabled)
+        if not enabled and isOpen then
+            CloseMenu()
+        end
+        UpdateButtonVisual()
+    end
+
+    function dropdown:IsEnabled()
+        return isEnabled
+    end
+
+    return dropdown
+end
+
 ---Create direction buttons (LEFT, CENTER, RIGHT, UP, DOWN)
 ---@param parent table Parent frame
 ---@param config DirectionButtonsConfig Configuration table
@@ -254,13 +851,15 @@ function Components.DirectionButtons(parent, config)
     local dirLabels = { LEFT = "Left", CENTER = "Center", RIGHT = "Right", UP = "Up", DOWN = "Down" }
     local width = config.width or 90
 
-    -- Generate unique name for dropdown
-    directionDropdownCounter = directionDropdownCounter + 1
-    local dropdownName = "BuffRemindersDirectionDropdown" .. directionDropdownCounter
+    -- Build options array
+    local options = {}
+    for _, dir in ipairs(directions) do
+        table.insert(options, { label = dirLabels[dir], value = dir })
+    end
 
     -- Container frame
     local holder = CreateFrame("Frame", nil, parent)
-    holder:SetSize(70 + width + 20, 26)
+    holder:SetSize(70 + width + 10, 26)
 
     -- Label
     local label = holder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -268,50 +867,25 @@ function Components.DirectionButtons(parent, config)
     label:SetText(config.label or "Direction:")
     holder.label = label
 
-    -- Dropdown
-    local dropdown = CreateFrame("Frame", dropdownName, holder, "UIDropDownMenuTemplate")
-    dropdown:SetPoint("LEFT", label, "RIGHT", -10, -2)
-    UIDropDownMenu_SetWidth(dropdown, width)
+    -- Initial value
+    local initialValue = config.get and config.get() or config.selected
+
+    -- Create dropdown core
+    local dropdown = CreateDropdownCore(holder, width, options, initialValue, function(value)
+        config.onChange(value)
+    end)
+    dropdown.button:SetPoint("LEFT", label, "RIGHT", 5, 0)
     holder.dropdown = dropdown
-
-    -- Store current value (use get() if available for initial value)
-    local currentValue = config.get and config.get() or config.selected
-
-    -- Initialize dropdown
-    local function InitializeDropdown(_, level)
-        for _, dir in ipairs(directions) do
-            local info = UIDropDownMenu_CreateInfo()
-            info.text = dirLabels[dir] or dir
-            info.value = dir
-            info.checked = currentValue == dir
-            info.func = function()
-                currentValue = dir
-                UIDropDownMenu_SetSelectedValue(dropdown, dir)
-                UIDropDownMenu_SetText(dropdown, dirLabels[dir] or dir)
-                config.onChange(dir)
-            end
-            UIDropDownMenu_AddButton(info, level)
-        end
-    end
-
-    UIDropDownMenu_Initialize(dropdown, InitializeDropdown)
-    UIDropDownMenu_SetSelectedValue(dropdown, currentValue)
-    UIDropDownMenu_SetText(dropdown, dirLabels[currentValue] or currentValue)
 
     -- Public method to update selection (backwards compatible)
     function holder:SetDirection(dir)
-        currentValue = dir
-        UIDropDownMenu_SetSelectedValue(dropdown, dir)
-        UIDropDownMenu_SetText(dropdown, dirLabels[dir] or dir)
+        dropdown:SetValue(dir)
     end
 
     -- Refresh method for OnShow pattern
     function holder:Refresh()
         if config.get then
-            local dir = config.get()
-            currentValue = dir
-            UIDropDownMenu_SetSelectedValue(dropdown, dir)
-            UIDropDownMenu_SetText(dropdown, dirLabels[dir] or dir)
+            dropdown:SetValue(config.get())
         end
     end
 
@@ -325,13 +899,9 @@ function Components.DirectionButtons(parent, config)
 
     -- SetEnabled method for toggling interactivity
     function holder:SetEnabled(enabled)
-        if enabled then
-            UIDropDownMenu_EnableDropDown(dropdown)
-            label:SetTextColor(1, 0.82, 0)
-        else
-            UIDropDownMenu_DisableDropDown(dropdown)
-            label:SetTextColor(0.5, 0.5, 0.5)
-        end
+        dropdown:SetEnabled(enabled)
+        local color = enabled and 1 or 0.5
+        label:SetTextColor(color, color, color)
     end
 
     return holder
@@ -428,17 +998,17 @@ end
 ---@field width? number Dropdown width (default 100)
 ---@field onChange fun(value: any) Callback when selection changes
 
----Create a dropdown with label (Platynator-style wrapper around UIDropDownMenu)
+---Create a dropdown with label
 ---@param parent table Parent frame
 ---@param config DropdownConfig Configuration table
----@param uniqueName string Unique global name for the dropdown frame
+---@param _ string? Unused (was uniqueName for UIDropDownMenu, kept for API compatibility)
 ---@return table holder Frame containing dropdown with .SetValue(v), .GetValue(), .SetEnabled(bool)
-function Components.Dropdown(parent, config, uniqueName)
+function Components.Dropdown(parent, config, _)
     local width = config.width or 100
 
     -- Container frame
     local holder = CreateFrame("Frame", nil, parent)
-    holder:SetSize(70 + width + 20, 26)
+    holder:SetSize(70 + width + 10, 26)
 
     -- Label
     local label = holder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -446,81 +1016,35 @@ function Components.Dropdown(parent, config, uniqueName)
     label:SetText(config.label)
     holder.label = label
 
-    -- Dropdown
-    local dropdown = CreateFrame("Frame", uniqueName, holder, "UIDropDownMenuTemplate")
-    dropdown:SetPoint("LEFT", label, "RIGHT", -10, -2)
-    UIDropDownMenu_SetWidth(dropdown, width)
+    -- Initial value
+    local initialValue = config.get and config.get() or config.selected
+
+    -- Create dropdown core
+    local dropdown = CreateDropdownCore(holder, width, config.options, initialValue, function(value)
+        config.onChange(value)
+    end)
+    dropdown.button:SetPoint("LEFT", label, "RIGHT", 5, 0)
     holder.dropdown = dropdown
 
-    -- Store current value (use get() if available for initial value)
-    local currentValue = config.get and config.get() or config.selected
-
-    -- Initialize dropdown
-    local function InitializeDropdown(_, level)
-        for _, opt in ipairs(config.options) do
-            local info = UIDropDownMenu_CreateInfo()
-            info.text = opt.label
-            info.value = opt.value
-            info.checked = currentValue == opt.value
-            info.func = function()
-                currentValue = opt.value
-                UIDropDownMenu_SetSelectedValue(dropdown, opt.value)
-                UIDropDownMenu_SetText(dropdown, opt.label)
-                config.onChange(opt.value)
-            end
-            UIDropDownMenu_AddButton(info, level)
-        end
-    end
-
-    UIDropDownMenu_Initialize(dropdown, InitializeDropdown)
-    UIDropDownMenu_SetSelectedValue(dropdown, config.selected)
-
-    -- Set initial text
-    for _, opt in ipairs(config.options) do
-        if opt.value == config.selected then
-            UIDropDownMenu_SetText(dropdown, opt.label)
-            break
-        end
-    end
-
-    -- Public methods
+    -- Public methods (delegate to core)
     function holder:SetValue(value)
-        currentValue = value
-        UIDropDownMenu_SetSelectedValue(dropdown, value)
-        for _, opt in ipairs(config.options) do
-            if opt.value == value then
-                UIDropDownMenu_SetText(dropdown, opt.label)
-                break
-            end
-        end
+        dropdown:SetValue(value)
     end
 
     function holder:GetValue()
-        return currentValue
+        return dropdown:GetValue()
     end
 
     function holder:SetEnabled(enabled)
+        dropdown:SetEnabled(enabled)
         local color = enabled and 1 or 0.5
         label:SetTextColor(color, color, color)
-        if enabled then
-            UIDropDownMenu_EnableDropDown(dropdown)
-        else
-            UIDropDownMenu_DisableDropDown(dropdown)
-        end
     end
 
     -- Refresh method for OnShow pattern
     function holder:Refresh()
         if config.get then
-            local value = config.get()
-            currentValue = value
-            UIDropDownMenu_SetSelectedValue(dropdown, value)
-            for _, opt in ipairs(config.options) do
-                if opt.value == value then
-                    UIDropDownMenu_SetText(dropdown, opt.label)
-                    break
-                end
-            end
+            dropdown:SetValue(config.get())
         end
     end
 
@@ -695,6 +1219,224 @@ function Components.TextInput(parent, config)
     return holder
 end
 
+-- Modern scrollbar colors (defined early for use by TextArea and ScrollableContainer)
+local ScrollbarColors = {
+    track = { 0.12, 0.12, 0.12, 1 },
+    thumb = { 0.3, 0.3, 0.3, 1 },
+    thumbHover = { 0.45, 0.45, 0.45, 1 },
+    thumbPressed = { 1, 0.82, 0, 0.8 },
+    border = { 0.2, 0.2, 0.2, 1 },
+}
+
+-- Helper to apply modern styling to scrollbar (used by TextArea and ScrollableContainer)
+local function ApplyModernScrollbarStyle(scrollBar)
+    if not scrollBar then
+        return
+    end
+    local colors = ScrollbarColors
+
+    -- Hide default textures
+    local trackBg = scrollBar.trackBg or scrollBar.Track
+    if trackBg then
+        trackBg:SetAlpha(0)
+    end
+
+    -- Try to find and hide the track textures
+    for _, region in pairs({ scrollBar:GetRegions() }) do
+        if region:GetObjectType() == "Texture" then
+            local name = region:GetName() or ""
+            if name:find("Track") or name:find("Border") or name:find("BG") then
+                region:SetAlpha(0)
+            end
+        end
+    end
+
+    -- Create modern track background
+    local track = CreateFrame("Frame", nil, scrollBar, "BackdropTemplate")
+    track:SetPoint("TOPLEFT", 4, 0)
+    track:SetPoint("BOTTOMRIGHT", -4, 0)
+    track:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    track:SetBackdropColor(unpack(colors.track))
+    track:SetBackdropBorderColor(unpack(colors.border))
+    track:SetFrameLevel(scrollBar:GetFrameLevel())
+
+    -- Style the thumb
+    local thumb = scrollBar.ThumbTexture or scrollBar.thumbTexture
+    if thumb then
+        thumb:SetColorTexture(unpack(colors.thumb))
+        thumb:SetSize(8, 40)
+
+        -- Try to set up hover/press effects
+        local thumbParent = thumb:GetParent()
+        if thumbParent and thumbParent.SetScript then
+            thumbParent:HookScript("OnEnter", function()
+                thumb:SetColorTexture(unpack(colors.thumbHover))
+            end)
+            thumbParent:HookScript("OnLeave", function()
+                thumb:SetColorTexture(unpack(colors.thumb))
+            end)
+        end
+    end
+
+    -- Hide scroll up/down buttons
+    local scrollUp = scrollBar.ScrollUpButton or scrollBar.scrollUp or _G[scrollBar:GetName() .. "ScrollUpButton"]
+    local scrollDown = scrollBar.ScrollDownButton
+        or scrollBar.scrollDown
+        or _G[scrollBar:GetName() .. "ScrollDownButton"]
+    if scrollUp then
+        scrollUp:SetAlpha(0)
+        scrollUp:SetSize(1, 1)
+        scrollUp:EnableMouse(false)
+    end
+    if scrollDown then
+        scrollDown:SetAlpha(0)
+        scrollDown:SetSize(1, 1)
+        scrollDown:EnableMouse(false)
+    end
+end
+
+-- TextArea color constants
+local TextAreaColors = {
+    bg = { 0.08, 0.08, 0.08, 0.9 },
+    bgFocused = { 0.1, 0.1, 0.1, 0.95 },
+    border = { 0.3, 0.3, 0.3, 1 },
+    borderFocused = { 1, 0.82, 0, 1 },
+    text = { 1, 1, 1, 1 },
+}
+
+---@class TextAreaConfig : ComponentConfig
+---@field width number Width of the text area
+---@field height number Height of the text area
+---@field readOnly? boolean If true, text cannot be edited (default false)
+---@field onTextChanged? fun(text: string) Callback when text changes
+---@field onFocusGained? fun() Callback when focus gained
+---@field onFocusLost? fun() Callback when focus lost
+
+---Create a multiline text area (no scrollbar, mouse wheel scrolls)
+---@param parent table Parent frame
+---@param config TextAreaConfig Configuration table
+---@return table holder Frame with .editBox, .SetText(v), .GetText(), .HighlightText(), .SetFocus()
+function Components.TextArea(parent, config)
+    local colors = TextAreaColors
+
+    -- Container frame with backdrop
+    local holder = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    holder:SetSize(config.width, config.height)
+    holder:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    holder:SetBackdropColor(unpack(colors.bg))
+    holder:SetBackdropBorderColor(unpack(colors.border))
+
+    -- Scroll frame (basic, no scrollbar)
+    local scrollFrame = CreateFrame("ScrollFrame", nil, holder)
+    scrollFrame:SetPoint("TOPLEFT", 1, -1)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -1, 1)
+    scrollFrame:SetClipsChildren(true)
+    scrollFrame:EnableMouseWheel(true)
+    scrollFrame:SetScript("OnMouseWheel", function(self, delta)
+        local current = self:GetVerticalScroll()
+        local maxScroll = math.max(0, self:GetScrollChild():GetHeight() - self:GetHeight())
+        local newScroll = math.max(0, math.min(maxScroll, current - delta * 20))
+        self:SetVerticalScroll(newScroll)
+    end)
+
+    -- Edit box
+    local editBox = CreateFrame("EditBox", nil, scrollFrame)
+    editBox:SetMultiLine(true)
+    editBox:SetFontObject("GameFontHighlightSmall")
+    editBox:SetSize(config.width - 4, config.height)
+    editBox:SetAutoFocus(false)
+    editBox:SetTextInsets(6, 6, 6, 6)
+    editBox:EnableMouse(true)
+    editBox:SetTextColor(unpack(colors.text))
+
+    if config.readOnly then
+        editBox:SetScript("OnChar", function() end)
+        editBox:SetScript("OnKeyDown", function() end)
+    end
+
+    scrollFrame:SetScrollChild(editBox)
+    holder.editBox = editBox
+    holder.scrollFrame = scrollFrame
+
+    -- Focus visual state
+    local function UpdateFocusVisual(focused)
+        if focused then
+            holder:SetBackdropColor(unpack(colors.bgFocused))
+            holder:SetBackdropBorderColor(unpack(colors.borderFocused))
+        else
+            holder:SetBackdropColor(unpack(colors.bg))
+            holder:SetBackdropBorderColor(unpack(colors.border))
+        end
+    end
+
+    editBox:SetScript("OnEditFocusGained", function(self)
+        UpdateFocusVisual(true)
+        if config.onFocusGained then
+            config.onFocusGained()
+        end
+    end)
+
+    editBox:SetScript("OnEditFocusLost", function(self)
+        UpdateFocusVisual(false)
+        if config.onFocusLost then
+            config.onFocusLost()
+        end
+    end)
+
+    editBox:SetScript("OnEscapePressed", function(self)
+        self:ClearFocus()
+    end)
+
+    -- Auto-resize content height based on text
+    editBox:SetScript("OnTextChanged", function(self)
+        local text = self:GetText()
+        local _, fontHeight = self:GetFont()
+        local lineCount = select(2, string.gsub(text, "\n", "\n")) + 1
+        local contentHeight = math.max(config.height - 4, fontHeight * lineCount + 12)
+        self:SetHeight(contentHeight)
+
+        if config.onTextChanged then
+            config.onTextChanged(text)
+        end
+    end)
+
+    -- Track editbox for focus cleanup
+    if panelEditBoxes then
+        table.insert(panelEditBoxes, editBox)
+    end
+
+    -- Public methods
+    function holder:SetText(text)
+        editBox:SetText(text or "")
+    end
+
+    function holder:GetText()
+        return editBox:GetText()
+    end
+
+    function holder:HighlightText()
+        editBox:HighlightText()
+    end
+
+    function holder:SetFocus()
+        editBox:SetFocus()
+    end
+
+    function holder:ClearFocus()
+        editBox:ClearFocus()
+    end
+
+    return holder
+end
+
 ---Initialize panelEditBoxes reference (called from CreateOptionsPanel)
 ---@param editBoxes table[] The editboxes array from the options panel
 function Components.SetEditBoxesRef(editBoxes)
@@ -736,6 +1478,9 @@ function Components.ScrollableContainer(parent, config)
         scrollBar:ClearAllPoints()
         scrollBar:SetPoint("TOPLEFT", scrollFrame, "TOPRIGHT", -16, -16)
         scrollBar:SetPoint("BOTTOMLEFT", scrollFrame, "BOTTOMRIGHT", -16, 16)
+
+        -- Apply modern styling
+        ApplyModernScrollbarStyle(scrollBar)
     end
 
     -- Content frame

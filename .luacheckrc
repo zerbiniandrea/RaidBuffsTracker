@@ -7,6 +7,7 @@ ignore = {
 	"21./_",
 	"212/self",
 	"212/profileKey",
+	"311/currentValue", -- Closure state in dropdown components
 }
 
 globals = {
@@ -32,6 +33,7 @@ read_globals = {
 	"C_UnitAuras",
 	"CreateFrame",
 	"GetActionInfo",
+	"GetCursorPosition",
 	"GetNumGroupMembers",
 	"GetSpecialization",
 	"GetSpecializationRole",
@@ -40,6 +42,7 @@ read_globals = {
 	"InCombatLockdown",
 	"IsInInstance",
 	"IsInRaid",
+	"IsMouseButtonDown",
 	"ReloadUI",
 	"Settings",
 	"SettingsPanel",
@@ -71,12 +74,4 @@ read_globals = {
 	"HideUIPanel",
 	"STANDARD_TEXT_FONT",
 	"UISpecialFrames",
-	"UIDropDownMenu_AddButton",
-	"UIDropDownMenu_CreateInfo",
-	"UIDropDownMenu_DisableDropDown",
-	"UIDropDownMenu_EnableDropDown",
-	"UIDropDownMenu_Initialize",
-	"UIDropDownMenu_SetSelectedValue",
-	"UIDropDownMenu_SetText",
-	"UIDropDownMenu_SetWidth",
 }

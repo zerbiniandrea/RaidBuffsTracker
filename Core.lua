@@ -36,28 +36,133 @@ function BR.SetupTooltip(widget, tooltipTitle, tooltipDesc, anchor)
     end)
 end
 
----Create a styled button using standard Blizzard dynamic resize template
+-- Modern button color constants
+BR.ButtonColors = {
+    bg = { 0.15, 0.15, 0.15, 1 },
+    bgHover = { 0.22, 0.22, 0.22, 1 },
+    bgPressed = { 0.12, 0.12, 0.12, 1 },
+    border = { 0.3, 0.3, 0.3, 1 },
+    borderHover = { 0.5, 0.5, 0.5, 1 },
+    borderPressed = { 1, 0.82, 0, 1 },
+    borderDisabled = { 0.25, 0.25, 0.25, 1 },
+    text = { 1, 1, 1, 1 },
+    textDisabled = { 0.5, 0.5, 0.5, 1 },
+}
+
+---Create a modern flat-style button with dark background and thin border
 ---@param parent Frame
 ---@param text string
 ---@param onClick function
 ---@param tooltip? {title: string, desc?: string} Optional tooltip configuration
 ---@return table
 function BR.CreateButton(parent, text, onClick, tooltip)
-    local btn = CreateFrame("Button", nil, parent, "UIPanelDynamicResizeButtonTemplate")
-    btn:SetText(text)
-    DynamicResizeButton_Resize(btn)
-    btn:SetScript("OnClick", onClick)
-    if tooltip then
-        BR.SetupTooltip(btn, tooltip.title, tooltip.desc, "ANCHOR_TOP")
+    local colors = BR.ButtonColors
+
+    local btn = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    btn:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    btn:SetBackdropColor(unpack(colors.bg))
+    btn:SetBackdropBorderColor(unpack(colors.border))
+
+    -- Text
+    local btnText = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    btnText:SetPoint("CENTER", 0, 0)
+    btnText:SetText(text)
+    btn.text = btnText
+
+    -- Auto-size based on text with padding
+    local textWidth = btnText:GetStringWidth()
+    btn:SetSize(math.max(textWidth + 16, 60), 22)
+
+    -- Visual state tracking
+    local isEnabled = true
+    local isPressed = false
+    local isHovered = false
+
+    local function UpdateVisual()
+        if not isEnabled then
+            btn:SetBackdropColor(unpack(colors.bg))
+            btn:SetBackdropBorderColor(unpack(colors.borderDisabled))
+            btnText:SetTextColor(unpack(colors.textDisabled))
+        elseif isPressed then
+            btn:SetBackdropColor(unpack(colors.bgPressed))
+            btn:SetBackdropBorderColor(unpack(colors.borderPressed))
+            btnText:SetTextColor(unpack(colors.text))
+        elseif isHovered then
+            btn:SetBackdropColor(unpack(colors.bgHover))
+            btn:SetBackdropBorderColor(unpack(colors.borderHover))
+            btnText:SetTextColor(unpack(colors.text))
+        else
+            btn:SetBackdropColor(unpack(colors.bg))
+            btn:SetBackdropBorderColor(unpack(colors.border))
+            btnText:SetTextColor(unpack(colors.text))
+        end
     end
-    -- Add SetEnabled wrapper for convenience
+
+    btn:SetScript("OnEnter", function()
+        isHovered = true
+        UpdateVisual()
+        if tooltip then
+            GameTooltip:SetOwner(btn, "ANCHOR_TOP")
+            GameTooltip:SetText(tooltip.title)
+            if tooltip.desc then
+                GameTooltip:AddLine(tooltip.desc, 1, 1, 1, true)
+            end
+            GameTooltip:Show()
+        end
+    end)
+
+    btn:SetScript("OnLeave", function()
+        isHovered = false
+        isPressed = false
+        UpdateVisual()
+        if tooltip then
+            GameTooltip:Hide()
+        end
+    end)
+
+    btn:SetScript("OnMouseDown", function()
+        if isEnabled then
+            isPressed = true
+            UpdateVisual()
+        end
+    end)
+
+    btn:SetScript("OnMouseUp", function()
+        isPressed = false
+        UpdateVisual()
+    end)
+
+    btn:SetScript("OnClick", function()
+        if isEnabled and onClick then
+            onClick(btn)
+        end
+    end)
+
+    -- Public methods
+    function btn:SetText(newText)
+        btnText:SetText(newText)
+        local newWidth = btnText:GetStringWidth()
+        self:SetSize(math.max(newWidth + 16, 60), 22)
+    end
+
+    function btn:GetText()
+        return btnText:GetText()
+    end
+
     function btn:SetEnabled(enabled)
+        isEnabled = enabled
         if enabled then
             self:Enable()
         else
             self:Disable()
         end
+        UpdateVisual()
     end
+
     return btn
 end
 
