@@ -7,8 +7,179 @@ local _, BR = ...
 -- These reduce code duplication and provide consistent styling.
 
 local Components = BR.Components
-local SetupTooltip = BR.SetupTooltip
 local RefreshableComponents = BR.RefreshableComponents
+
+-- ============================================================================
+-- TOOLTIP UTILITIES
+-- ============================================================================
+
+---Show a tooltip on a widget (title in gold, optional description in white)
+---@param owner table Frame that owns the tooltip
+---@param title string Tooltip title
+---@param desc? string Optional description line
+---@param anchor? string Anchor point (default "ANCHOR_RIGHT")
+local function ShowTooltip(owner, title, desc, anchor)
+    GameTooltip:SetOwner(owner, anchor or "ANCHOR_RIGHT")
+    GameTooltip:SetText(title, 1, 1, 1)
+    if desc then
+        GameTooltip:AddLine(desc, 0.7, 0.7, 0.7, true)
+    end
+    GameTooltip:Show()
+end
+
+local function HideTooltip()
+    GameTooltip:Hide()
+end
+
+---Setup tooltip on a widget using SetScript (replaces existing OnEnter/OnLeave)
+local function SetupTooltip(widget, tooltipTitle, tooltipDesc, anchor)
+    widget:SetScript("OnEnter", function(self)
+        ShowTooltip(self, tooltipTitle, tooltipDesc, anchor)
+    end)
+    widget:SetScript("OnLeave", HideTooltip)
+end
+
+---Setup tooltip on a widget using HookScript (chains with existing OnEnter/OnLeave)
+local function HookTooltip(widget, tooltipTitle, tooltipDesc, anchor)
+    widget:HookScript("OnEnter", function(self)
+        ShowTooltip(self, tooltipTitle, tooltipDesc, anchor)
+    end)
+    widget:HookScript("OnLeave", HideTooltip)
+end
+
+BR.ShowTooltip = ShowTooltip
+BR.HideTooltip = HideTooltip
+BR.SetupTooltip = SetupTooltip
+BR.HookTooltip = HookTooltip
+
+-- ============================================================================
+-- BUTTON
+-- ============================================================================
+
+-- Modern button color constants
+local ButtonColors = {
+    bg = { 0.15, 0.15, 0.15, 1 },
+    bgHover = { 0.22, 0.22, 0.22, 1 },
+    bgPressed = { 0.12, 0.12, 0.12, 1 },
+    border = { 0.3, 0.3, 0.3, 1 },
+    borderHover = { 0.5, 0.5, 0.5, 1 },
+    borderPressed = { 1, 0.82, 0, 1 },
+    borderDisabled = { 0.25, 0.25, 0.25, 1 },
+    text = { 1, 1, 1, 1 },
+    textDisabled = { 0.5, 0.5, 0.5, 1 },
+}
+
+---Create a modern flat-style button with dark background and thin border
+---@param parent Frame
+---@param text string
+---@param onClick function
+---@param tooltip? {title: string, desc?: string} Optional tooltip configuration
+---@return table
+function BR.CreateButton(parent, text, onClick, tooltip)
+    local colors = ButtonColors
+
+    local btn = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    btn:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    btn:SetBackdropColor(unpack(colors.bg))
+    btn:SetBackdropBorderColor(unpack(colors.border))
+
+    -- Text
+    local btnText = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    btnText:SetPoint("CENTER", 0, 0)
+    btnText:SetText(text)
+    btn.text = btnText
+
+    -- Auto-size based on text with padding
+    local textWidth = btnText:GetStringWidth()
+    btn:SetSize(math.max(textWidth + 16, 60), 22)
+
+    -- Visual state tracking
+    local isEnabled = true
+    local isPressed = false
+    local isHovered = false
+
+    local function UpdateVisual()
+        if not isEnabled then
+            btn:SetBackdropColor(unpack(colors.bg))
+            btn:SetBackdropBorderColor(unpack(colors.borderDisabled))
+            btnText:SetTextColor(unpack(colors.textDisabled))
+        elseif isPressed then
+            btn:SetBackdropColor(unpack(colors.bgPressed))
+            btn:SetBackdropBorderColor(unpack(colors.borderPressed))
+            btnText:SetTextColor(unpack(colors.text))
+        elseif isHovered then
+            btn:SetBackdropColor(unpack(colors.bgHover))
+            btn:SetBackdropBorderColor(unpack(colors.borderHover))
+            btnText:SetTextColor(unpack(colors.text))
+        else
+            btn:SetBackdropColor(unpack(colors.bg))
+            btn:SetBackdropBorderColor(unpack(colors.border))
+            btnText:SetTextColor(unpack(colors.text))
+        end
+    end
+
+    btn:SetScript("OnEnter", function()
+        isHovered = true
+        UpdateVisual()
+        if tooltip then
+            ShowTooltip(btn, tooltip.title, tooltip.desc, "ANCHOR_TOP")
+        end
+    end)
+
+    btn:SetScript("OnLeave", function()
+        isHovered = false
+        isPressed = false
+        UpdateVisual()
+        if tooltip then
+            HideTooltip()
+        end
+    end)
+
+    btn:SetScript("OnMouseDown", function()
+        if isEnabled then
+            isPressed = true
+            UpdateVisual()
+        end
+    end)
+
+    btn:SetScript("OnMouseUp", function()
+        isPressed = false
+        UpdateVisual()
+    end)
+
+    btn:SetScript("OnClick", function()
+        if isEnabled and onClick then
+            onClick(btn)
+        end
+    end)
+
+    -- Public methods
+    function btn:SetText(newText)
+        btnText:SetText(newText)
+        local newWidth = btnText:GetStringWidth()
+        self:SetSize(math.max(newWidth + 16, 60), 22)
+    end
+
+    function btn:GetText()
+        return btnText:GetText()
+    end
+
+    function btn:SetEnabled(enabled)
+        isEnabled = enabled
+        if enabled then
+            self:Enable()
+        else
+            self:Disable()
+        end
+        UpdateVisual()
+    end
+
+    return btn
+end
 
 ---@class ComponentConfig
 ---@class SliderConfig : ComponentConfig
@@ -461,10 +632,11 @@ end
 ---@field checked? boolean Initial checked state (deprecated: prefer get)
 ---@field get? fun(): boolean Getter for initial value and refresh (preferred over checked)
 ---@field enabled? fun(): boolean Getter for enabled state, evaluated on Refresh()
----@field tooltip? string Tooltip description (shown on hover)
+---@field tooltip? string|{title: string, desc: string} Tooltip shown on hover (string or {title, desc} table)
 ---@field onChange fun(checked: boolean) Callback when checked state changes
 ---@field icons? number[] Optional texture ID(s) to show between checkbox and label
 ---@field infoTooltip? string Optional info icon tooltip (format: "title|description")
+---@field onRightClick? fun() Optional right-click callback (wired on all interactive children)
 
 ---Create a modern flat-style checkbox with label and optional icons/tooltip
 ---@param parent table Parent frame
@@ -520,10 +692,28 @@ function Components.Checkbox(parent, config)
         cb:SetHovered(false)
     end)
 
-    -- Hover tooltip (on checkbox itself)
+    -- Hover tooltip (on all interactive children, chained with hover visuals)
     if config.tooltip then
-        SetupTooltip(cb, config.label, config.tooltip)
-        SetupTooltip(labelBtn, config.label, config.tooltip)
+        local title, desc
+        if type(config.tooltip) == "table" then
+            title = config.tooltip.title
+            desc = config.tooltip.desc
+        else
+            title = config.tooltip
+        end
+        holder:EnableMouse(true)
+        local function showTip()
+            ShowTooltip(holder, title, desc, "ANCHOR_TOP")
+        end
+        local function hideTip()
+            HideTooltip()
+        end
+        holder:HookScript("OnEnter", showTip)
+        holder:HookScript("OnLeave", hideTip)
+        cb:HookScript("OnEnter", showTip)
+        cb:HookScript("OnLeave", hideTip)
+        labelBtn:HookScript("OnEnter", showTip)
+        labelBtn:HookScript("OnLeave", hideTip)
     end
 
     -- Info tooltip icon (optional, shown after label)
@@ -537,21 +727,24 @@ function Components.Checkbox(parent, config)
         infoBtn:SetSize(14, 14)
         infoBtn:SetPoint("CENTER", infoIcon, "CENTER", 0, 0)
 
-        local tooltipTitle, tooltipDesc = config.infoTooltip:match("^([^|]+)|(.+)$")
-        if not tooltipTitle then
-            tooltipTitle, tooltipDesc = config.infoTooltip, nil
+        local infoTitle, infoDesc = config.infoTooltip:match("^([^|]+)|(.+)$")
+        if not infoTitle then
+            infoTitle = config.infoTooltip
         end
-        infoBtn:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText(tooltipTitle, 1, 0.82, 0)
-            if tooltipDesc then
-                GameTooltip:AddLine(tooltipDesc, 1, 1, 1, true)
+        SetupTooltip(infoBtn, infoTitle, infoDesc)
+    end
+
+    -- Right-click callback (wired on all interactive children)
+    if config.onRightClick then
+        local function handleRightClick(_, button)
+            if button == "RightButton" then
+                config.onRightClick()
             end
-            GameTooltip:Show()
-        end)
-        infoBtn:SetScript("OnLeave", function()
-            GameTooltip:Hide()
-        end)
+        end
+        holder:EnableMouse(true)
+        holder:SetScript("OnMouseUp", handleRightClick)
+        cb:HookScript("OnMouseUp", handleRightClick)
+        labelBtn:SetScript("OnMouseUp", handleRightClick)
     end
 
     -- Public methods
@@ -992,15 +1185,7 @@ local function CreateSegmentedBar(parent, category, onChange)
             onChange()
         end)
 
-        btn:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_TOP")
-            GameTooltip:SetText(toggle.tooltip, 1, 1, 1)
-            GameTooltip:AddLine("Click to toggle visibility in " .. toggle.tooltip:lower(), 0.7, 0.7, 0.7)
-            GameTooltip:Show()
-        end)
-        btn:SetScript("OnLeave", function()
-            GameTooltip:Hide()
-        end)
+        SetupTooltip(btn, toggle.tooltip, "Click to toggle visibility in " .. toggle.tooltip:lower(), "ANCHOR_TOP")
 
         -- Divider after each segment except the last
         if i < #TOGGLE_DEFS then

@@ -432,13 +432,13 @@ local function CreateOptionsPanel()
     buffsLeftY = RenderBuffCheckboxes(buffsContent, buffsLeftX, buffsLeftY, RaidBuffs)
     buffsLeftY = buffsLeftY - SECTION_SPACING
 
-    -- Presence Buffs
-    _, buffsLeftY = CreateSectionHeader(buffsContent, "Presence Buffs", buffsLeftX, buffsLeftY)
-    local presenceNote = buffsContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    presenceNote:SetPoint("TOPLEFT", buffsLeftX, buffsLeftY)
-    presenceNote:SetText("(at least 1 person needs)")
+    -- Targeted Buffs
+    _, buffsLeftY = CreateSectionHeader(buffsContent, "Targeted Buffs", buffsLeftX, buffsLeftY)
+    local targetedNote = buffsContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    targetedNote:SetPoint("TOPLEFT", buffsLeftX, buffsLeftY)
+    targetedNote:SetText("(buffs on someone else)")
     buffsLeftY = buffsLeftY - 14
-    buffsLeftY = RenderBuffCheckboxes(buffsContent, buffsLeftX, buffsLeftY, PresenceBuffs)
+    buffsLeftY = RenderBuffCheckboxes(buffsContent, buffsLeftX, buffsLeftY, TargetedBuffs)
     buffsLeftY = buffsLeftY - SECTION_SPACING
 
     -- Consumables
@@ -450,13 +450,13 @@ local function CreateOptionsPanel()
     buffsLeftY = RenderBuffCheckboxes(buffsContent, buffsLeftX, buffsLeftY, Consumables)
 
     -- RIGHT COLUMN: Individual buffs
-    -- Targeted Buffs
-    _, buffsRightY = CreateSectionHeader(buffsContent, "Targeted Buffs", buffsRightX, buffsRightY)
-    local targetedNote = buffsContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    targetedNote:SetPoint("TOPLEFT", buffsRightX, buffsRightY)
-    targetedNote:SetText("(buffs on someone else)")
+    -- Presence Buffs
+    _, buffsRightY = CreateSectionHeader(buffsContent, "Presence Buffs", buffsRightX, buffsRightY)
+    local presenceNote = buffsContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    presenceNote:SetPoint("TOPLEFT", buffsRightX, buffsRightY)
+    presenceNote:SetText("(at least 1 person needs)")
     buffsRightY = buffsRightY - 14
-    buffsRightY = RenderBuffCheckboxes(buffsContent, buffsRightX, buffsRightY, TargetedBuffs)
+    buffsRightY = RenderBuffCheckboxes(buffsContent, buffsRightX, buffsRightY, PresenceBuffs)
     buffsRightY = buffsRightY - SECTION_SPACING
 
     -- Self Buffs
@@ -481,6 +481,11 @@ local function CreateOptionsPanel()
     _, buffsRightY = CreateSectionHeader(buffsContent, "Custom Buffs", buffsRightX, buffsRightY)
     panel.customBuffRows = {}
 
+    local customNote = buffsContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    customNote:SetPoint("TOPLEFT", buffsRightX, buffsRightY)
+    customNote:SetText("(track any buff by spell ID)")
+    buffsRightY = buffsRightY - 14
+
     local customBuffsContainer = CreateFrame("Frame", nil, buffsContent)
     customBuffsContainer:SetPoint("TOPLEFT", buffsRightX, buffsRightY)
     customBuffsContainer:SetSize(COL_WIDTH, 200)
@@ -503,17 +508,6 @@ local function CreateOptionsPanel()
         end
         table.sort(sortedKeys)
 
-        if #sortedKeys == 0 then
-            local emptyFrame = CreateFrame("Frame", nil, customBuffsContainer)
-            emptyFrame:SetSize(300, 22)
-            emptyFrame:SetPoint("TOPLEFT", 0, rowY)
-            local emptyMsg = emptyFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-            emptyMsg:SetPoint("TOPLEFT")
-            emptyMsg:SetText("No custom buffs added yet.")
-            table.insert(panel.customBuffRows, emptyFrame)
-            rowY = rowY - ITEM_HEIGHT
-        end
-
         for _, key in ipairs(sortedKeys) do
             local customBuff = db.customBuffs[key]
 
@@ -528,18 +522,13 @@ local function CreateOptionsPanel()
                     BuffRemindersDB.enabledBuffs[key] = checked
                     UpdateDisplay()
                 end,
+                onRightClick = function()
+                    ShowCustomBuffModal(key, RenderCustomBuffRows)
+                end,
+                tooltip = { title = "Custom Buff", desc = "Right-click to edit or delete" },
             })
             holder:SetPoint("TOPLEFT", 0, rowY)
             panel.buffCheckboxes[key] = holder
-
-            -- Right-click to edit (on the holder frame)
-            holder:EnableMouse(true)
-            holder:SetScript("OnMouseUp", function(_, button)
-                if button == "RightButton" then
-                    ShowCustomBuffModal(key, RenderCustomBuffRows)
-                end
-            end)
-            BR.SetupTooltip(holder, "Right-click to edit or delete", nil, "ANCHOR_CURSOR")
 
             table.insert(panel.customBuffRows, holder)
             rowY = rowY - ITEM_HEIGHT
@@ -819,7 +808,10 @@ local function CreateOptionsPanel()
             get = function()
                 return IsCategorySplit(category)
             end,
-            tooltip = "Display this category's buffs in a separate, independently movable frame",
+            tooltip = {
+                title = "Split into separate frame",
+                desc = "Display this category's buffs in a separate, independently movable frame",
+            },
             onChange = function(checked)
                 if not db.categorySettings then
                     db.categorySettings = {}
@@ -903,7 +895,10 @@ local function CreateOptionsPanel()
                     and db.categorySettings[category].useCustomAppearance == true
             end,
             enabled = isCategorySplitEnabled,
-            tooltip = "When disabled, this category inherits appearance settings from Global Defaults",
+            tooltip = {
+                title = "Use custom appearance",
+                desc = "When disabled, this category inherits appearance settings from Global Defaults",
+            },
             onChange = function(checked)
                 if not db.categorySettings then
                     db.categorySettings = {}
@@ -1062,7 +1057,7 @@ local function CreateOptionsPanel()
         get = function()
             return BuffRemindersDB.showOnlyPlayerClassBuff == true
         end,
-        tooltip = "Only show buffs that your class can provide",
+        tooltip = { title = "Show only my class buffs", desc = "Only show buffs that your class can provide" },
         onChange = function(checked)
             BuffRemindersDB.showOnlyPlayerClassBuff = checked
             UpdateDisplay()
@@ -1076,7 +1071,7 @@ local function CreateOptionsPanel()
         get = function()
             return BuffRemindersDB.showOnlyPlayerMissing == true
         end,
-        tooltip = "Only show buffs you personally are missing",
+        tooltip = { title = "Show only buffs I'm missing", desc = "Only show buffs you personally are missing" },
         onChange = function(checked)
             BuffRemindersDB.showOnlyPlayerMissing = checked
             UpdateDisplay()
@@ -1090,7 +1085,10 @@ local function CreateOptionsPanel()
         get = function()
             return BuffRemindersDB.useGlowFallback == true
         end,
-        tooltip = "Uses WoW's action bar glow to detect when someone needs your raid buff, in Mythic+ where normal tracking is disabled.\n\nRequires the spell to be on your action bars.",
+        tooltip = {
+            title = "Show own raid buff during M+",
+            desc = "Uses WoW's action bar glow to detect when someone needs your raid buff, in Mythic+ where normal tracking is disabled.\n\nRequires the spell to be on your action bars.",
+        },
         onChange = function(checked)
             BuffRemindersDB.useGlowFallback = checked
             UpdateFallbackDisplay()
