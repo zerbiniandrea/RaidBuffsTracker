@@ -919,35 +919,46 @@ function Components.DirectionButtons(parent, config)
     return holder
 end
 
----Create category header with content visibility toggles [W][S][D][R]
+local TOGGLE_DEFS = {
+    { key = "openWorld", label = "W", tooltip = "Open World" },
+    { key = "scenario", label = "S", tooltip = "Scenarios (Delves, Torghast, etc.)" },
+    { key = "dungeon", label = "D", tooltip = "Dungeons (including M+)" },
+    { key = "raid", label = "R", tooltip = "Raids" },
+}
+
+local SEGMENT_W, SEGMENT_H = 22, 16
+local DIVIDER_W = 1
+-- 4 segments + 3 dividers + 2px border (1px each side)
+local BAR_W = 4 * SEGMENT_W + 3 * DIVIDER_W + 2
+local BAR_H = SEGMENT_H + 2
+
+---Create a segmented toggle bar (W/S/D/R) as a connected BackdropTemplate control
 ---@param parent table Parent frame
----@param config CategoryHeaderConfig Configuration table
----@param updateCallback fun() Function to call when visibility changes (UpdateDisplay or RefreshTestDisplay)
----@return table header FontString for the header
-function Components.CategoryHeader(parent, config, updateCallback)
-    local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    header:SetText("|cffffcc00" .. config.text .. "|r")
+---@param category CategoryName Category key for visibility DB
+---@param onChange fun() Callback when visibility changes
+---@return table container The bar container frame
+---@return table toggleButtons Array of segment button frames
+local function CreateSegmentedBar(parent, category, onChange)
+    local container = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    container:SetSize(BAR_W, BAR_H)
+    container:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    container:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+    container:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
 
-    local toggles = {
-        { key = "openWorld", label = "W", tooltip = "Open World" },
-        { key = "scenario", label = "S", tooltip = "Scenarios (Delves, Torghast, etc.)" },
-        { key = "dungeon", label = "D", tooltip = "Dungeons (including M+)" },
-        { key = "raid", label = "R", tooltip = "Raids" },
-    }
-
-    local lastToggle
-    for i, toggle in ipairs(toggles) do
-        local btn = CreateFrame("Button", nil, parent)
-        btn:SetSize(18, 14)
-        if i == 1 then
-            btn:SetPoint("LEFT", header, "RIGHT", 8, 0)
-        else
-            btn:SetPoint("LEFT", lastToggle, "RIGHT", 2, 0)
-        end
+    local toggleButtons = {}
+    for i, toggle in ipairs(TOGGLE_DEFS) do
+        local btn = CreateFrame("Button", nil, container)
+        btn:SetSize(SEGMENT_W, SEGMENT_H)
+        -- Position: 1px border offset, then (i-1) * (segment + divider)
+        local xOff = 1 + (i - 1) * (SEGMENT_W + DIVIDER_W)
+        btn:SetPoint("TOPLEFT", container, "TOPLEFT", xOff, -1)
 
         local bg = btn:CreateTexture(nil, "BACKGROUND")
         bg:SetAllPoints()
-        bg.key = toggle.key
 
         local btnLabel = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         btnLabel:SetPoint("CENTER", 0, 0)
@@ -955,14 +966,14 @@ function Components.CategoryHeader(parent, config, updateCallback)
 
         local function UpdateToggleVisual()
             local db = BuffRemindersDB
-            local visibility = db.categoryVisibility and db.categoryVisibility[config.category]
+            local visibility = db.categoryVisibility and db.categoryVisibility[category]
             local enabled = not visibility or visibility[toggle.key] ~= false
             if enabled then
-                bg:SetColorTexture(0.2, 0.6, 0.2, 0.8) -- Green
-                btnLabel:SetTextColor(1, 1, 1)
+                bg:SetColorTexture(0.18, 0.15, 0.08, 1)
+                btnLabel:SetTextColor(0.9, 0.75, 0.2, 1)
             else
-                bg:SetColorTexture(0.4, 0.2, 0.2, 0.8) -- Dim red
-                btnLabel:SetTextColor(0.6, 0.6, 0.6)
+                bg:SetColorTexture(0, 0, 0, 0)
+                btnLabel:SetTextColor(0.4, 0.4, 0.4, 1)
             end
         end
         btn.UpdateVisual = UpdateToggleVisual
@@ -973,13 +984,12 @@ function Components.CategoryHeader(parent, config, updateCallback)
             if not db.categoryVisibility then
                 db.categoryVisibility = {}
             end
-            if not db.categoryVisibility[config.category] then
-                db.categoryVisibility[config.category] =
-                    { openWorld = true, scenario = true, dungeon = true, raid = true }
+            if not db.categoryVisibility[category] then
+                db.categoryVisibility[category] = { openWorld = true, scenario = true, dungeon = true, raid = true }
             end
-            db.categoryVisibility[config.category][toggle.key] = not db.categoryVisibility[config.category][toggle.key]
+            db.categoryVisibility[category][toggle.key] = not db.categoryVisibility[category][toggle.key]
             UpdateToggleVisual()
-            updateCallback()
+            onChange()
         end)
 
         btn:SetScript("OnEnter", function(self)
@@ -992,8 +1002,31 @@ function Components.CategoryHeader(parent, config, updateCallback)
             GameTooltip:Hide()
         end)
 
-        lastToggle = btn
+        -- Divider after each segment except the last
+        if i < #TOGGLE_DEFS then
+            local divider = container:CreateTexture(nil, "ARTWORK")
+            divider:SetSize(DIVIDER_W, SEGMENT_H)
+            divider:SetPoint("LEFT", btn, "RIGHT", 0, 0)
+            divider:SetColorTexture(0.3, 0.3, 0.3, 0.8)
+        end
+
+        toggleButtons[i] = btn
     end
+
+    return container, toggleButtons
+end
+
+---Create category header with content visibility toggles [W][S][D][R]
+---@param parent table Parent frame
+---@param config CategoryHeaderConfig Configuration table
+---@param updateCallback fun() Function to call when visibility changes (UpdateDisplay or RefreshTestDisplay)
+---@return table header FontString for the header
+function Components.CategoryHeader(parent, config, updateCallback)
+    local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    header:SetText("|cffffcc00" .. config.text .. "|r")
+
+    local bar = CreateSegmentedBar(parent, config.category, updateCallback)
+    bar:SetPoint("LEFT", header, "RIGHT", 8, 0)
 
     return header
 end
@@ -1005,83 +1038,18 @@ end
 ---Create standalone W/S/D/R content visibility toggles
 ---@param parent table Parent frame
 ---@param config VisibilityTogglesConfig Configuration table
----@return table holder Frame containing 4 toggle buttons
+---@return table holder Frame containing segmented toggle bar
 function Components.VisibilityToggles(parent, config)
     local holder = CreateFrame("Frame", nil, parent)
-    holder:SetSize(200, 16)
-
-    local toggleDefs = {
-        { key = "openWorld", label = "W", tooltip = "Open World" },
-        { key = "scenario", label = "S", tooltip = "Scenarios (Delves, Torghast, etc.)" },
-        { key = "dungeon", label = "D", tooltip = "Dungeons (including M+)" },
-        { key = "raid", label = "R", tooltip = "Raids" },
-    }
+    holder:SetSize(200, BAR_H)
 
     local toggleLabel = holder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     toggleLabel:SetPoint("LEFT", 0, 0)
     toggleLabel:SetText("Show in:")
     holder.label = toggleLabel
 
-    local toggleButtons = {}
-    local lastToggle = toggleLabel
-    for i, toggle in ipairs(toggleDefs) do
-        local btn = CreateFrame("Button", nil, holder)
-        btn:SetSize(18, 14)
-        if i == 1 then
-            btn:SetPoint("LEFT", toggleLabel, "RIGHT", 6, 0)
-        else
-            btn:SetPoint("LEFT", lastToggle, "RIGHT", 2, 0)
-        end
-
-        local bg = btn:CreateTexture(nil, "BACKGROUND")
-        bg:SetAllPoints()
-
-        local btnLabel = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        btnLabel:SetPoint("CENTER", 0, 0)
-        btnLabel:SetText(toggle.label)
-
-        local function UpdateToggleVisual()
-            local db = BuffRemindersDB
-            local visibility = db.categoryVisibility and db.categoryVisibility[config.category]
-            local enabled = not visibility or visibility[toggle.key] ~= false
-            if enabled then
-                bg:SetColorTexture(0.2, 0.6, 0.2, 0.8)
-                btnLabel:SetTextColor(1, 1, 1)
-            else
-                bg:SetColorTexture(0.4, 0.2, 0.2, 0.8)
-                btnLabel:SetTextColor(0.6, 0.6, 0.6)
-            end
-        end
-        btn.UpdateVisual = UpdateToggleVisual
-        UpdateToggleVisual()
-
-        btn:SetScript("OnClick", function()
-            local db = BuffRemindersDB
-            if not db.categoryVisibility then
-                db.categoryVisibility = {}
-            end
-            if not db.categoryVisibility[config.category] then
-                db.categoryVisibility[config.category] =
-                    { openWorld = true, scenario = true, dungeon = true, raid = true }
-            end
-            db.categoryVisibility[config.category][toggle.key] = not db.categoryVisibility[config.category][toggle.key]
-            UpdateToggleVisual()
-            config.onChange()
-        end)
-
-        btn:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_TOP")
-            GameTooltip:SetText(toggle.tooltip, 1, 1, 1)
-            GameTooltip:AddLine("Click to toggle visibility in " .. toggle.tooltip:lower(), 0.7, 0.7, 0.7)
-            GameTooltip:Show()
-        end)
-        btn:SetScript("OnLeave", function()
-            GameTooltip:Hide()
-        end)
-
-        toggleButtons[i] = btn
-        lastToggle = btn
-    end
+    local bar, toggleButtons = CreateSegmentedBar(holder, config.category, config.onChange)
+    bar:SetPoint("LEFT", toggleLabel, "RIGHT", 6, 0)
 
     holder.toggleButtons = toggleButtons
 

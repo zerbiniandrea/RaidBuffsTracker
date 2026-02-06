@@ -223,9 +223,9 @@ local function CreateOptionsPanel()
         end
     end
 
-    -- Create 4 tabs: Buffs, Appearance, Settings, Import/Export
+    -- Create 4 tabs: Buffs, Display, Settings, Import/Export
     tabButtons.buffs = Components.Tab(panel, { name = "buffs", label = "Buffs", width = 50 })
-    tabButtons.appearance = Components.Tab(panel, { name = "appearance", label = "Appearance", width = 85 })
+    tabButtons.appearance = Components.Tab(panel, { name = "appearance", label = "Display", width = 60 })
     tabButtons.settings = Components.Tab(panel, { name = "settings", label = "Settings", width = 65 })
     tabButtons.profiles = Components.Tab(panel, { name = "profiles", label = "Import/Export", width = 95 })
 
