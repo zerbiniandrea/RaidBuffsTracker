@@ -1203,12 +1203,14 @@ local function CreateOptionsPanel()
     separator:SetColorTexture(0.3, 0.3, 0.3, 1)
 
     local btnHolder = CreateFrame("Frame", nil, bottomFrame)
-    btnHolder:SetPoint("TOP", 0, -18)
+    btnHolder:SetPoint("TOP", separator, "BOTTOM", 0, -8)
     btnHolder:SetSize(1, 22)
+
+    local BTN_WIDTH = 80
 
     local lockBtn = CreateButton(btnHolder, "Unlock", function(self)
         BuffRemindersDB.locked = not BuffRemindersDB.locked
-        self:SetText(BuffRemindersDB.locked and "Unlock" or "Lock")
+        self.text:SetText(BuffRemindersDB.locked and "Unlock" or "Lock")
         if BR.Display.IsTestMode() then
             RefreshTestDisplay()
         else
@@ -1216,17 +1218,19 @@ local function CreateOptionsPanel()
         end
     end, { title = "Lock/Unlock", desc = "Unlock to drag and reposition the buff frames." })
     lockBtn:SetText(BuffRemindersDB.locked and "Unlock" or "Lock")
+    lockBtn:SetSize(BTN_WIDTH, 22)
     lockBtn:SetPoint("RIGHT", btnHolder, "CENTER", -4, 0)
     panel.lockBtn = lockBtn
 
     local testBtn = CreateButton(btnHolder, "Stop Test", function(self)
         local isOn = ToggleTestMode()
-        self:SetText(isOn and "Stop Test" or "Test")
+        self.text:SetText(isOn and "Stop Test" or "Test")
     end, {
         title = "Test icon's appearance",
         desc = "Shows ALL buffs regardless of what you selected in the buffs section.",
     })
     testBtn:SetText("Test")
+    testBtn:SetSize(BTN_WIDTH, 22)
     testBtn:SetPoint("LEFT", btnHolder, "CENTER", 4, 0)
     panel.testBtn = testBtn
 
@@ -1250,12 +1254,12 @@ local function ToggleOptions()
             optionsPanel.RenderCustomBuffRows()
         end
         -- Update lock button text
-        optionsPanel.lockBtn:SetText(BuffRemindersDB.locked and "Unlock" or "Lock")
+        optionsPanel.lockBtn.text:SetText(BuffRemindersDB.locked and "Unlock" or "Lock")
         -- Update test button text
         if BR.Display.IsTestMode() then
-            optionsPanel.testBtn:SetText("Stop Test")
+            optionsPanel.testBtn.text:SetText("Stop Test")
         else
-            optionsPanel.testBtn:SetText("Test")
+            optionsPanel.testBtn.text:SetText("Test")
         end
         optionsPanel:Show()
     end
