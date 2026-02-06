@@ -764,23 +764,6 @@ function Components.Checkbox(parent, config)
     holder.label = label
     cb.label = label
 
-    -- Make label clickable too
-    local labelBtn = CreateFrame("Button", nil, holder)
-    labelBtn:SetPoint("TOPLEFT", label, "TOPLEFT", 0, 0)
-    labelBtn:SetPoint("BOTTOMRIGHT", label, "BOTTOMRIGHT", 0, 0)
-    labelBtn:SetScript("OnClick", function()
-        if cb:IsEnabled() then
-            cb:SetChecked(not cb:GetChecked())
-            config.onChange(cb:GetChecked())
-        end
-    end)
-    labelBtn:SetScript("OnEnter", function()
-        cb:SetHovered(true)
-    end)
-    labelBtn:SetScript("OnLeave", function()
-        cb:SetHovered(false)
-    end)
-
     -- Hover tooltip (on all interactive children, chained with hover visuals)
     if config.tooltip then
         local title, desc
@@ -801,8 +784,6 @@ function Components.Checkbox(parent, config)
         holder:HookScript("OnLeave", hideTip)
         cb:HookScript("OnEnter", showTip)
         cb:HookScript("OnLeave", hideTip)
-        labelBtn:HookScript("OnEnter", showTip)
-        labelBtn:HookScript("OnLeave", hideTip)
     end
 
     -- Info tooltip icon (optional, shown after label)
@@ -833,7 +814,6 @@ function Components.Checkbox(parent, config)
         holder:EnableMouse(true)
         holder:SetScript("OnMouseUp", handleRightClick)
         cb:HookScript("OnMouseUp", handleRightClick)
-        labelBtn:SetScript("OnMouseUp", handleRightClick)
     end
 
     -- Public methods
