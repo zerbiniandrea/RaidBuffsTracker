@@ -727,9 +727,38 @@ local function CreateCategoryFrame(category)
     return frame
 end
 
+-- Apply icon and border textures to a buff frame
+local function ApplyIconStyling(frame, catSettings, texture)
+    frame.icon = frame:CreateTexture(nil, "ARTWORK")
+    frame.icon:SetAllPoints()
+    local zoom = (catSettings.iconZoom or DEFAULT_ICON_ZOOM) / 100
+    frame.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
+    frame.icon:SetDesaturated(false)
+    frame.icon:SetVertexColor(1, 1, 1, 1)
+    if texture then
+        frame.icon:SetTexture(texture)
+    end
+
+    local borderSize = catSettings.borderSize or DEFAULT_BORDER_SIZE
+    frame.border = frame:CreateTexture(nil, "BACKGROUND")
+    frame.border:SetPoint("TOPLEFT", -borderSize, borderSize)
+    frame.border:SetPoint("BOTTOMRIGHT", borderSize, -borderSize)
+    frame.border:SetColorTexture(0, 0, 0, 1)
+end
+
+-- Update icon zoom and border size on an existing buff frame
+local function UpdateIconStyling(frame, catSettings)
+    local zoom = (catSettings.iconZoom or DEFAULT_ICON_ZOOM) / 100
+    frame.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
+    local borderSize = catSettings.borderSize or DEFAULT_BORDER_SIZE
+    frame.border:ClearAllPoints()
+    frame.border:SetPoint("TOPLEFT", -borderSize, borderSize)
+    frame.border:SetPoint("BOTTOMRIGHT", borderSize, -borderSize)
+end
+
 -- Create icon frame for a buff
 local function CreateBuffFrame(buff, category)
-    local frame = CreateFrame("Frame", "BuffReminders_" .. buff.key, mainFrame)
+    local frame = CreateFrame("Button", "BuffReminders_" .. buff.key, mainFrame)
     frame.key = buff.key
     frame.spellIDs = buff.spellID
     frame.displayName = buff.name
@@ -742,28 +771,13 @@ local function CreateBuffFrame(buff, category)
     local iconSize = catSettings.iconSize or 64
     frame:SetSize(iconSize, iconSize)
 
-    -- Icon texture
-    frame.icon = frame:CreateTexture(nil, "ARTWORK")
-    frame.icon:SetAllPoints()
-    local zoom = (catSettings.iconZoom or DEFAULT_ICON_ZOOM) / 100
-    frame.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
-    frame.icon:SetDesaturated(false)
-    frame.icon:SetVertexColor(1, 1, 1, 1)
+    -- Icon + border textures
     local iconOverride = buff.iconOverride
     if type(iconOverride) == "table" then
         iconOverride = iconOverride[1] -- Use first icon for buff frame
     end
     local texture = iconOverride or GetBuffTexture(buff.spellID, buff.iconByRole)
-    if texture then
-        frame.icon:SetTexture(texture)
-    end
-
-    -- Border (background behind icon)
-    local borderSize = catSettings.borderSize or DEFAULT_BORDER_SIZE
-    frame.border = frame:CreateTexture(nil, "BACKGROUND")
-    frame.border:SetPoint("TOPLEFT", -borderSize, borderSize)
-    frame.border:SetPoint("BOTTOMRIGHT", borderSize, -borderSize)
-    frame.border:SetColorTexture(0, 0, 0, 1)
+    ApplyIconStyling(frame, catSettings, texture)
 
     -- Count text (font size scales with icon size, updated in UpdateVisuals)
     frame.count = frame:CreateFontString(nil, "OVERLAY", "NumberFontNormalLarge")
@@ -1679,14 +1693,7 @@ local function UpdateVisuals()
             end
             frame.buffText:SetShown(showReminder)
         end
-        -- Update icon zoom (texcoord)
-        local zoom = (catSettings.iconZoom or DEFAULT_ICON_ZOOM) / 100
-        frame.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
-        -- Update border size
-        local borderSize = catSettings.borderSize or DEFAULT_BORDER_SIZE
-        frame.border:ClearAllPoints()
-        frame.border:SetPoint("TOPLEFT", -borderSize, borderSize)
-        frame.border:SetPoint("BOTTOMRIGHT", borderSize, -borderSize)
+        UpdateIconStyling(frame, catSettings)
     end
     if testMode then
         RefreshTestDisplay()

@@ -9,6 +9,8 @@
 ---@field GetWidth fun(self: Frame): number
 ---@field GetHeight fun(self: Frame): number
 
+---@class Button: Frame
+
 ---@class Texture
 ---@field SetAllPoints fun(self: Texture, target?: any)
 ---@field SetTexCoord fun(self: Texture, left: number, right: number, top: number, bottom: number)
@@ -99,7 +101,7 @@
 ---@field missingText? string
 ---@field class? ClassName
 
----@class BuffFrame: Frame
+---@class BuffFrame: Button
 ---@field key string
 ---@field spellIDs SpellID
 ---@field displayName string
