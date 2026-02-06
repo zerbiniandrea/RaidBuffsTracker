@@ -2326,6 +2326,22 @@ function Components.VerticalLayout(parent, config)
         return x
     end
 
+    ---Add multiple components on the same row, advancing Y by the tallest
+    ---@param items table[] Array of {component, xOffset} pairs
+    ---@param spacing? number Extra spacing after row (default 0)
+    function layout:AddRow(items, spacing)
+        local maxH = 0
+        for _, item in ipairs(items) do
+            local comp, xOff = item[1], item[2]
+            comp:SetPoint("TOPLEFT", parent, "TOPLEFT", xOff, currentY)
+            local h = (comp.GetHeight and comp:GetHeight()) or 20
+            if h > maxH then
+                maxH = h
+            end
+        end
+        currentY = currentY - maxH - (spacing or 0)
+    end
+
     return layout
 end
 

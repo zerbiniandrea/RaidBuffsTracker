@@ -80,6 +80,11 @@ local SECTION_SPACING = 12
 local ITEM_HEIGHT = 22
 local SCROLLBAR_WIDTH = 24
 
+-- Vertical layout spacing constants
+local COMPONENT_GAP = 4 -- Standard gap between components
+local SECTION_GAP = 8 -- Gap before/after section boundaries
+local DROPDOWN_EXTRA = 8 -- Extra clearance after dropdowns (menu overlay space)
+
 local CATEGORY_ORDER = { "raid", "presence", "targeted", "self", "pet", "consumable", "custom" }
 local CATEGORY_LABELS = {
     raid = "Raid Buffs",
@@ -90,6 +95,14 @@ local CATEGORY_LABELS = {
     consumable = "Consumables",
     custom = "Custom Buffs",
 }
+
+-- Layout-aware section header (uses VerticalLayout instead of manual Y tracking)
+local function LayoutSectionHeader(layout, parent, text)
+    local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    header:SetText("|cffffcc00" .. text .. "|r")
+    layout:AddText(header, 14, COMPONENT_GAP)
+    return header
+end
 
 -- ============================================================================
 -- OPTIONS PANEL
@@ -583,16 +596,15 @@ local function CreateOptionsPanel()
 
     -- ========== APPEARANCE TAB ==========
     local appearanceContent, _ = CreateScrollableContent("appearance")
-    local appY = -10
     local appX = COL_PADDING
+    local appLayout = Components.VerticalLayout(appearanceContent, { x = appX, y = -10 })
 
     -- Global Defaults section
-    _, appY = CreateSectionHeader(appearanceContent, "Global Defaults", appX, appY)
+    LayoutSectionHeader(appLayout, appearanceContent, "Global Defaults")
 
     local defNote = appearanceContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    defNote:SetPoint("TOPLEFT", appX, appY)
+    appLayout:AddText(defNote, 12, COMPONENT_GAP)
     defNote:SetText("(All categories inherit these unless overridden)")
-    appY = appY - 16
 
     -- Fixed column layout: all sliders use default labelWidth (70)
     local DEF_COL2 = 260 -- labelWidth(70) + sliderWidth(100) + value(60) + gap(30)
@@ -608,7 +620,6 @@ local function CreateOptionsPanel()
             BR.Config.Set("defaults.iconSize", val)
         end,
     })
-    defSizeHolder:SetPoint("TOPLEFT", appX, appY)
 
     local defZoomHolder = Components.Slider(appearanceContent, {
         label = "Icon Zoom",
@@ -622,8 +633,7 @@ local function CreateOptionsPanel()
             BR.Config.Set("defaults.iconZoom", val)
         end,
     })
-    defZoomHolder:SetPoint("TOPLEFT", appX + DEF_COL2, appY)
-    appY = appY - 24
+    appLayout:AddRow({ { defSizeHolder, appX }, { defZoomHolder, appX + DEF_COL2 } }, COMPONENT_GAP)
 
     local defBorderHolder = Components.Slider(appearanceContent, {
         label = "Border Size",
@@ -637,7 +647,6 @@ local function CreateOptionsPanel()
             BR.Config.Set("defaults.borderSize", val)
         end,
     })
-    defBorderHolder:SetPoint("TOPLEFT", appX, appY)
 
     local defAlphaHolder = Components.Slider(appearanceContent, {
         label = "Alpha",
@@ -651,8 +660,7 @@ local function CreateOptionsPanel()
             BR.Config.Set("defaults.iconAlpha", val / 100)
         end,
     })
-    defAlphaHolder:SetPoint("TOPLEFT", appX + DEF_COL2, appY)
-    appY = appY - 24
+    appLayout:AddRow({ { defBorderHolder, appX }, { defAlphaHolder, appX + DEF_COL2 } }, COMPONENT_GAP)
 
     local defSpacingHolder = Components.Slider(appearanceContent, {
         label = "Spacing",
@@ -666,7 +674,6 @@ local function CreateOptionsPanel()
             BR.Config.Set("defaults.spacing", val / 100)
         end,
     })
-    defSpacingHolder:SetPoint("TOPLEFT", appX, appY)
 
     local defTextSizeHolder = Components.NumericStepper(appearanceContent, {
         label = "Text Size",
@@ -685,7 +692,6 @@ local function CreateOptionsPanel()
             BR.Config.Set("defaults.textSize", val)
         end,
     })
-    defTextSizeHolder:SetPoint("TOPLEFT", appX + DEF_COL2, appY)
 
     local defTextColorHolder = Components.ColorSwatch(appearanceContent, {
         label = "",
@@ -703,8 +709,8 @@ local function CreateOptionsPanel()
             })
         end,
     })
+    appLayout:AddRow({ { defSpacingHolder, appX }, { defTextSizeHolder, appX + DEF_COL2 } }, COMPONENT_GAP)
     defTextColorHolder:SetPoint("LEFT", defTextSizeHolder, "RIGHT", 12, 0) -- aligns alpha % with slider values
-    appY = appY - 24
 
     local defDirHolder = Components.DirectionButtons(appearanceContent, {
         get = function()
@@ -714,8 +720,7 @@ local function CreateOptionsPanel()
             BR.Config.Set("defaults.growDirection", dir)
         end,
     })
-    defDirHolder:SetPoint("TOPLEFT", appX, appY)
-    appY = appY - 35 -- Extra space for Direction dropdown menu
+    appLayout:Add(defDirHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
 
     local resetMainPosBtn = CreateButton(appearanceContent, "Reset Main Frame Position", function()
         local mainDefaults = defaults.categorySettings.main
@@ -739,11 +744,10 @@ local function CreateOptionsPanel()
             end
         end
     end, { title = "Reset Position", desc = "Reset the main buff frame to center of screen." })
-    resetMainPosBtn:SetPoint("TOPLEFT", appX, appY)
-    appY = appY - 30
+    appLayout:Add(resetMainPosBtn, 22, SECTION_GAP)
 
     -- Expiration Glow section
-    _, appY = CreateSectionHeader(appearanceContent, "Expiration Glow", appX, appY)
+    LayoutSectionHeader(appLayout, appearanceContent, "Expiration Glow")
 
     local defGlowHolder = Components.Checkbox(appearanceContent, {
         label = "Show expiration glow",
@@ -755,8 +759,7 @@ local function CreateOptionsPanel()
             Components.RefreshAll()
         end,
     })
-    defGlowHolder:SetPoint("TOPLEFT", appX, appY)
-    appY = appY - 22
+    appLayout:Add(defGlowHolder, nil, COMPONENT_GAP)
 
     local function isExpirationGlowEnabled()
         return BuffRemindersDB.defaults and BuffRemindersDB.defaults.showExpirationGlow ~= false
@@ -775,8 +778,8 @@ local function CreateOptionsPanel()
             BR.Config.Set("defaults.expirationThreshold", val)
         end,
     })
-    defThresholdHolder:SetPoint("TOPLEFT", appX + 20, appY)
-    appY = appY - 26
+    appLayout:SetX(appX + 20)
+    appLayout:Add(defThresholdHolder, nil, COMPONENT_GAP)
 
     -- Style dropdown (on its own line)
     local styleOptions = {}
@@ -796,29 +799,29 @@ local function CreateOptionsPanel()
             BR.Config.Set("defaults.glowStyle", val)
         end,
     }, "BuffRemindersDefStyleDropdown")
-    defStyleHolder:SetPoint("TOPLEFT", appX + 20, appY)
+    appLayout:Add(defStyleHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
+    appLayout:SetX(appX)
 
     local previewBtn = CreateButton(appearanceContent, "Preview", function()
         ShowGlowDemo()
     end)
     previewBtn:SetPoint("LEFT", defStyleHolder, "RIGHT", 10, 0)
-    appY = appY - 40 -- Extra space after dropdown to avoid clipping
 
     -- Per-Category Customization section
-    _, appY = CreateSectionHeader(appearanceContent, "Per-Category Customization", appX, appY)
-    appY = appY - 4
+    LayoutSectionHeader(appLayout, appearanceContent, "Per-Category Customization")
+    appLayout:Space(COMPONENT_GAP)
 
     -- Create collapsible sections that chain-anchor to each other
     local categorySections = {}
     local previousSection = nil
 
     local function UpdateAppearanceContentHeight()
-        -- Calculate total height based on all sections
-        local totalHeight = 180 -- Header sections height
+        -- Calculate total height: fixed header area + all collapsible sections
+        local totalHeight = math.abs(appLayout:GetY())
         for _, sec in ipairs(categorySections) do
             totalHeight = totalHeight + sec:GetHeight() + 4
         end
-        appearanceContent:SetHeight(totalHeight + 50)
+        appearanceContent:SetHeight(totalHeight)
     end
 
     local SECTION_SCROLLBAR_OFFSET = COL_PADDING
@@ -836,11 +839,11 @@ local function CreateOptionsPanel()
         if previousSection then
             section:SetPoint("TOPLEFT", previousSection, "BOTTOMLEFT", 0, -4)
         else
-            section:SetPoint("TOPLEFT", appX, appY)
+            section:SetPoint("TOPLEFT", appX, appLayout:GetY())
         end
 
         local catContent = section:GetContentFrame()
-        local catY = 0
+        local catLayout = Components.VerticalLayout(catContent, { x = 0, y = 0 })
 
         local db = BuffRemindersDB
 
@@ -858,8 +861,7 @@ local function CreateOptionsPanel()
             category = category,
             onChange = OnCategoryVisibilityChange,
         })
-        visToggles:SetPoint("TOPLEFT", 0, catY)
-        catY = catY - 20
+        catLayout:Add(visToggles, nil, SECTION_GAP)
 
         -- Hide while mounted (pet only)
         if category == "pet" then
@@ -873,8 +875,7 @@ local function CreateOptionsPanel()
                     UpdateDisplay()
                 end,
             })
-            hideMountHolder:SetPoint("TOPLEFT", 0, catY)
-            catY = catY - 22
+            catLayout:Add(hideMountHolder, nil, COMPONENT_GAP)
         end
 
         -- "BUFF!" text (raid only)
@@ -889,8 +890,7 @@ local function CreateOptionsPanel()
                     BR.Config.Set("categorySettings.raid.showBuffReminder", checked)
                 end,
             })
-            reminderHolder:SetPoint("TOPLEFT", 0, catY)
-            catY = catY - 22
+            catLayout:Add(reminderHolder, nil, COMPONENT_GAP)
         end
 
         -- Split frame checkbox
@@ -915,8 +915,7 @@ local function CreateOptionsPanel()
                 UpdateVisuals()
             end,
         })
-        splitHolder:SetPoint("TOPLEFT", 0, catY)
-        catY = catY - 22
+        catLayout:Add(splitHolder, nil, COMPONENT_GAP)
 
         -- Priority slider (only relevant when not split)
         local priorityHolder = Components.Slider(catContent, {
@@ -939,8 +938,8 @@ local function CreateOptionsPanel()
                 BR.Config.Set("categorySettings." .. category .. ".priority", val)
             end,
         })
-        priorityHolder:SetPoint("TOPLEFT", 10, catY)
-        catY = catY - 32
+        catLayout:SetX(10)
+        catLayout:Add(priorityHolder, nil, COMPONENT_GAP)
 
         -- Shared enabled predicates for this category
         local function isCategorySplitEnabled()
@@ -969,7 +968,7 @@ local function CreateOptionsPanel()
                 BR.Config.Set("categorySettings." .. category .. ".growDirection", dir)
             end,
         })
-        dirHolder:SetPoint("TOPLEFT", 10, catY)
+        catLayout:Add(dirHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
 
         local resetBtn = CreateButton(catContent, "Reset Pos", function()
             local catDefaults = defaults.categorySettings[category]
@@ -1004,9 +1003,9 @@ local function CreateOptionsPanel()
             resetBtn:SetEnabled(IsCategorySplit(category))
             Components.RefreshAll()
         end)
-        catY = catY - 32
 
         -- Use custom appearance checkbox
+        catLayout:SetX(0)
         local useCustomAppHolder = Components.Checkbox(catContent, {
             label = "Use custom appearance",
             get = function()
@@ -1059,13 +1058,13 @@ local function CreateOptionsPanel()
                 Components.RefreshAll()
             end,
         })
-        useCustomAppHolder:SetPoint("TOPLEFT", 0, catY)
-        catY = catY - 22
+        catLayout:Add(useCustomAppHolder, nil, COMPONENT_GAP)
 
         -- Appearance controls (3-row grid with fixed columns)
         local appFrame = CreateFrame("Frame", nil, catContent)
         appFrame:SetSize(380, 50)
-        appFrame:SetPoint("TOPLEFT", 10, catY)
+        catLayout:SetX(10)
+        catLayout:Add(appFrame, 0)
 
         -- Read the category's own saved value, falling back to defaults only if no value was saved.
         -- This avoids showing inherited defaults when useCustomAppearance is off, so toggling
@@ -1201,9 +1200,11 @@ local function CreateOptionsPanel()
         })
         catTextColorHolder:SetPoint("LEFT", catTextSizeHolder, "RIGHT", 12, 0) -- aligns alpha % with slider values
 
-        catY = catY - 76
+        -- Advance past the 3-row appFrame grid (72px) and finalize section height
+        catLayout:Space(72)
+        catLayout:SetX(0)
 
-        section:SetContentHeight(math.abs(catY) + 10)
+        section:SetContentHeight(math.abs(catLayout:GetY()) + 10)
         table.insert(categorySections, section)
         previousSection = section
     end
@@ -1218,11 +1219,11 @@ local function CreateOptionsPanel()
     settingsContent:Hide()
     contentContainers.settings = settingsContent
 
-    local setY = -10
     local setX = COL_PADDING
+    local setLayout = Components.VerticalLayout(settingsContent, { x = setX, y = -10 })
 
     -- General Settings section
-    _, setY = CreateSectionHeader(settingsContent, "Display Behavior", setX, setY)
+    LayoutSectionHeader(setLayout, settingsContent, "Display Behavior")
 
     local groupHolder = Components.Checkbox(settingsContent, {
         label = "Show only in group/raid",
@@ -1234,8 +1235,7 @@ local function CreateOptionsPanel()
             UpdateDisplay()
         end,
     })
-    groupHolder:SetPoint("TOPLEFT", setX, setY)
-    setY = setY - 22
+    setLayout:Add(groupHolder, nil, COMPONENT_GAP)
 
     local readyCheckHolder = Components.Checkbox(settingsContent, {
         label = "Show only on ready check",
@@ -1248,8 +1248,7 @@ local function CreateOptionsPanel()
             Components.RefreshAll()
         end,
     })
-    readyCheckHolder:SetPoint("TOPLEFT", setX, setY)
-    setY = setY - 22
+    setLayout:Add(readyCheckHolder, nil, COMPONENT_GAP)
 
     local readyDurationHolder = Components.Slider(settingsContent, {
         label = "Duration",
@@ -1268,8 +1267,9 @@ local function CreateOptionsPanel()
             BuffRemindersDB.readyCheckDuration = val
         end,
     })
-    readyDurationHolder:SetPoint("TOPLEFT", setX + 20, setY)
-    setY = setY - 22
+    setLayout:SetX(setX + 20)
+    setLayout:Add(readyDurationHolder, nil, COMPONENT_GAP)
+    setLayout:SetX(setX)
 
     local playerClassHolder = Components.Checkbox(settingsContent, {
         label = "Show only my class buffs",
@@ -1282,8 +1282,7 @@ local function CreateOptionsPanel()
             UpdateDisplay()
         end,
     })
-    playerClassHolder:SetPoint("TOPLEFT", setX, setY)
-    setY = setY - 22
+    setLayout:Add(playerClassHolder, nil, COMPONENT_GAP)
 
     local playerMissingHolder = Components.Checkbox(settingsContent, {
         label = "Show only buffs I'm missing",
@@ -1296,8 +1295,7 @@ local function CreateOptionsPanel()
             UpdateDisplay()
         end,
     })
-    playerMissingHolder:SetPoint("TOPLEFT", setX, setY)
-    setY = setY - 22
+    setLayout:Add(playerMissingHolder, nil, COMPONENT_GAP)
 
     local glowFallbackHolder = Components.Checkbox(settingsContent, {
         label = "|cffff8800EXPERIMENTAL|r Show own raid buff during M+",
@@ -1313,8 +1311,7 @@ local function CreateOptionsPanel()
             UpdateFallbackDisplay()
         end,
     })
-    glowFallbackHolder:SetPoint("TOPLEFT", setX, setY)
-    setY = setY - 22
+    setLayout:Add(glowFallbackHolder, nil, COMPONENT_GAP)
 
     local loginMsgHolder = Components.Checkbox(settingsContent, {
         label = "Show login messages",
@@ -1325,7 +1322,7 @@ local function CreateOptionsPanel()
             BuffRemindersDB.showLoginMessages = checked
         end,
     })
-    loginMsgHolder:SetPoint("TOPLEFT", setX, setY)
+    setLayout:Add(loginMsgHolder)
 
     -- ========== IMPORT/EXPORT TAB ==========
     -- Use simple frame (not scrollable) to avoid nested scroll frame issues with edit boxes
@@ -1335,30 +1332,27 @@ local function CreateOptionsPanel()
     profilesContent:Hide()
     contentContainers.profiles = profilesContent
 
-    local profY = -10
     local profX = COL_PADDING
+    local profLayout = Components.VerticalLayout(profilesContent, { x = profX, y = -10 })
 
     local formatWarning = profilesContent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    formatWarning:SetPoint("TOPLEFT", profX, profY)
     formatWarning:SetText("|cffff9900Note:|r Export string format changed in v2.6.1. Old strings are incompatible.")
     formatWarning:SetWidth(PANEL_WIDTH - COL_PADDING * 2)
     formatWarning:SetJustifyH("LEFT")
-    profY = profY - 25
+    profLayout:AddText(formatWarning, 12, SECTION_GAP)
 
     -- Export section
-    _, profY = CreateSectionHeader(profilesContent, "Export Settings", profX, profY)
+    LayoutSectionHeader(profLayout, profilesContent, "Export Settings")
 
     local exportDesc = profilesContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    exportDesc:SetPoint("TOPLEFT", profX, profY)
     exportDesc:SetText("Copy the string below to share your settings with others.")
-    profY = profY - 20
+    profLayout:AddText(exportDesc, 12, COMPONENT_GAP)
 
     local exportTextArea = Components.TextArea(profilesContent, {
         width = PANEL_WIDTH - COL_PADDING * 2 - SCROLLBAR_WIDTH,
         height = 80,
     })
-    exportTextArea:SetPoint("TOPLEFT", profX, profY)
-    profY = profY - 90
+    profLayout:Add(exportTextArea, 80, COMPONENT_GAP)
 
     local exportButton = CreateButton(profilesContent, "Export", function()
         local exportString, err = BuffReminders:Export()
@@ -1370,23 +1364,20 @@ local function CreateOptionsPanel()
             exportTextArea:SetText("Error: " .. (err or "Failed to export"))
         end
     end)
-    exportButton:SetPoint("TOPLEFT", profX, profY)
-    profY = profY - 35
+    profLayout:Add(exportButton, 22, SECTION_GAP)
 
     -- Import section
-    _, profY = CreateSectionHeader(profilesContent, "Import Settings", profX, profY)
+    LayoutSectionHeader(profLayout, profilesContent, "Import Settings")
 
     local importDesc = profilesContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    importDesc:SetPoint("TOPLEFT", profX, profY)
     importDesc:SetText("Paste a settings string below. This will overwrite your current settings.")
-    profY = profY - 20
+    profLayout:AddText(importDesc, 12, COMPONENT_GAP)
 
     local importTextArea = Components.TextArea(profilesContent, {
         width = PANEL_WIDTH - COL_PADDING * 2 - SCROLLBAR_WIDTH,
         height = 80,
     })
-    importTextArea:SetPoint("TOPLEFT", profX, profY)
-    profY = profY - 90
+    profLayout:Add(importTextArea, 80, COMPONENT_GAP)
 
     local importStatus = profilesContent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     importStatus:SetWidth(PANEL_WIDTH - COL_PADDING * 2 - 120)
@@ -1403,10 +1394,10 @@ local function CreateOptionsPanel()
             importStatus:SetText("|cffff0000Error: " .. (err or "Unknown error") .. "|r")
         end
     end)
-    importButton:SetPoint("TOPLEFT", profX, profY)
+    profLayout:Add(importButton, 22)
     importStatus:SetPoint("LEFT", importButton, "RIGHT", 10, 0)
 
-    profilesContent:SetHeight(math.abs(profY) + 50)
+    profilesContent:SetHeight(math.abs(profLayout:GetY()) + 50)
 
     -- ========== BOTTOM BUTTONS ==========
     local bottomFrame = CreateFrame("Frame", nil, panel)
