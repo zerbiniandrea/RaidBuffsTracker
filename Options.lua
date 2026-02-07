@@ -637,7 +637,7 @@ local function CreateOptionsPanel()
     appLayout:AddRow({ { defSizeHolder, appX }, { defZoomHolder, appX + DEF_COL2 } }, COMPONENT_GAP)
 
     local defBorderHolder = Components.Slider(appearanceContent, {
-        label = "Border Size",
+        label = "Border",
         min = 0,
         max = 8,
         get = function()
@@ -677,7 +677,7 @@ local function CreateOptionsPanel()
     })
 
     local defTextSizeHolder = Components.NumericStepper(appearanceContent, {
-        label = "Text Size",
+        label = "Text",
         min = 6,
         max = 32,
         get = function()
