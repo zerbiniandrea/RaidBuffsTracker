@@ -6,6 +6,7 @@
 ## SavedVariables: BuffRemindersDB
 ## X-Curse-Project-ID: 1441094
 ## X-Wago-ID: qGYZZjNg
+## OptionalDeps: Masque
 ## IconTexture: Interface\AddOns\BuffReminders\icon.tga
 
 Libs\LibStub\LibStub.lua

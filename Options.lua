@@ -57,6 +57,11 @@ local ReparentBuffFrames = BR.CallbackRegistry.TriggerEvent
         end
     or function() end
 
+-- Masque state
+local IsMasqueActive = BR.Masque and BR.Masque.IsActive or function()
+    return false
+end
+
 -- Custom buff management
 local CreateCustomBuffFrameRuntime = BR.CustomBuffs.CreateRuntime
 local RemoveCustomBuffFrame = BR.CustomBuffs.Remove
@@ -628,6 +633,9 @@ local function CreateOptionsPanel()
         get = function()
             return BuffRemindersDB.defaults and BuffRemindersDB.defaults.iconZoom or DEFAULT_ICON_ZOOM
         end,
+        enabled = function()
+            return not IsMasqueActive()
+        end,
         suffix = "%",
         onChange = function(val)
             BR.Config.Set("defaults.iconZoom", val)
@@ -641,6 +649,9 @@ local function CreateOptionsPanel()
         max = 8,
         get = function()
             return BuffRemindersDB.defaults and BuffRemindersDB.defaults.borderSize or DEFAULT_BORDER_SIZE
+        end,
+        enabled = function()
+            return not IsMasqueActive()
         end,
         suffix = "px",
         onChange = function(val)
@@ -1155,7 +1166,9 @@ local function CreateOptionsPanel()
             get = function()
                 return getCatOwnValue("iconZoom", DEFAULT_ICON_ZOOM)
             end,
-            enabled = isCustomAppearanceEnabled,
+            enabled = function()
+                return isCustomAppearanceEnabled() and not IsMasqueActive()
+            end,
             suffix = "%",
             onChange = function(val)
                 BR.Config.Set("categorySettings." .. category .. ".iconZoom", val)
@@ -1171,7 +1184,9 @@ local function CreateOptionsPanel()
             get = function()
                 return getCatOwnValue("borderSize", DEFAULT_BORDER_SIZE)
             end,
-            enabled = isCustomAppearanceEnabled,
+            enabled = function()
+                return isCustomAppearanceEnabled() and not IsMasqueActive()
+            end,
             suffix = "px",
             onChange = function(val)
                 BR.Config.Set("categorySettings." .. category .. ".borderSize", val)

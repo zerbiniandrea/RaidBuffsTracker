@@ -7,6 +7,14 @@ local DEFAULT_ICON_ZOOM = BR.DEFAULT_ICON_ZOOM
 -- LibSharedMedia for font resolution
 local LSM = LibStub("LibSharedMedia-3.0")
 
+-- Masque integration (optional)
+local Masque = LibStub("Masque", true)
+local masqueGroup = Masque and Masque:Group("BuffReminders")
+
+local function IsMasqueActive()
+    return masqueGroup ~= nil and not masqueGroup.db.Disabled
+end
+
 -- Cached font path — resolved once on load and updated when the setting changes (via VisualsRefresh).
 -- All SetFont calls read this local directly instead of calling LSM:Fetch() every time.
 local fontPath = STANDARD_TEXT_FONT
@@ -727,38 +735,40 @@ local function CreateCategoryFrame(category)
     return frame
 end
 
--- Apply icon and border textures to a buff frame
-local function ApplyIconStyling(frame, catSettings, texture)
+-- Create icon and border textures on a buff frame (no positioning — call UpdateIconStyling after)
+local function CreateIconTextures(frame, texture)
     frame.icon = frame:CreateTexture(nil, "ARTWORK")
     frame.icon:SetAllPoints()
-    local zoom = (catSettings.iconZoom or DEFAULT_ICON_ZOOM) / 100
-    frame.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
     frame.icon:SetDesaturated(false)
     frame.icon:SetVertexColor(1, 1, 1, 1)
     if texture then
         frame.icon:SetTexture(texture)
     end
 
-    local borderSize = catSettings.borderSize or DEFAULT_BORDER_SIZE
     frame.border = frame:CreateTexture(nil, "BACKGROUND")
-    frame.border:SetPoint("TOPLEFT", -borderSize, borderSize)
-    frame.border:SetPoint("BOTTOMRIGHT", borderSize, -borderSize)
     frame.border:SetColorTexture(0, 0, 0, 1)
 end
 
--- Update icon zoom and border size on an existing buff frame
+-- Apply icon zoom and border sizing (single source of truth for Masque vs native styling)
 local function UpdateIconStyling(frame, catSettings)
+    if IsMasqueActive() then
+        -- Masque controls TexCoord; hide our border for a clean borderless look
+        frame.border:Hide()
+        return
+    end
+    -- Native styling: our zoom and border
     local zoom = (catSettings.iconZoom or DEFAULT_ICON_ZOOM) / 100
     frame.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
     local borderSize = catSettings.borderSize or DEFAULT_BORDER_SIZE
     frame.border:ClearAllPoints()
     frame.border:SetPoint("TOPLEFT", -borderSize, borderSize)
     frame.border:SetPoint("BOTTOMRIGHT", borderSize, -borderSize)
+    frame.border:Show()
 end
 
 -- Create icon frame for a buff
 local function CreateBuffFrame(buff, category)
-    local frame = CreateFrame("Button", "BuffReminders_" .. buff.key, mainFrame)
+    local frame = CreateFrame("Frame", "BuffReminders_" .. buff.key, mainFrame)
     frame.key = buff.key
     frame.spellIDs = buff.spellID
     frame.displayName = buff.name
@@ -777,7 +787,18 @@ local function CreateBuffFrame(buff, category)
         iconOverride = iconOverride[1] -- Use first icon for buff frame
     end
     local texture = iconOverride or GetBuffTexture(buff.spellID, buff.iconByRole)
-    ApplyIconStyling(frame, catSettings, texture)
+    CreateIconTextures(frame, texture)
+
+    -- Register with Masque (Normal = false: we handle borders, Masque handles TexCoord)
+    if masqueGroup then
+        masqueGroup:AddButton(frame, {
+            Icon = frame.icon,
+            Normal = false,
+        })
+    end
+
+    -- Apply initial zoom/border state (respects Masque)
+    UpdateIconStyling(frame, catSettings)
 
     -- Count text (font size scales with icon size, updated in UpdateVisuals)
     local textColor = catSettings.textColor or { 1, 1, 1 }
@@ -1795,6 +1816,9 @@ local function UpdateVisuals()
             frame.count:Hide()
         end
     end
+    if IsMasqueActive() then
+        masqueGroup:ReSkin()
+    end
     if testMode then
         RefreshTestDisplay()
     else
@@ -1839,6 +1863,14 @@ CallbackRegistry:RegisterCallback("FramesReparent", function()
     ReparentBuffFrames()
     UpdateVisuals()
 end)
+
+-- Masque skin change callback — restore our TexCoord when Masque is disabled
+if masqueGroup then
+    masqueGroup:RegisterCallback(function()
+        UpdateVisuals()
+        BR.Components.RefreshAll()
+    end)
+end
 
 -- ============================================================================
 -- IMPORT/EXPORT FUNCTIONS
@@ -1897,6 +1929,13 @@ BR.Display = {
             frame:ClearAllPoints()
             frame:SetPoint(point, UIParent, point, x, y)
         end
+    end,
+}
+
+-- Export Masque state for Options.lua
+BR.Masque = {
+    IsActive = function()
+        return masqueGroup ~= nil and not masqueGroup.db.Disabled
     end,
 }
 
