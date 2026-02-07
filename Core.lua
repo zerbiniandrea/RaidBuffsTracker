@@ -520,6 +520,47 @@ function BR.CreateSectionHeader(parent, text, x, y)
     return header, y - 18
 end
 
+-- ============================================================================
+-- CLASS SPEC OPTIONS (for custom buff spec filtering)
+-- ============================================================================
+-- Built once at load time. Keyed by class token, each value is a dropdown
+-- options table with { value, label } entries.
+
+local CLASS_IDS = {
+    WARRIOR = 1,
+    PALADIN = 2,
+    HUNTER = 3,
+    ROGUE = 4,
+    PRIEST = 5,
+    DEATHKNIGHT = 6,
+    SHAMAN = 7,
+    MAGE = 8,
+    WARLOCK = 9,
+    MONK = 10,
+    DRUID = 11,
+    DEMONHUNTER = 12,
+    EVOKER = 13,
+}
+
+BR.CLASS_SPEC_OPTIONS = {}
+for token, classID in pairs(CLASS_IDS) do
+    local specs = {}
+    for i = 1, 4 do
+        local specID, name = GetSpecializationInfoForClassID(classID, i)
+        if specID then
+            table.insert(specs, { value = specID, label = name })
+        end
+    end
+    table.sort(specs, function(a, b)
+        return a.label < b.label
+    end)
+    local opts = { { value = nil, label = "Any" } }
+    for _, spec in ipairs(specs) do
+        table.insert(opts, spec)
+    end
+    BR.CLASS_SPEC_OPTIONS[token] = opts
+end
+
 ---Create a buff icon texture with standard formatting
 ---@param parent table
 ---@param size number

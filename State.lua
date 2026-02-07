@@ -860,8 +860,9 @@ function BuffState.Refresh()
         for _, customBuff in pairs(db.customBuffs) do
             local entry = GetOrCreateEntry(customBuff.key, "custom")
             local classMatch = not customBuff.class or customBuff.class == playerClass
+            local specMatch = not customBuff.specId or customBuff.specId == GetPlayerSpecId()
 
-            if IsBuffEnabled(customBuff.key) and customVisible and classMatch then
+            if IsBuffEnabled(customBuff.key) and customVisible and classMatch and specMatch then
                 local hasBuff = UnitHasBuff("player", customBuff.spellID)
                 if not hasBuff then
                     entry.visible = true

@@ -39,6 +39,7 @@ read_globals = {
 	"GetNumGroupMembers",
 	"GetSpecialization",
 	"GetSpecializationInfo",
+	"GetSpecializationInfoForClassID",
 	"GetSpecializationRole",
 	"GetTime",
 	"GetWeaponEnchantInfo",

@@ -1625,7 +1625,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     local MODAL_WIDTH = 340
     local BASE_HEIGHT = 270
     local ROW_HEIGHT = 26
-    local ADVANCED_HEIGHT = 85
+    local ADVANCED_HEIGHT = 115
     local CONTENT_LEFT = 20
     local ROWS_START_Y = -60
     local editingBuff = existingKey and BuffRemindersDB.customBuffs[existingKey] or nil
@@ -1685,6 +1685,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
 
     local addSpellBtn, advancedBtn, advancedText, advancedFrame
     local classDropdownHolder
+    local specDropdownHolder
 
     local function UpdateLayout()
         local rowCount = #spellRows
@@ -1848,29 +1849,59 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
 
     local classOptions = {
         { value = nil, label = "Any" },
-        { value = "WARRIOR", label = "Warrior" },
-        { value = "PALADIN", label = "Paladin" },
-        { value = "HUNTER", label = "Hunter" },
-        { value = "ROGUE", label = "Rogue" },
-        { value = "PRIEST", label = "Priest" },
         { value = "DEATHKNIGHT", label = "Death Knight" },
-        { value = "SHAMAN", label = "Shaman" },
-        { value = "MAGE", label = "Mage" },
-        { value = "WARLOCK", label = "Warlock" },
-        { value = "MONK", label = "Monk" },
-        { value = "DRUID", label = "Druid" },
         { value = "DEMONHUNTER", label = "Demon Hunter" },
+        { value = "DRUID", label = "Druid" },
         { value = "EVOKER", label = "Evoker" },
+        { value = "HUNTER", label = "Hunter" },
+        { value = "MAGE", label = "Mage" },
+        { value = "MONK", label = "Monk" },
+        { value = "PALADIN", label = "Paladin" },
+        { value = "PRIEST", label = "Priest" },
+        { value = "ROGUE", label = "Rogue" },
+        { value = "SHAMAN", label = "Shaman" },
+        { value = "WARLOCK", label = "Warlock" },
+        { value = "WARRIOR", label = "Warrior" },
     }
+
+    local function CreateSpecDropdown(classToken, selectedSpecId)
+        if specDropdownHolder then
+            specDropdownHolder:Hide()
+            specDropdownHolder = nil
+        end
+        if not classToken then
+            return
+        end
+        local specOptions = BR.CLASS_SPEC_OPTIONS[classToken]
+        if not specOptions then
+            return
+        end
+        specDropdownHolder = Components.Dropdown(advancedFrame, {
+            label = "Only for spec:",
+            options = specOptions,
+            selected = selectedSpecId,
+            width = 130,
+            onChange = function() end,
+        })
+        specDropdownHolder:SetPoint("TOPLEFT", 0, advY - 28)
+    end
 
     classDropdownHolder = Components.Dropdown(advancedFrame, {
         label = "Only for class:",
         options = classOptions,
         selected = editingBuff and editingBuff.class or nil,
-        width = 100,
-        onChange = function() end,
+        width = 130,
+        maxItems = 10,
+        onChange = function(value)
+            CreateSpecDropdown(value, nil)
+        end,
     }, "BuffRemindersCustomClassDropdown")
     classDropdownHolder:SetPoint("TOPLEFT", 0, advY)
+
+    -- Initialize spec dropdown for editing existing buff
+    if editingBuff and editingBuff.class then
+        CreateSpecDropdown(editingBuff.class, editingBuff.specId)
+    end
 
     advancedBtn:SetScript("OnClick", function()
         advancedShown = not advancedShown
@@ -1946,6 +1977,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             name = displayName,
             missingText = missingTextValue,
             class = classDropdownHolder:GetValue(),
+            specId = specDropdownHolder and specDropdownHolder:GetValue() or nil,
         }
 
         BuffRemindersDB.customBuffs[key] = customBuff
