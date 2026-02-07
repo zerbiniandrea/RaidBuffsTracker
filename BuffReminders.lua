@@ -432,84 +432,30 @@ local function GetBuffTexture(spellIDs, iconByRole)
 end
 
 -- Action bar button names to scan for glows
-local ACTION_BAR_BUTTONS = {
-    "ActionButton",
-    "MultiBarBottomLeftButton",
-    "MultiBarBottomRightButton",
-    "MultiBarRightButton",
-    "MultiBarLeftButton",
-    "MultiBar5Button",
-    "MultiBar6Button",
-    "MultiBar7Button",
-}
-
----Check if a specific action button has an active glow overlay
----@param button table
----@return boolean
-local function ButtonHasGlow(button)
-    -- Check for SpellActivationAlert (Blizzard's glow frame)
-    if button.SpellActivationAlert and button.SpellActivationAlert:IsShown() then
-        return true
-    end
-    -- Check for overlay (older method)
-    if button.overlay and button.overlay:IsShown() then
-        return true
-    end
-    return false
-end
-
----Check if any of the given spell IDs are currently glowing on the action bar
----@param spellIDs SpellID
----@return boolean
-local function IsSpellGlowing(spellIDs)
-    local ids = type(spellIDs) == "table" and spellIDs or { spellIDs }
-    for _, id in ipairs(ids) do
-        -- Check cached event data first (populated by glow events)
-        if glowingSpells[id] then
-            return true
-        end
-    end
-
-    -- On reload, events don't fire for already-active glows
-    -- Scan action bar buttons directly to check for active overlays
-    for _, barName in ipairs(ACTION_BAR_BUTTONS) do
-        for i = 1, 12 do
-            local button = _G[barName .. i]
-            if button and ButtonHasGlow(button) then
-                -- Check if this button has one of our spell IDs
-                local actionType, actionId = GetActionInfo(button.action or 0)
-                if actionType == "spell" then
-                    for _, id in ipairs(ids) do
-                        if actionId == id then
-                            return true
-                        end
-                    end
-                end
+-- Reverse lookup: spellID → buff entry (for glow fallback detection across all categories)
+local glowSpellToBuff = {}
+for _, category in pairs(BUFF_TABLES) do
+    for _, buff in ipairs(category) do
+        if not buff.enchantID and not buff.customCheck then
+            local ids = type(buff.spellID) == "table" and buff.spellID or { buff.spellID }
+            for _, id in ipairs(ids) do
+                glowSpellToBuff[id] = buff
             end
         end
     end
-
-    return false
 end
 
--- Cache for player's raid buff (computed once, never changes)
-local playerRaidBuff = nil
-local playerRaidBuffComputed = false
-
----Find the player's own raid buff (the one their class provides)
----@return RaidBuff|nil
-local function GetPlayerRaidBuff()
-    if playerRaidBuffComputed then
-        return playerRaidBuff
+-- Seed glowingSpells with any already-active overlay glows (covers login/reload/zone change)
+local IsSpellOverlayed = C_SpellActivationOverlay and C_SpellActivationOverlay.IsSpellOverlayed
+local function SeedGlowingSpells()
+    if not IsSpellOverlayed then
+        return
     end
-    for _, buff in ipairs(RaidBuffs) do
-        if buff.class == playerClass then
-            playerRaidBuff = buff
-            break
+    for spellID, buff in pairs(glowSpellToBuff) do
+        if buff.class == playerClass and IsSpellOverlayed(spellID) then
+            glowingSpells[spellID] = true
         end
     end
-    playerRaidBuffComputed = true
-    return playerRaidBuff
 end
 
 -- Forward declarations
@@ -1312,35 +1258,54 @@ local function HideAllDisplayFrames()
     end
 end
 
--- Update the fallback display (shows player's own raid buff via glow during M+/PvP)
--- Assumes caller has already determined we're in restricted mode and called HideAllDisplayFrames()
+-- Update the fallback display (shows tracked buffs via action bar glow during M+/PvP/combat)
+-- Shows glow-based frames, then collects ALL visible frames (glow + pet) for unified positioning
 UpdateFallbackDisplay = function()
     if not mainFrame then
         return
     end
 
-    local playerBuff = GetPlayerRaidBuff()
-    if not playerBuff then
-        return
-    end
-
-    local frame = buffFrames[playerBuff.key]
-    if not frame or not IsBuffEnabled(playerBuff.key) then
-        return
-    end
-
-    if IsSpellGlowing(playerBuff.spellID) then
-        ShowMissingFrame(frame, "NO\nBUFF!")
-        -- Position this single frame in its container
-        local category = frame.buffCategory
-        if category and IsCategorySplit(category) then
-            PositionSplitCategory(category, { frame })
-        else
-            PositionMainContainer({ frame })
+    -- Show frames for any glowing spells
+    local seenKeys = {}
+    for spellID, _ in pairs(glowingSpells) do
+        local buff = glowSpellToBuff[spellID]
+        if buff and buff.class == playerClass and not seenKeys[buff.key] then
+            seenKeys[buff.key] = true
+            local frame = buffFrames[buff.key]
+            if frame and IsBuffEnabled(buff.key) then
+                ShowMissingFrame(frame, buff.missingText or "NO\nBUFF!")
+            end
         end
-        UpdateAnchor() -- Ensure edit mode visuals are updated
     end
-    -- No else branch - HideAllDisplayFrames was already called by caller
+
+    -- Collect ALL visible frames (glow + pet) for unified positioning
+    local shownByCategory = {}
+    local mainFrameBuffs = {}
+    for _, frame in pairs(buffFrames) do
+        if frame:IsShown() and frame.buffCategory then
+            local category = frame.buffCategory
+            if IsCategorySplit(category) then
+                if not shownByCategory[category] then
+                    shownByCategory[category] = {}
+                end
+                shownByCategory[category][#shownByCategory[category] + 1] = frame
+            else
+                mainFrameBuffs[#mainFrameBuffs + 1] = frame
+            end
+        end
+    end
+
+    if #mainFrameBuffs > 0 or next(shownByCategory) then
+        for category, frames in pairs(shownByCategory) do
+            PositionSplitCategory(category, frames)
+        end
+        if #mainFrameBuffs > 0 then
+            PositionMainContainer(mainFrameBuffs)
+        end
+        UpdateAnchor()
+    else
+        HideAllDisplayFrames()
+    end
 end
 
 -- Render a single visible entry into its frame using the appropriate display type
@@ -1403,41 +1368,28 @@ UpdateDisplay = function()
         return
     end
 
-    -- Combat: only show pet reminders (pets can be summoned in combat)
+    -- Combat: show pet reminders + glow fallback (positioning handled by UpdateFallbackDisplay)
     if combatCheck then
         BR.BuffState.Refresh()
 
-        -- Hide all frames first
         for _, frame in pairs(buffFrames) do
             HideFrame(frame)
         end
 
+        -- Render pet entries (visible, but positioning deferred to UpdateFallbackDisplay)
         local petEntries = BR.BuffState.visibleByCategory.pet
         if petEntries and #petEntries > 0 then
             table.sort(petEntries, function(a, b)
                 return a.sortOrder < b.sortOrder
             end)
-            local petFrames = {}
             for _, entry in ipairs(petEntries) do
                 local frame = buffFrames[entry.key]
                 if frame then
                     RenderVisibleEntry(frame, entry)
-                    petFrames[#petFrames + 1] = frame
                 end
             end
-            if #petFrames > 0 then
-                if IsCategorySplit("pet") then
-                    PositionSplitCategory("pet", petFrames)
-                else
-                    PositionMainContainer(petFrames)
-                end
-                UpdateAnchor()
-            else
-                HideAllDisplayFrames()
-            end
-        else
-            HideAllDisplayFrames()
         end
+
         UpdateFallbackDisplay()
         return
     end
@@ -2399,6 +2351,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         if not mainFrame then
             InitializeFrames()
         end
+        SeedGlowingSpells() -- Catch glows that were active before event registration
         if not inCombat then
             StartUpdates()
         end
