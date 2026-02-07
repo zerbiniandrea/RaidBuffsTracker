@@ -348,6 +348,17 @@ local function GetEffectiveCategory(frame)
     return "main"
 end
 
+---Check if overlay text should be shown for a given category
+---@param category? CategoryName
+---@return boolean
+local function ShouldShowText(category)
+    if not category then
+        return true
+    end
+    local cs = BuffRemindersDB.categorySettings and BuffRemindersDB.categorySettings[category]
+    return not cs or cs.showText ~= false
+end
+
 -- Fallback text scale ratio (used when textSize is not set)
 local TEXT_SCALE_RATIO = 0.32
 
@@ -1356,6 +1367,11 @@ local function RenderVisibleEntry(frame, entry)
         end
         ShowMissingFrame(frame, entry.missingText)
     end
+
+    -- Per-category text visibility (uses buff's actual category, not effective/main)
+    if not ShouldShowText(frame.buffCategory) then
+        frame.count:Hide()
+    end
 end
 
 -- Update the display
@@ -1824,6 +1840,11 @@ local function UpdateVisuals()
             frame.buffText:SetShown(showReminder)
         end
         UpdateIconStyling(frame, catSettings)
+
+        -- Per-category text visibility
+        if not ShouldShowText(frame.buffCategory) then
+            frame.count:Hide()
+        end
     end
     if testMode then
         RefreshTestDisplay()

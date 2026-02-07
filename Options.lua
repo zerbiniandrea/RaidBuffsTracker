@@ -926,6 +926,25 @@ local function CreateOptionsPanel()
             catLayout:Add(reminderHolder, nil, COMPONENT_GAP)
         end
 
+        -- Show text on icons (not for custom — custom buffs have per-buff missing text)
+        if category ~= "custom" then
+            local showTextHolder = Components.Checkbox(catContent, {
+                label = "Show text on icons",
+                get = function()
+                    local cs = db.categorySettings and db.categorySettings[category]
+                    return not cs or cs.showText ~= false
+                end,
+                tooltip = {
+                    title = "Show text on icons",
+                    desc = "Display count or missing text overlays on buff icons for this category",
+                },
+                onChange = function(checked)
+                    BR.Config.Set("categorySettings." .. category .. ".showText", checked)
+                end,
+            })
+            catLayout:Add(showTextHolder, nil, COMPONENT_GAP)
+        end
+
         -- Split frame checkbox
         local splitHolder = Components.Checkbox(catContent, {
             label = "Split into separate frame",

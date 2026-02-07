@@ -85,6 +85,7 @@ local CategorySettingKeys = {
     priority = "LayoutRefresh",
     -- Behavior
     showBuffReminder = "VisualsRefresh",
+    showText = "VisualsRefresh",
     -- Toggles
     useCustomAppearance = nil, -- No refresh, just toggle state
     split = "FramesReparent",
@@ -203,6 +204,7 @@ local function ValidatePath(segments)
                 "spacing",
                 "growDirection",
                 "showBuffReminder",
+                "showText",
                 "useCustomAppearance",
                 "split",
             }

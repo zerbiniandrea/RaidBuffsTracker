@@ -154,6 +154,7 @@
 ---@field iconZoom? number
 ---@field borderSize? number
 ---@field showBuffReminder? boolean
+---@field showText? boolean
 ---@field useCustomAppearance? boolean
 ---@field split? boolean
 ---@field priority? number
