@@ -410,8 +410,11 @@ end
 ---@param requiredClass ClassName
 ---@param beneficiaryRole? RoleType
 ---@return boolean? Returns nil if player can't provide this buff
-local function ShouldShowTargetedBuff(spellIDs, requiredClass, beneficiaryRole)
+local function ShouldShowTargetedBuff(spellIDs, requiredClass, beneficiaryRole, requireSpecId)
     if playerClass ~= requiredClass then
+        return nil
+    end
+    if requireSpecId and GetPlayerSpecId() ~= requireSpecId then
         return nil
     end
 
@@ -733,7 +736,8 @@ function BuffState.Refresh()
         local settingKey = GetBuffSettingKey(buff)
 
         if IsBuffEnabled(settingKey) and targetedVisible and PassesPreChecks(buff, nil, db) then
-            local shouldShow = ShouldShowTargetedBuff(buff.spellID, buff.class, buff.beneficiaryRole)
+            local shouldShow =
+                ShouldShowTargetedBuff(buff.spellID, buff.class, buff.beneficiaryRole, buff.requireSpecId)
             if shouldShow then
                 entry.visible = true
                 entry.displayType = "missing"
@@ -885,6 +889,11 @@ end
 ---Invalidate content type cache (call on PLAYER_ENTERING_WORLD)
 function BuffState.InvalidateContentTypeCache()
     cachedContentType = nil
+end
+
+---Invalidate spec ID cache (call on PLAYER_ENTERING_WORLD, PLAYER_SPECIALIZATION_CHANGED)
+function BuffState.InvalidateSpecCache()
+    cachedSpecId = nil
 end
 
 ---Invalidate spell knowledge cache (call on PLAYER_SPECIALIZATION_CHANGED)

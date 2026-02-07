@@ -2331,8 +2331,10 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         local category = Settings.RegisterCanvasLayoutCategory(settingsPanel, settingsPanel.name)
         Settings.RegisterAddOnCategory(category)
     elseif event == "PLAYER_ENTERING_WORLD" then
-        -- Invalidate content type cache on zone change
+        -- Invalidate caches on zone change (spec may have auto-switched on entry)
         BR.BuffState.InvalidateContentTypeCache()
+        BR.BuffState.InvalidateSpellCache()
+        BR.BuffState.InvalidateSpecCache()
         -- Sync combat flag with current state (in case of reload while in combat)
         inCombat = InCombatLockdown()
         ResolveFontPath()

@@ -58,6 +58,7 @@
 ---@field beneficiaryRole? RoleType
 ---@field excludeTalentSpellID? number
 ---@field iconOverride? number
+---@field requireSpecId? number
 ---@field infoTooltip? string
 
 ---@class SelfBuff

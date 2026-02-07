@@ -97,6 +97,7 @@ BR.BUFF_TABLES = {
             class = "PALADIN",
             missingText = "NO\nFAITH",
             groupId = "beacons",
+            requireSpecId = 65, -- Holy only
         },
         {
             spellID = 53563,
@@ -105,6 +106,7 @@ BR.BUFF_TABLES = {
             class = "PALADIN",
             missingText = "NO\nLIGHT",
             groupId = "beacons",
+            requireSpecId = 65, -- Holy only
             excludeTalentSpellID = 200025, -- Hide when Beacon of Virtue is known
             iconOverride = 236247, -- Force original icon (talents replace the texture)
         },
