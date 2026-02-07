@@ -36,6 +36,7 @@ local GlowStyles = BR.GlowStyles
 
 -- Export references from BuffReminders.lua
 local defaults = BR.defaults
+local LSM = BR.LSM
 
 -- Helper function aliases
 local GetCategorySettings = BR.Helpers.GetCategorySettings
@@ -711,6 +712,38 @@ local function CreateOptionsPanel()
     })
     appLayout:AddRow({ { defSpacingHolder, appX }, { defTextSizeHolder, appX + DEF_COL2 } }, COMPONENT_GAP)
     defTextColorHolder:SetPoint("LEFT", defTextSizeHolder, "RIGHT", 12, 0) -- aligns alpha % with slider values
+
+    -- Font dropdown (global setting, uses LibSharedMedia)
+    local function BuildFontOptions()
+        local fontList = LSM:List("font")
+        local opts = { { label = "Default", value = nil } }
+        for _, name in ipairs(fontList) do
+            table.insert(opts, { label = name, value = name })
+        end
+        return opts
+    end
+
+    local defFontHolder = Components.Dropdown(appearanceContent, {
+        label = "Font:",
+        options = BuildFontOptions(),
+        width = 200,
+        maxItems = 15,
+        itemInit = function(_, itemLabel, opt)
+            if opt.value then
+                local path = LSM:Fetch("font", opt.value)
+                if path then
+                    itemLabel:SetFont(path, 12, "")
+                end
+            end
+        end,
+        get = function()
+            return BuffRemindersDB.defaults and BuffRemindersDB.defaults.fontFace or nil
+        end,
+        onChange = function(val)
+            BR.Config.Set("defaults.fontFace", val)
+        end,
+    })
+    appLayout:Add(defFontHolder, nil, COMPONENT_GAP)
 
     local defDirHolder = Components.DirectionButtons(appearanceContent, {
         get = function()

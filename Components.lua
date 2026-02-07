@@ -880,8 +880,10 @@ local DropdownColors = {
 ---@param options table[] Array of {label, value} options
 ---@param initialValue any Initial selected value
 ---@param onChange fun(value: any, label: string) Callback when selection changes
+---@param maxItems? number Max visible items before scrolling (nil = no limit)
+---@param itemInit? fun(item: table, label: FontString, opt: table) Optional per-item setup callback
 ---@return table dropdown Core dropdown with .button, .menu, .SetValue(), .GetValue(), .SetEnabled()
-local function CreateDropdownCore(parent, width, options, initialValue, onChange)
+local function CreateDropdownCore(parent, width, options, initialValue, onChange, maxItems, itemInit)
     local colors = DropdownColors
     local BUTTON_HEIGHT = 22
     local ITEM_HEIGHT = 22
@@ -923,7 +925,9 @@ local function CreateDropdownCore(parent, width, options, initialValue, onChange
 
     -- ==================== MENU ====================
     -- Parent to UIParent for proper strata handling
-    local menuHeight = #options * ITEM_HEIGHT + MENU_PADDING_V * 2
+    local useScroll = maxItems and #options > maxItems
+    local visibleCount = useScroll and maxItems or #options
+    local menuHeight = visibleCount * ITEM_HEIGHT + MENU_PADDING_V * 2
     local menu = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
     menu:SetSize(width, menuHeight)
     menu:SetBackdrop({
@@ -935,6 +939,26 @@ local function CreateDropdownCore(parent, width, options, initialValue, onChange
     menu:SetBackdropBorderColor(unpack(colors.menuBorder))
     menu:SetFrameStrata("FULLSCREEN_DIALOG")
     menu:Hide()
+
+    -- Scroll frame (only created when needed)
+    local scrollFrame, scrollChild
+    if useScroll then
+        scrollFrame = CreateFrame("ScrollFrame", nil, menu)
+        scrollFrame:SetPoint("TOPLEFT", 1, -MENU_PADDING_V)
+        scrollFrame:SetPoint("BOTTOMRIGHT", -1, MENU_PADDING_V)
+
+        scrollChild = CreateFrame("Frame", nil, scrollFrame)
+        scrollChild:SetSize(width - 2, #options * ITEM_HEIGHT)
+        scrollFrame:SetScrollChild(scrollChild)
+
+        scrollFrame:EnableMouseWheel(true)
+        scrollFrame:SetScript("OnMouseWheel", function(_, delta)
+            local current = scrollFrame:GetVerticalScroll()
+            local maxScroll = #options * ITEM_HEIGHT - visibleCount * ITEM_HEIGHT
+            local newScroll = math.max(0, math.min(maxScroll, current - delta * ITEM_HEIGHT * 3))
+            scrollFrame:SetVerticalScroll(newScroll)
+        end)
+    end
 
     -- Position menu below button (updated when shown)
     local function PositionMenu()
@@ -976,6 +1000,9 @@ local function CreateDropdownCore(parent, width, options, initialValue, onChange
         isOpen = true
         PositionMenu()
         menu:Show()
+        if scrollFrame then
+            scrollFrame:SetVerticalScroll(0)
+        end
         wasMouseDown = IsMouseButtonDown("LeftButton") -- Prevent immediate close from the opening click
         UpdateButtonVisual()
     end
@@ -996,11 +1023,12 @@ local function CreateDropdownCore(parent, width, options, initialValue, onChange
     end)
 
     -- ==================== MENU ITEMS ====================
+    local itemParent = scrollChild or menu
     local items = {}
     for i, opt in ipairs(options) do
-        local item = CreateFrame("Button", nil, menu)
+        local item = CreateFrame("Button", nil, itemParent)
         item:SetSize(width - 2, ITEM_HEIGHT)
-        item:SetPoint("TOPLEFT", 1, -MENU_PADDING_V - (i - 1) * ITEM_HEIGHT)
+        item:SetPoint("TOPLEFT", 0, -(useScroll and 0 or MENU_PADDING_V) - (i - 1) * ITEM_HEIGHT)
 
         local itemBg = item:CreateTexture(nil, "BACKGROUND")
         itemBg:SetAllPoints()
@@ -1048,6 +1076,22 @@ local function CreateDropdownCore(parent, width, options, initialValue, onChange
             CloseMenu()
             onChange(currentValue, currentLabel)
         end)
+
+        -- Forward mouse wheel to scroll frame when scrollable
+        if scrollFrame then
+            item:EnableMouseWheel(true)
+            item:SetScript("OnMouseWheel", function(_, delta)
+                local current = scrollFrame:GetVerticalScroll()
+                local maxScroll = #options * ITEM_HEIGHT - visibleCount * ITEM_HEIGHT
+                local newScroll = math.max(0, math.min(maxScroll, current - delta * ITEM_HEIGHT * 3))
+                scrollFrame:SetVerticalScroll(newScroll)
+            end)
+        end
+
+        -- Custom per-item setup (e.g., font preview)
+        if itemInit then
+            itemInit(item, label, opt)
+        end
 
         item.value = opt.value
         item.check = check
@@ -1330,6 +1374,8 @@ end
 ---@field get? fun(): any Getter for initial value and refresh (preferred over selected)
 ---@field enabled? fun(): boolean Getter for enabled state, evaluated on Refresh()
 ---@field width? number Dropdown width (default 100)
+---@field maxItems? number Max visible items before scrolling (nil = no limit)
+---@field itemInit? fun(item: table, label: FontString, opt: table) Optional per-item setup callback
 ---@field onChange fun(value: any) Callback when selection changes
 
 ---Create a dropdown with label
@@ -1356,7 +1402,7 @@ function Components.Dropdown(parent, config, _)
     -- Create dropdown core
     local dropdown = CreateDropdownCore(holder, width, config.options, initialValue, function(value)
         config.onChange(value)
-    end)
+    end, config.maxItems, config.itemInit)
     dropdown.button:SetPoint("LEFT", label, "RIGHT", 5, 0)
     holder.dropdown = dropdown
 

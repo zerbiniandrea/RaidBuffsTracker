@@ -4,6 +4,26 @@ local addonName, BR = ...
 local DEFAULT_BORDER_SIZE = BR.DEFAULT_BORDER_SIZE
 local DEFAULT_ICON_ZOOM = BR.DEFAULT_ICON_ZOOM
 
+-- LibSharedMedia for font resolution
+local LSM = LibStub("LibSharedMedia-3.0")
+
+-- Cached font path — resolved once on load and updated when the setting changes (via VisualsRefresh).
+-- All SetFont calls read this local directly instead of calling LSM:Fetch() every time.
+local fontPath = STANDARD_TEXT_FONT
+
+---Resolve the font path from saved settings and update the cache
+local function ResolveFontPath()
+    local fontName = BuffRemindersDB and BuffRemindersDB.defaults and BuffRemindersDB.defaults.fontFace
+    if fontName then
+        local path = LSM:Fetch("font", fontName)
+        if path then
+            fontPath = path
+            return
+        end
+    end
+    fontPath = STANDARD_TEXT_FONT
+end
+
 -- Global API table for external addon integration
 BuffReminders = {}
 local EXPORT_PREFIX = "!BR_"
@@ -640,7 +660,7 @@ end
 ---@param missingText? string
 ---@return boolean true (for anyVisible chaining)
 local function ShowMissingFrame(frame, missingText)
-    frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
+    frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
     frame.count:SetText(missingText or "")
     frame:Show()
     SetExpirationGlow(frame, false)
@@ -701,7 +721,7 @@ local function CreateCategoryFrame(category)
     -- Label text at top
     frame.editLabel = frame:CreateFontString(nil, "OVERLAY")
     frame.editLabel:SetPoint("BOTTOM", frame, "TOP", 0, EDIT_PADDING + 6)
-    frame.editLabel:SetFont(STANDARD_TEXT_FONT, 11, "OUTLINE")
+    frame.editLabel:SetFont(fontPath, 11, "OUTLINE")
     frame.editLabel:SetTextColor(0.4, 1, 0.4, 1)
     frame.editLabel:SetText(CATEGORY_LABELS[category] or category)
     frame.editLabel:Hide()
@@ -805,7 +825,7 @@ local function CreateBuffFrame(buff, category)
     frame.count = frame:CreateFontString(nil, "OVERLAY", "NumberFontNormalLarge")
     frame.count:SetPoint("CENTER", 0, 0)
     frame.count:SetTextColor(textColor[1], textColor[2], textColor[3], textAlpha)
-    frame.count:SetFont(STANDARD_TEXT_FONT, GetFontSize(1, catSettings.textSize, catSettings.iconSize), "OUTLINE")
+    frame.count:SetFont(fontPath, GetFontSize(1, catSettings.textSize, catSettings.iconSize), "OUTLINE")
 
     -- Frame alpha
     frame:SetAlpha(catSettings.iconAlpha or 1)
@@ -815,11 +835,7 @@ local function CreateBuffFrame(buff, category)
     if frame.isPlayerBuff and category == "raid" then
         frame.buffText = frame:CreateFontString(nil, "OVERLAY")
         frame.buffText:SetPoint("TOP", frame, "BOTTOM", 0, -6)
-        frame.buffText:SetFont(
-            STANDARD_TEXT_FONT,
-            GetFontSize(0.8, catSettings.textSize, catSettings.iconSize),
-            "OUTLINE"
-        )
+        frame.buffText:SetFont(fontPath, GetFontSize(0.8, catSettings.textSize, catSettings.iconSize), "OUTLINE")
         frame.buffText:SetTextColor(textColor[1], textColor[2], textColor[3], textAlpha)
         frame.buffText:SetText("BUFF!")
         local raidCs = db.categorySettings and db.categorySettings.raid
@@ -831,7 +847,7 @@ local function CreateBuffFrame(buff, category)
     -- "TEST" text (shown above icon in test mode)
     frame.testText = frame:CreateFontString(nil, "OVERLAY")
     frame.testText:SetPoint("BOTTOM", frame, "TOP", 0, 25)
-    frame.testText:SetFont(STANDARD_TEXT_FONT, GetFontSize(0.6, catSettings.textSize, catSettings.iconSize), "OUTLINE")
+    frame.testText:SetFont(fontPath, GetFontSize(0.6, catSettings.textSize, catSettings.iconSize), "OUTLINE")
     frame.testText:SetTextColor(1, 0.8, 0, 1)
     frame.testText:SetText("TEST")
     frame.testText:Hide()
@@ -1110,7 +1126,7 @@ RefreshTestDisplay = function()
     for i, buff in ipairs(RaidBuffs) do
         local frame = buffFrames[buff.key]
         if frame then
-            frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame), "OUTLINE")
+            frame.count:SetFont(fontPath, GetFrameFontSize(frame), "OUTLINE")
             if (db.defaults and db.defaults.showExpirationGlow ~= false) and not glowShown then
                 frame.count:SetText(FormatRemainingTime(testModeData.fakeRemaining))
                 SetExpirationGlow(frame, true)
@@ -1120,7 +1136,7 @@ RefreshTestDisplay = function()
                 frame.count:SetText(fakeBuffed .. "/" .. testModeData.fakeTotal)
             end
             if frame.testText and testModeData.showLabels then
-                frame.testText:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, 0.6), "OUTLINE")
+                frame.testText:SetFont(fontPath, GetFrameFontSize(frame, 0.6), "OUTLINE")
                 frame.testText:Show()
             end
             frame:Show()
@@ -1131,10 +1147,10 @@ RefreshTestDisplay = function()
     for _, buff in ipairs(PresenceBuffs) do
         local frame = buffFrames[buff.key]
         if frame then
-            frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
+            frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
             frame.count:SetText(buff.missingText or "")
             if frame.testText and testModeData.showLabels then
-                frame.testText:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, 0.6), "OUTLINE")
+                frame.testText:SetFont(fontPath, GetFrameFontSize(frame, 0.6), "OUTLINE")
                 frame.testText:Show()
             end
             frame:Show()
@@ -1156,9 +1172,9 @@ RefreshTestDisplay = function()
                 else
                     frame.count:SetText(buff.missingText or "")
                 end
-                frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
+                frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
                 if frame.testText and testModeData.showLabels then
-                    frame.testText:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, 0.6), "OUTLINE")
+                    frame.testText:SetFont(fontPath, GetFrameFontSize(frame, 0.6), "OUTLINE")
                     frame.testText:Show()
                 end
                 frame:Show()
@@ -1171,9 +1187,9 @@ RefreshTestDisplay = function()
         local frame = buffFrames[buff.key]
         if frame then
             frame.count:SetText(buff.missingText or "")
-            frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
+            frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
             if frame.testText and testModeData.showLabels then
-                frame.testText:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, 0.6), "OUTLINE")
+                frame.testText:SetFont(fontPath, GetFrameFontSize(frame, 0.6), "OUTLINE")
                 frame.testText:Show()
             end
             frame:Show()
@@ -1185,9 +1201,9 @@ RefreshTestDisplay = function()
         local frame = buffFrames[buff.key]
         if frame then
             frame.count:SetText(buff.missingText or "")
-            frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
+            frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
             if frame.testText and testModeData.showLabels then
-                frame.testText:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, 0.6), "OUTLINE")
+                frame.testText:SetFont(fontPath, GetFrameFontSize(frame, 0.6), "OUTLINE")
                 frame.testText:Show()
             end
             frame:Show()
@@ -1199,9 +1215,9 @@ RefreshTestDisplay = function()
         local frame = buffFrames[buff.key]
         if frame then
             frame.count:SetText(buff.missingText)
-            frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
+            frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
             if frame.testText and testModeData.showLabels then
-                frame.testText:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, 0.6), "OUTLINE")
+                frame.testText:SetFont(fontPath, GetFrameFontSize(frame, 0.6), "OUTLINE")
                 frame.testText:Show()
             end
             frame:Show()
@@ -1213,10 +1229,10 @@ RefreshTestDisplay = function()
         for _, customBuff in pairs(db.customBuffs) do
             local frame = buffFrames[customBuff.key]
             if frame then
-                frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
+                frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
                 frame.count:SetText(customBuff.missingText or "NO\nBUFF")
                 if frame.testText and testModeData.showLabels then
-                    frame.testText:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, 0.6), "OUTLINE")
+                    frame.testText:SetFont(fontPath, GetFrameFontSize(frame, 0.6), "OUTLINE")
                     frame.testText:Show()
                 end
                 frame:Show()
@@ -1311,12 +1327,12 @@ end
 -- Render a single visible entry into its frame using the appropriate display type
 local function RenderVisibleEntry(frame, entry)
     if entry.displayType == "count" then
-        frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame), "OUTLINE")
+        frame.count:SetFont(fontPath, GetFrameFontSize(frame), "OUTLINE")
         frame.count:SetText(entry.countText or "")
         frame:Show()
         SetExpirationGlow(frame, entry.shouldGlow)
     elseif entry.displayType == "expiring" then
-        frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame), "OUTLINE")
+        frame.count:SetFont(fontPath, GetFrameFontSize(frame), "OUTLINE")
         frame.count:SetText(entry.countText or "")
         frame:Show()
         SetExpirationGlow(frame, true)
@@ -1516,7 +1532,7 @@ local function InitializeFrames()
     -- Label text at top
     mainFrame.editLabel = mainFrame:CreateFontString(nil, "OVERLAY")
     mainFrame.editLabel:SetPoint("BOTTOM", mainFrame, "TOP", 0, EDIT_PADDING + 6)
-    mainFrame.editLabel:SetFont(STANDARD_TEXT_FONT, 11, "OUTLINE")
+    mainFrame.editLabel:SetFont(fontPath, 11, "OUTLINE")
     mainFrame.editLabel:SetTextColor(0.4, 1, 0.4, 1)
     mainFrame.editLabel:SetText("Main")
     mainFrame.editLabel:Hide()
@@ -1534,7 +1550,7 @@ local function InitializeFrames()
     mainFrame.anchor:SetColorTexture(0, 0.8, 0, 0.9)
     mainFrame.anchorText = mainFrame.anchorFrame:CreateFontString(nil, "OVERLAY")
     mainFrame.anchorText:SetPoint("CENTER", 0, 0)
-    mainFrame.anchorText:SetFont(STANDARD_TEXT_FONT, 10, "OUTLINE")
+    mainFrame.anchorText:SetFont(fontPath, 10, "OUTLINE")
     mainFrame.anchorText:SetTextColor(1, 1, 1, 1)
     mainFrame.anchorText:SetText("ANCHOR")
     mainFrame.anchorFrame:Hide()
@@ -1726,7 +1742,7 @@ local function UpdateVisuals()
         local catSettings = GetCategorySettings(effectiveCat)
         local size = catSettings.iconSize or 64
         frame:SetSize(size, size)
-        frame.count:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, 1), "OUTLINE")
+        frame.count:SetFont(fontPath, GetFrameFontSize(frame, 1), "OUTLINE")
 
         -- Text color and alpha
         local tc = catSettings.textColor or { 1, 1, 1 }
@@ -1737,7 +1753,7 @@ local function UpdateVisuals()
         frame:SetAlpha(catSettings.iconAlpha or 1)
 
         if frame.buffText then
-            frame.buffText:SetFont(STANDARD_TEXT_FONT, GetFrameFontSize(frame, 0.8), "OUTLINE")
+            frame.buffText:SetFont(fontPath, GetFrameFontSize(frame, 0.8), "OUTLINE")
             frame.buffText:SetTextColor(tc[1], tc[2], tc[3], ta)
             -- BUFF! text: use buff's actual category (raid only)
             local buffCat = frame.buffCategory
@@ -1765,8 +1781,9 @@ end
 
 local CallbackRegistry = BR.CallbackRegistry
 
--- Visual changes (icon size, zoom, border, text visibility)
+-- Visual changes (icon size, zoom, border, text visibility, font)
 CallbackRegistry:RegisterCallback("VisualsRefresh", function()
+    ResolveFontPath()
     UpdateVisuals()
 end)
 
@@ -1811,6 +1828,9 @@ local function DeepCopy(orig)
     end
     return copy
 end
+
+-- Export shared references for Options.lua
+BR.LSM = LSM
 
 -- Export helpers for Options.lua
 BR.Helpers = {
@@ -2291,6 +2311,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         BR.BuffState.InvalidateContentTypeCache()
         -- Sync combat flag with current state (in case of reload while in combat)
         inCombat = InCombatLockdown()
+        ResolveFontPath()
         if not mainFrame then
             InitializeFrames()
         end

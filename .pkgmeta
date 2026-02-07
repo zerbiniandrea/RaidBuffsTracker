@@ -6,6 +6,7 @@ ignore:
   - .claude
   - .luacheckrc
   - .luarc.json
+  - .styluaignore
   - stylua.toml
   - Makefile
   - README.md

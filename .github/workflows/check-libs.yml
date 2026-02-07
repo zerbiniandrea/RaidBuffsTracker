@@ -1,0 +1,56 @@
+name: Check Library Updates
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Every Monday at 9am UTC
+  workflow_dispatch:
+
+jobs:
+  check-libs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SVN
+        run: sudo apt-get install -y subversion
+
+      - name: Fetch latest libraries
+        run: |
+          svn export --force https://repos.curseforge.com/wow/libstub/trunk /tmp/LibStub
+          svn export --force https://repos.curseforge.com/wow/callbackhandler/trunk/CallbackHandler-1.0 /tmp/CallbackHandler-1.0
+          svn export --force https://repos.curseforge.com/wow/libsharedmedia-3-0/trunk/LibSharedMedia-3.0 /tmp/LibSharedMedia-3.0
+
+      - name: Check for updates
+        id: diff
+        run: |
+          updated=""
+
+          # Only compare the files we actually bundle
+          for lib in LibStub CallbackHandler-1.0 LibSharedMedia-3.0; do
+            if ! diff -rq "Libs/$lib" "/tmp/$lib" --exclude='.pkgmeta' --exclude='*.toc' --exclude='tests' > /dev/null 2>&1; then
+              cp -r "/tmp/$lib/"* "Libs/$lib/"
+              # Clean up files we don't bundle
+              rm -rf "Libs/$lib/tests" "Libs/$lib/.pkgmeta" "Libs/$lib/"*.toc
+              updated="$updated $lib"
+            fi
+          done
+
+          updated=$(echo "$updated" | xargs)
+          echo "updated=$updated" >> "$GITHUB_OUTPUT"
+
+      - name: Create PR if updates found
+        if: steps.diff.outputs.updated != ''
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore: update embedded libs (${{ steps.diff.outputs.updated }})"
+          title: "chore: update embedded libs (${{ steps.diff.outputs.updated }})"
+          body: |
+            Automated weekly check found updates for: **${{ steps.diff.outputs.updated }}**
+
+            Please review the diff to make sure nothing breaking changed.
+          branch: chore/update-libs
+          delete-branch: true

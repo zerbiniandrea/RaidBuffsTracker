@@ -6,6 +6,7 @@
 		"disable": ["undefined-global"]
 	},
 	"workspace": {
-		"checkThirdParty": false
+		"checkThirdParty": false,
+		"ignoreDir": ["Libs"]
 	}
 }

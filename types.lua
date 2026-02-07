@@ -137,6 +137,7 @@
 ---@field showExpirationGlow boolean
 ---@field expirationThreshold number
 ---@field glowStyle number
+---@field fontFace? string
 
 ---@class CategorySetting
 ---@field position CategoryPosition

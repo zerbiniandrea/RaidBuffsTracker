@@ -106,6 +106,8 @@ local DefaultSettingKeys = {
     showExpirationGlow = "VisualsRefresh",
     expirationThreshold = "VisualsRefresh",
     glowStyle = "VisualsRefresh",
+    -- Font (global-only, lives under defaults)
+    fontFace = "VisualsRefresh",
 }
 
 -- Valid category names
