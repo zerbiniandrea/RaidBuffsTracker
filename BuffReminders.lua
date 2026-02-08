@@ -1202,7 +1202,7 @@ UpdateFallbackDisplay = function()
                     seenKeys[buff.key] = true
                     local frame = buffFrames[buff.key]
                     if frame and IsBuffEnabled(buff.key) then
-                        ShowMissingFrame(frame, buff.missingText or "NO\nBUFF!")
+                        ShowMissingFrame(frame, buff.missingText)
                     end
                 end
             end
@@ -1226,7 +1226,7 @@ UpdateFallbackDisplay = function()
                 if not skipSpec then
                     local frame = buffFrames[buff.key]
                     if frame and IsBuffEnabled(buff.key) then
-                        ShowMissingFrame(frame, buff.missingText or "NO\nBUFF!")
+                        ShowMissingFrame(frame, buff.missingText)
                     end
                 end
             end

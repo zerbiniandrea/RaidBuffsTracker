@@ -2061,7 +2061,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             displayName = firstName or ("Spell " .. validatedIDs[1])
         end
 
-        local missingTextValue = missingBox:GetText()
+        local missingTextValue = strtrim(missingBox:GetText())
         if missingTextValue ~= "" then
             missingTextValue = missingTextValue:gsub("\\n", "\n")
         else
