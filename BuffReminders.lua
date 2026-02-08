@@ -252,6 +252,7 @@ local lastAuraUpdate = 0
 
 -- Track combat state via events (InCombatLockdown() can lag behind PLAYER_REGEN_DISABLED)
 local inCombat = false
+local isResting = false
 
 -- Category frame system
 local categoryFrames = {}
@@ -1361,6 +1362,11 @@ UpdateDisplay = function()
         return
     end
 
+    if db.hideWhileResting and isResting then
+        HideAllDisplayFrames()
+        return
+    end
+
     -- Refresh buff state
     BR.BuffState.Refresh()
 
@@ -2263,6 +2269,7 @@ eventFrame:RegisterEvent("UNIT_PET")
 eventFrame:RegisterEvent("PET_BAR_UPDATE")
 eventFrame:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
 eventFrame:RegisterEvent("PLAYER_DIFFICULTY_CHANGED")
+eventFrame:RegisterEvent("PLAYER_UPDATE_RESTING")
 
 eventFrame:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" and arg1 == addonName then
@@ -2633,8 +2640,9 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         BR.BuffState.InvalidateContentTypeCache()
         BR.BuffState.InvalidateSpellCache()
         BR.BuffState.InvalidateSpecCache()
-        -- Sync combat flag with current state (in case of reload while in combat)
+        -- Sync flags with current state (in case of reload)
         inCombat = InCombatLockdown()
+        isResting = IsResting()
         ResolveFontPath()
         if not mainFrame then
             InitializeFrames()
@@ -2681,6 +2689,9 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         UpdateDisplay()
     elseif event == "PLAYER_DIFFICULTY_CHANGED" then
         BR.BuffState.InvalidateContentTypeCache()
+        UpdateDisplay()
+    elseif event == "PLAYER_UPDATE_RESTING" then
+        isResting = IsResting()
         UpdateDisplay()
     elseif event == "READY_CHECK" then
         -- Cancel any existing timer

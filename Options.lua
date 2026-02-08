@@ -1345,6 +1345,19 @@ local function CreateOptionsPanel()
     })
     setLayout:Add(groupHolder, nil, COMPONENT_GAP)
 
+    local restingHolder = Components.Checkbox(settingsContent, {
+        label = "Hide while resting",
+        get = function()
+            return BuffRemindersDB.hideWhileResting == true
+        end,
+        tooltip = { title = "Hide while resting", desc = "Hide buff reminders while in inns or capital cities" },
+        onChange = function(checked)
+            BuffRemindersDB.hideWhileResting = checked
+            UpdateDisplay()
+        end,
+    })
+    setLayout:Add(restingHolder, nil, COMPONENT_GAP)
+
     local readyCheckHolder = Components.Checkbox(settingsContent, {
         label = "Show only on ready check",
         get = function()
