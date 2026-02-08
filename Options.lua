@@ -1674,9 +1674,8 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     end
 
     local MODAL_WIDTH = 340
-    local BASE_HEIGHT = 270
+    local BASE_HEIGHT = 409
     local ROW_HEIGHT = 26
-    local ADVANCED_HEIGHT = 115
     local CONTENT_LEFT = 20
     local ROWS_START_Y = -60
     local editingBuff = existingKey and BuffRemindersDB.customBuffs[existingKey] or nil
@@ -1732,9 +1731,9 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     spellIdsLabel:SetText("Spell IDs:")
 
     spellRows = {}
-    local advancedShown = false
 
-    local addSpellBtn, advancedBtn, advancedText, advancedFrame
+    local addSpellBtn, sectionsFrame
+    local showWhenActiveToggle, invertGlowToggle
     local classDropdownHolder
     local specDropdownHolder
 
@@ -1755,16 +1754,11 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         addSpellBtn:ClearAllPoints()
         addSpellBtn:SetPoint("TOPLEFT", modal, "TOPLEFT", CONTENT_LEFT, addBtnY)
 
-        local advancedY = addBtnY - 26
-        advancedBtn:ClearAllPoints()
-        advancedBtn:SetPoint("TOPLEFT", modal, "TOPLEFT", CONTENT_LEFT, advancedY)
-
-        advancedFrame:ClearAllPoints()
-        advancedFrame:SetPoint("TOPLEFT", modal, "TOPLEFT", CONTENT_LEFT, advancedY - 22)
+        sectionsFrame:ClearAllPoints()
+        sectionsFrame:SetPoint("TOPLEFT", modal, "TOPLEFT", CONTENT_LEFT, addBtnY - 28)
 
         local extraRows = math.max(0, rowCount - 1)
-        local advancedExtra = advancedShown and ADVANCED_HEIGHT or 0
-        modal:SetHeight(BASE_HEIGHT + (extraRows * ROW_HEIGHT) + advancedExtra)
+        modal:SetHeight(BASE_HEIGHT + (extraRows * ROW_HEIGHT))
     end
 
     local function CreateSpellRow(initialSpellID)
@@ -1861,42 +1855,88 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         UpdateLayout()
     end)
 
-    advancedBtn = CreateFrame("Button", nil, modal)
-    advancedBtn:SetSize(200, 20)
-    advancedText = advancedBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    advancedText:SetPoint("LEFT", 0, 0)
-    advancedText:SetText("[+] Show Advanced Options")
-    advancedText:SetTextColor(0.6, 0.8, 1)
+    -- Sections frame (always visible, below add-spell button)
+    sectionsFrame = CreateFrame("Frame", nil, modal)
+    sectionsFrame:SetSize(MODAL_WIDTH - 40, 240)
 
-    advancedFrame = CreateFrame("Frame", nil, modal)
-    advancedFrame:SetSize(MODAL_WIDTH - 40, ADVANCED_HEIGHT)
-    advancedFrame:Hide()
+    local function CreateSeparator(parent, yOff)
+        local line = parent:CreateTexture(nil, "ARTWORK")
+        line:SetHeight(1)
+        line:SetPoint("TOPLEFT", 0, yOff)
+        line:SetPoint("RIGHT", 0, 0)
+        line:SetColorTexture(0.25, 0.25, 0.25, 0.8)
+    end
 
-    local advY = 0
+    -- Display section
+    CreateSeparator(sectionsFrame, 0)
+    local displayLabel = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    displayLabel:SetPoint("TOPLEFT", 0, -9)
+    displayLabel:SetText("Display")
 
-    local nameHolder = Components.TextInput(advancedFrame, {
+    local nameHolder = Components.TextInput(sectionsFrame, {
         label = "Display Name:",
         value = editingBuff and editingBuff.name or "",
         width = 150,
         labelWidth = 85,
     })
-    nameHolder:SetPoint("TOPLEFT", 0, advY)
+    nameHolder:SetPoint("TOPLEFT", 0, -25)
     nameBox = nameHolder.editBox
-    advY = advY - 25
 
-    local missingHolder = Components.TextInput(advancedFrame, {
+    local missingHolder = Components.TextInput(sectionsFrame, {
         label = "Missing Text:",
         value = editingBuff and editingBuff.missingText and editingBuff.missingText:gsub("\n", "\\n") or "",
         width = 80,
         labelWidth = 85,
     })
-    missingHolder:SetPoint("TOPLEFT", 0, advY)
+    missingHolder:SetPoint("TOPLEFT", 0, -49)
     missingBox = missingHolder.editBox
 
-    local missingHint = advancedFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    local missingHint = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     missingHint:SetPoint("LEFT", missingHolder, "RIGHT", 5, 0)
     missingHint:SetText("(use \\n for newline)")
-    advY = advY - 25
+
+    -- Behavior section
+    CreateSeparator(sectionsFrame, -73)
+    local behaviorLabel = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    behaviorLabel:SetPoint("TOPLEFT", 0, -82)
+    behaviorLabel:SetText("Behavior")
+
+    showWhenActiveToggle = Components.Toggle(sectionsFrame, {
+        label = editingBuff and editingBuff.showWhenPresent and "Show when active" or "Show when missing",
+        checked = editingBuff and editingBuff.showWhenPresent or false,
+        onChange = function(isChecked)
+            if isChecked then
+                showWhenActiveToggle.label:SetText("Show when active")
+                missingHolder.label:SetText("Active Text:")
+            else
+                showWhenActiveToggle.label:SetText("Show when missing")
+                missingHolder.label:SetText("Missing Text:")
+            end
+        end,
+    })
+    showWhenActiveToggle:SetPoint("TOPLEFT", 0, -98)
+    if editingBuff and editingBuff.showWhenPresent then
+        missingHolder.label:SetText("Active Text:")
+    end
+
+    invertGlowToggle = Components.Toggle(sectionsFrame, {
+        label = editingBuff and editingBuff.invertGlow and "Detect when not glowing" or "Detect when glowing",
+        checked = not (editingBuff and editingBuff.invertGlow or false),
+        onChange = function(isChecked)
+            if isChecked then
+                invertGlowToggle.label:SetText("Detect when glowing")
+            else
+                invertGlowToggle.label:SetText("Detect when not glowing")
+            end
+        end,
+    })
+    invertGlowToggle:SetPoint("TOPLEFT", 0, -120)
+
+    -- Filtering section
+    CreateSeparator(sectionsFrame, -144)
+    local filteringLabel = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    filteringLabel:SetPoint("TOPLEFT", 0, -153)
+    filteringLabel:SetText("Filtering")
 
     local classOptions = {
         { value = nil, label = "Any" },
@@ -1927,17 +1967,17 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         if not specOptions then
             return
         end
-        specDropdownHolder = Components.Dropdown(advancedFrame, {
+        specDropdownHolder = Components.Dropdown(sectionsFrame, {
             label = "Only for spec:",
             options = specOptions,
             selected = selectedSpecId,
             width = 130,
             onChange = function() end,
         })
-        specDropdownHolder:SetPoint("TOPLEFT", 0, advY - 28)
+        specDropdownHolder:SetPoint("TOPLEFT", 0, -197)
     end
 
-    classDropdownHolder = Components.Dropdown(advancedFrame, {
+    classDropdownHolder = Components.Dropdown(sectionsFrame, {
         label = "Only for class:",
         options = classOptions,
         selected = editingBuff and editingBuff.class or nil,
@@ -1947,24 +1987,12 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             CreateSpecDropdown(value, nil)
         end,
     }, "BuffRemindersCustomClassDropdown")
-    classDropdownHolder:SetPoint("TOPLEFT", 0, advY)
+    classDropdownHolder:SetPoint("TOPLEFT", 0, -169)
 
     -- Initialize spec dropdown for editing existing buff
     if editingBuff and editingBuff.class then
         CreateSpecDropdown(editingBuff.class, editingBuff.requireSpecId)
     end
-
-    advancedBtn:SetScript("OnClick", function()
-        advancedShown = not advancedShown
-        if advancedShown then
-            advancedText:SetText("[-] Hide Advanced Options")
-            advancedFrame:Show()
-        else
-            advancedText:SetText("[+] Show Advanced Options")
-            advancedFrame:Hide()
-        end
-        UpdateLayout()
-    end)
 
     local saveError = modal:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     saveError:SetPoint("BOTTOMLEFT", 20, 42)
@@ -2029,6 +2057,8 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             missingText = missingTextValue,
             class = classDropdownHolder:GetValue(),
             requireSpecId = specDropdownHolder and specDropdownHolder:GetValue() or nil,
+            showWhenPresent = showWhenActiveToggle:GetChecked() or nil,
+            invertGlow = (not invertGlowToggle:GetChecked()) or nil,
         }
 
         BuffRemindersDB.customBuffs[key] = customBuff

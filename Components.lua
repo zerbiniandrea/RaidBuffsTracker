@@ -852,6 +852,168 @@ function Components.Checkbox(parent, config)
     return holder
 end
 
+-- Toggle (pill/switch) component colors
+local ToggleColors = {
+    trackOff = { 0.12, 0.12, 0.12, 1 },
+    trackOn = { 0.15, 0.13, 0.08, 1 },
+    borderOff = { 0.3, 0.3, 0.3, 1 },
+    borderOn = { 0.6, 0.5, 0.2, 1 },
+    borderHover = { 0.45, 0.45, 0.45, 1 },
+    borderDisabled = { 0.2, 0.2, 0.2, 1 },
+    thumbOff = { 0.4, 0.4, 0.4, 1 },
+    thumbOn = { 0.9, 0.75, 0.2, 1 },
+    thumbHover = { 1, 0.82, 0, 1 },
+    thumbDisabled = { 0.25, 0.25, 0.25, 1 },
+    text = { 1, 1, 1, 1 },
+    textDisabled = { 0.5, 0.5, 0.5, 1 },
+}
+
+---@param parent Frame
+---@param config ToggleConfig
+---@return Frame
+function Components.Toggle(parent, config)
+    local colors = ToggleColors
+    local checked = config.checked or false
+
+    local holder = CreateFrame("Frame", nil, parent)
+    holder:SetSize(200, 20)
+
+    -- Track (the pill background)
+    local track = CreateFrame("Button", nil, holder, "BackdropTemplate")
+    track:SetSize(32, 16)
+    track:SetPoint("LEFT", 0, 0)
+    track:SetBackdrop({
+        bgFile = "Interface\\BUTTONS\\WHITE8x8",
+        edgeFile = "Interface\\BUTTONS\\WHITE8x8",
+        edgeSize = 1,
+    })
+
+    -- Thumb (the sliding circle)
+    local thumb = track:CreateTexture(nil, "OVERLAY")
+    thumb:SetSize(12, 12)
+    thumb:SetColorTexture(1, 1, 1, 1)
+
+    -- Label
+    local label = holder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    label:SetPoint("LEFT", track, "RIGHT", 6, 0)
+    label:SetText(config.label)
+    holder.label = label
+
+    local enabled = true
+
+    local function UpdateVisual()
+        if not enabled then
+            track:SetBackdropColor(unpack(colors.trackOff))
+            track:SetBackdropBorderColor(unpack(colors.borderDisabled))
+            thumb:SetVertexColor(unpack(colors.thumbDisabled))
+            label:SetTextColor(unpack(colors.textDisabled))
+        elseif checked then
+            track:SetBackdropColor(unpack(colors.trackOn))
+            track:SetBackdropBorderColor(unpack(colors.borderOn))
+            thumb:SetVertexColor(unpack(colors.thumbOn))
+            label:SetTextColor(unpack(colors.text))
+        else
+            track:SetBackdropColor(unpack(colors.trackOff))
+            track:SetBackdropBorderColor(unpack(colors.borderOff))
+            thumb:SetVertexColor(unpack(colors.thumbOff))
+            label:SetTextColor(unpack(colors.text))
+        end
+
+        thumb:ClearAllPoints()
+        if checked then
+            thumb:SetPoint("LEFT", track, "LEFT", 18, 0) -- on position
+        else
+            thumb:SetPoint("LEFT", track, "LEFT", 2, 0) -- off position
+        end
+    end
+
+    track:SetScript("OnClick", function()
+        if not enabled then
+            return
+        end
+        checked = not checked
+        UpdateVisual()
+        if config.onChange then
+            config.onChange(checked)
+        end
+    end)
+
+    track:SetScript("OnEnter", function()
+        if not enabled then
+            return
+        end
+        if checked then
+            thumb:SetVertexColor(unpack(colors.thumbHover))
+        else
+            track:SetBackdropBorderColor(unpack(colors.borderHover))
+        end
+    end)
+
+    track:SetScript("OnLeave", function()
+        if not enabled then
+            return
+        end
+        UpdateVisual()
+    end)
+
+    -- Tooltip support (same pattern as Checkbox)
+    if config.tooltip then
+        local title, desc
+        if type(config.tooltip) == "table" then
+            title = config.tooltip.title
+            desc = config.tooltip.desc
+        else
+            title = config.tooltip --[[@as string]]
+        end
+        holder:EnableMouse(true)
+        local function showTip()
+            ShowTooltip(holder, title, desc, "ANCHOR_TOP")
+        end
+        local function hideTip()
+            HideTooltip()
+        end
+        holder:HookScript("OnEnter", showTip)
+        holder:HookScript("OnLeave", hideTip)
+        track:HookScript("OnEnter", showTip)
+        track:HookScript("OnLeave", hideTip)
+    end
+
+    -- Public methods
+    function holder:SetChecked(value)
+        checked = value and true or false
+        UpdateVisual()
+    end
+
+    function holder:GetChecked()
+        return checked
+    end
+
+    function holder:SetEnabled(value)
+        enabled = value and true or false
+        track:EnableMouse(enabled)
+        UpdateVisual()
+    end
+
+    function holder:Refresh()
+        if config.get then
+            checked = config.get() and true or false
+        end
+        if config.enabled then
+            holder:SetEnabled(config.enabled())
+        end
+        UpdateVisual()
+    end
+
+    -- Auto-register if refreshable
+    if config.get or config.enabled then
+        table.insert(RefreshableComponents, holder)
+    end
+
+    UpdateVisual()
+
+    return holder
+end
+
 -- Modern dropdown styling colors
 local DropdownColors = {
     bg = { 0.15, 0.15, 0.15, 1 },

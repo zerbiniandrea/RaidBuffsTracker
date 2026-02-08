@@ -104,6 +104,8 @@
 ---@field missingText? string
 ---@field class? ClassName
 ---@field requireSpecId? number
+---@field showWhenPresent? boolean  -- Show icon when buff IS on player (default: show when missing)
+---@field invertGlow? boolean       -- Fallback triggers when spell is NOT glowing (default: when glowing)
 
 ---@class BuffFrame: Button
 ---@field key string
@@ -234,3 +236,11 @@
 ---@field width? number Optional explicit width override
 ---@field scrollbarOffset? number Offset to subtract from parent width (used when width not specified)
 ---@field onToggle? fun(expanded: boolean) Optional callback when toggled
+
+---@class ToggleConfig
+---@field label string
+---@field checked? boolean
+---@field get? fun(): boolean
+---@field enabled? fun(): boolean
+---@field onChange fun(checked: boolean)
+---@field tooltip? string|table
