@@ -2547,3 +2547,72 @@ function Components.CollapsibleSection(parent, config)
 
     return holder
 end
+
+-- ============================================================================
+-- BANNER
+-- ============================================================================
+
+---Create a warning banner with left accent bar and muted background
+---@param parent table Parent frame
+---@param config {text: string, icon?: string, color?: string, visible?: function, height?: number}
+---@return table holder Banner frame with :Refresh(), :SetText()
+function Components.Banner(parent, config)
+    local BANNER_HEIGHT = config.height or 26
+
+    -- Color presets: "red" (warning) or "orange" (info)
+    local colors = {
+        red = { bg = { 0.18, 0.06, 0.06, 0.6 }, accent = { 0.7, 0.12, 0.1, 0.8 }, text = { 0.85, 0.7, 0.65 } },
+        orange = { bg = { 0.18, 0.12, 0.04, 0.6 }, accent = { 0.7, 0.45, 0.1, 0.8 }, text = { 0.9, 0.78, 0.6 } },
+    }
+    local c = colors[config.color] or colors.red
+
+    local holder = CreateFrame("Frame", nil, parent)
+    holder:SetHeight(BANNER_HEIGHT)
+
+    -- Subtle translucent background
+    local bg = holder:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(unpack(c.bg))
+
+    -- Thin accent line at the bottom
+    local accent = holder:CreateTexture(nil, "ARTWORK")
+    accent:SetPoint("BOTTOMLEFT")
+    accent:SetPoint("BOTTOMRIGHT")
+    accent:SetHeight(1.5)
+    accent:SetColorTexture(unpack(c.accent))
+
+    -- Icon (supports atlas names or texture file paths)
+    local icon = holder:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(14, 14)
+    icon:SetPoint("LEFT", 10, 0)
+    local iconPath = config.icon or "services-icon-warning"
+    if iconPath:find("\\") or iconPath:find("/") then
+        icon:SetTexture(iconPath)
+    else
+        icon:SetAtlas(iconPath)
+    end
+
+    -- Text
+    local text = holder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    text:SetPoint("LEFT", icon, "RIGHT", 6, 0)
+    text:SetPoint("RIGHT", -8, 0)
+    text:SetJustifyH("LEFT")
+    text:SetText(config.text or "")
+    text:SetTextColor(unpack(c.text))
+
+    function holder:SetText(newText)
+        text:SetText(newText)
+    end
+
+    function holder:Refresh()
+        if config.visible then
+            holder:SetShown(config.visible())
+        end
+    end
+
+    if config.visible then
+        table.insert(RefreshableComponents, holder)
+    end
+
+    return holder
+end

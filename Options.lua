@@ -117,6 +117,10 @@ local function CreateOptionsPanel()
     local panel = CreatePanel("BuffRemindersOptions", PANEL_WIDTH, 575, { escClose = true })
     panel:Hide()
 
+    -- Forward declarations for banner system
+    local UpdateBannerLayout
+    local housingBanner, masqueBanner
+
     -- Track all EditBoxes so we can clear focus when panel hides
     local panelEditBoxes = {}
     Components.SetEditBoxesRef(panelEditBoxes)
@@ -129,6 +133,7 @@ local function CreateOptionsPanel()
     -- Refresh all component values from DB when panel opens (OnShow pattern)
     panel:SetScript("OnShow", function()
         Components.RefreshAll()
+        UpdateBannerLayout()
     end)
 
     -- Title (inline with tab row)
@@ -256,8 +261,10 @@ local function CreateOptionsPanel()
     local tabButtons = {}
     local contentContainers = {}
     local TAB_HEIGHT = 22
+    local activeTabName = "buffs"
 
     local function SetActiveTab(tabName)
+        activeTabName = tabName
         for name, tab in pairs(tabButtons) do
             tab:SetActive(name == tabName)
         end
@@ -267,6 +274,10 @@ local function CreateOptionsPanel()
             else
                 container:Hide()
             end
+        end
+        if masqueBanner then
+            masqueBanner:Refresh()
+            UpdateBannerLayout()
         end
     end
 
@@ -310,6 +321,64 @@ local function CreateOptionsPanel()
 
         contentContainers[name] = scrollFrame
         return content, scrollFrame
+    end
+
+    -- ========== BANNERS ==========
+    local BANNER_HEIGHT = 28
+    local BANNER_TOP_GAP = 6
+    local BANNER_BETWEEN_GAP = 4
+    local BANNER_BOTTOM_GAP = 0
+
+    housingBanner = Components.Banner(panel, {
+        text = "Buff tracking is disabled in housing zones",
+        visible = function()
+            return C_Housing
+                and (
+                    (C_Housing.IsInsideHouseOrPlot and C_Housing.IsInsideHouseOrPlot())
+                    or (C_Housing.IsOnNeighborhoodMap and C_Housing.IsOnNeighborhoodMap())
+                )
+        end,
+    })
+
+    masqueBanner = Components.Banner(panel, {
+        text = "Zoom and Border settings are managed by Masque",
+        icon = "QuestNormal",
+        color = "orange",
+        visible = function()
+            return IsMasqueActive() and activeTabName == "appearance"
+        end,
+    })
+
+    UpdateBannerLayout = function()
+        local bannerY = -30 - TAB_HEIGHT - BANNER_TOP_GAP
+        local bannerOffset = 0
+
+        if housingBanner:IsShown() then
+            housingBanner:ClearAllPoints()
+            housingBanner:SetPoint("TOPLEFT", panel, "TOPLEFT", COL_PADDING, bannerY)
+            housingBanner:SetPoint("RIGHT", panel, "RIGHT", -COL_PADDING, 0)
+            bannerY = bannerY - BANNER_HEIGHT - BANNER_BETWEEN_GAP
+            bannerOffset = bannerOffset + BANNER_HEIGHT + BANNER_BETWEEN_GAP
+        end
+
+        if masqueBanner:IsShown() then
+            masqueBanner:ClearAllPoints()
+            masqueBanner:SetPoint("TOPLEFT", panel, "TOPLEFT", COL_PADDING, bannerY)
+            masqueBanner:SetPoint("RIGHT", panel, "RIGHT", -COL_PADDING, 0)
+            bannerOffset = bannerOffset + BANNER_HEIGHT + BANNER_BOTTOM_GAP
+        elseif bannerOffset > 0 then
+            -- Replace the between-gap with a bottom-gap after the last visible banner
+            bannerOffset = bannerOffset - BANNER_BETWEEN_GAP + BANNER_BOTTOM_GAP
+        end
+
+        local newTop = CONTENT_TOP - bannerOffset
+        for _, container in pairs(contentContainers) do
+            container:ClearAllPoints()
+            container:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, newTop)
+            if container.GetContentFrame then
+                container:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 50)
+            end
+        end
     end
 
     -- Store buff checkboxes for refresh
