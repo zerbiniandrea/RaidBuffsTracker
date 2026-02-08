@@ -599,7 +599,7 @@ local function CreateOptionsPanel()
 
     local customNote = buffsContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     customNote:SetPoint("TOPLEFT", buffsRightX, buffsRightY)
-    customNote:SetText("(track any buff by spell ID)")
+    customNote:SetText("(track any buff/glow by spell ID)")
     buffsRightY = buffsRightY - 14
 
     local customBuffsContainer = CreateFrame("Frame", nil, buffsContent)

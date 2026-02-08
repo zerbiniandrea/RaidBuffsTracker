@@ -20,7 +20,7 @@
 - Visual buff tracking with count overlay (e.g., "17/20" = 17 buffed out of 20)
 - Split into movable category frames
 - Expiration glow warnings (5 styles)
-- Custom buff tracking by spell ID
+- Custom buff tracking by spell ID (with in-combat glow detection)
 - Highly configurable (filtering, sizing, visibility)
 
 <p align="center">
