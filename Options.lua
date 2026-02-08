@@ -1951,7 +1951,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
 
     -- Initialize spec dropdown for editing existing buff
     if editingBuff and editingBuff.class then
-        CreateSpecDropdown(editingBuff.class, editingBuff.specId)
+        CreateSpecDropdown(editingBuff.class, editingBuff.requireSpecId)
     end
 
     advancedBtn:SetScript("OnClick", function()
@@ -2028,7 +2028,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             name = displayName,
             missingText = missingTextValue,
             class = classDropdownHolder:GetValue(),
-            specId = specDropdownHolder and specDropdownHolder:GetValue() or nil,
+            requireSpecId = specDropdownHolder and specDropdownHolder:GetValue() or nil,
         }
 
         BuffRemindersDB.customBuffs[key] = customBuff

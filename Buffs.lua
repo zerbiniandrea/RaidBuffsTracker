@@ -21,7 +21,7 @@ local function IsPetOnPassive()
     return nil
 end
 
----@type table<string, RaidBuff[]|PresenceBuff[]|TargetedBuff[]|SelfBuff[]|ConsumableBuff[]>
+---@type table<string, RaidBuff[]|PresenceBuff[]|TargetedBuff[]|SelfBuff[]|ConsumableBuff[]|CustomBuff[]>
 BR.BUFF_TABLES = {
     ---@type RaidBuff[]
     raid = {
@@ -349,6 +349,8 @@ BR.BUFF_TABLES = {
             end,
         },
     },
+    ---@type CustomBuff[]
+    custom = {},
     ---@type ConsumableBuff[]
     consumable = {
         -- Augment Rune (The War Within + Midnight)

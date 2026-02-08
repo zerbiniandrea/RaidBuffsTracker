@@ -73,6 +73,7 @@ read_globals = {
 
 	"strsplit",
 	"tinsert",
+	"wipe",
 
 	-- WoW Mixins
 	"Mixin",

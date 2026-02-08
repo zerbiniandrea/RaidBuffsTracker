@@ -103,7 +103,7 @@
 ---@field name string
 ---@field missingText? string
 ---@field class? ClassName
----@field specId? number
+---@field requireSpecId? number
 
 ---@class BuffFrame: Button
 ---@field key string

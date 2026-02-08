@@ -17,6 +17,7 @@ local TargetedBuffs = BUFF_TABLES.targeted
 local SelfBuffs = BUFF_TABLES.self
 local PetBuffs = BUFF_TABLES.pet
 local Consumables = BUFF_TABLES.consumable
+local CustomBuffs = BUFF_TABLES.custom
 
 -- ============================================================================
 -- MODULE STATE
@@ -488,6 +489,10 @@ local function ShouldShowTargetedBuff(spellIDs, requiredClass, beneficiaryRole, 
     return not IsPlayerBuffActive(spellID, beneficiaryRole)
 end
 
+-- Categories where the "player knows this spell" check should be skipped.
+-- Custom buffs track buffs the user *receives*, not necessarily casts.
+local SKIP_SPELL_KNOWN_CATEGORIES = { custom = true }
+
 ---Check if player should cast their self buff or weapon imbue (returns true if missing)
 ---@param spellID SpellID
 ---@param requiredClass ClassName
@@ -497,6 +502,7 @@ end
 ---@param buffIdOverride? number Separate buff ID to check (if different from spellID)
 ---@param customCheck? fun(): boolean? Custom check function for complex buff logic
 ---@param requireSpecId? number Only show if player's current spec matches (WoW spec ID)
+---@param skipSpellKnownCheck? boolean Skip the "player knows spell" check (for custom buffs)
 ---@return boolean? Returns nil if player can't/shouldn't use this buff
 local function ShouldShowSelfBuff(
     spellID,
@@ -506,7 +512,8 @@ local function ShouldShowSelfBuff(
     excludeTalent,
     buffIdOverride,
     customCheck,
-    requireSpecId
+    requireSpecId,
+    skipSpellKnownCheck
 )
     if requiredClass and playerClass ~= requiredClass then
         return nil
@@ -529,22 +536,25 @@ local function ShouldShowSelfBuff(
     end
 
     -- For buffs with multiple spellIDs (like shields), check if player knows ANY of them
-    ---@type number[]
-    local spellIDs
-    if type(spellID) == "table" then
-        spellIDs = spellID
-    else
-        spellIDs = { spellID }
-    end
-    local knowsAnySpell = false
-    for _, id in ipairs(spellIDs) do
-        if IsPlayerSpellCached(id) then
-            knowsAnySpell = true
-            break
+    -- Skip for custom buffs (they track received buffs, not cast buffs)
+    if not skipSpellKnownCheck then
+        ---@type number[]
+        local spellIDs
+        if type(spellID) == "table" then
+            spellIDs = spellID
+        else
+            spellIDs = { spellID }
         end
-    end
-    if not knowsAnySpell then
-        return nil
+        local knowsAnySpell = false
+        for _, id in ipairs(spellIDs) do
+            if IsPlayerSpellCached(id) then
+                knowsAnySpell = true
+                break
+            end
+        end
+        if not knowsAnySpell then
+            return nil
+        end
     end
 
     -- Weapon imbue: check if this specific enchant is on either weapon
@@ -881,29 +891,29 @@ function BuffState.Refresh()
         end
     end
 
-    -- Process custom buffs
+    -- Process custom buffs (user-defined, flows through ShouldShowSelfBuff like self/pet)
     local customVisible = IsCategoryVisibleForContent("custom")
-    if db.customBuffs then
-        -- Sort keys for stable ordering (pairs() has no guaranteed order)
-        local sortedKeys = {}
-        for k in pairs(db.customBuffs) do
-            sortedKeys[#sortedKeys + 1] = k
-        end
-        table.sort(sortedKeys)
+    local skipSpellKnown = SKIP_SPELL_KNOWN_CATEGORIES["custom"]
+    for i, buff in ipairs(CustomBuffs) do
+        local entry = GetOrCreateEntry(buff.key, "custom", i)
+        local settingKey = buff.groupId or buff.key
 
-        for i, k in ipairs(sortedKeys) do
-            local customBuff = db.customBuffs[k]
-            local entry = GetOrCreateEntry(customBuff.key, "custom", i)
-            local classMatch = not customBuff.class or customBuff.class == playerClass
-            local specMatch = not customBuff.specId or customBuff.specId == GetPlayerSpecId()
-
-            if IsBuffEnabled(customBuff.key) and customVisible and classMatch and specMatch then
-                local hasBuff = UnitHasBuff("player", customBuff.spellID)
-                if not hasBuff then
-                    entry.visible = true
-                    entry.displayType = "missing"
-                    entry.missingText = customBuff.missingText
-                end
+        if IsBuffEnabled(settingKey) and customVisible then
+            local shouldShow = ShouldShowSelfBuff(
+                buff.spellID,
+                buff.class,
+                buff.enchantID,
+                buff.requiresTalentSpellID,
+                buff.excludeTalentSpellID,
+                buff.buffIdOverride,
+                buff.customCheck,
+                buff.requireSpecId,
+                skipSpellKnown
+            )
+            if shouldShow then
+                entry.visible = true
+                entry.displayType = "missing"
+                entry.missingText = buff.missingText
             end
         end
     end

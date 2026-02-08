@@ -46,6 +46,7 @@ local TargetedBuffs = BUFF_TABLES.targeted
 local SelfBuffs = BUFF_TABLES.self
 local PetBuffs = BUFF_TABLES.pet
 local Consumables = BUFF_TABLES.consumable
+local CustomBuffs = BUFF_TABLES.custom
 
 -- Build icon override lookup table (for spells replaced by talents)
 local IconOverrides = {} ---@type table<number, number>
@@ -87,6 +88,23 @@ local function ValidateSpellID(spellID)
         end
     end)
     return name ~= nil, name, iconID
+end
+
+---Rebuild BUFF_TABLES.custom from db.customBuffs (preserves table identity via wipe)
+local function BuildCustomBuffArray()
+    local db = BuffRemindersDB
+    wipe(CustomBuffs)
+    if not db or not db.customBuffs then
+        return
+    end
+    local sortedKeys = {}
+    for k in pairs(db.customBuffs) do
+        sortedKeys[#sortedKeys + 1] = k
+    end
+    table.sort(sortedKeys)
+    for _, k in ipairs(sortedKeys) do
+        CustomBuffs[#CustomBuffs + 1] = db.customBuffs[k]
+    end
 end
 
 -- Get helpers from State.lua
@@ -462,13 +480,32 @@ end
 -- Action bar button names to scan for glows
 -- Reverse lookup: spellID → buff entry (for glow fallback detection across all categories)
 local glowSpellToBuff = {}
+
+--- Register a buff's spellID(s) in the glow fallback lookup table
+local function RegisterGlowBuff(buff, catName)
+    local ids = type(buff.spellID) == "table" and buff.spellID or { buff.spellID }
+    for _, id in ipairs(ids) do
+        if id and id ~= 0 then
+            glowSpellToBuff[id] = { buff = buff, category = catName }
+        end
+    end
+end
+
+--- Unregister spellID(s) from the glow fallback lookup table
+---@param spellID number|number[] Single spell ID or table of spell IDs
+local function UnregisterGlowSpell(spellID)
+    local ids = type(spellID) == "table" and spellID or { spellID }
+    for _, id in ipairs(ids) do
+        if id then
+            glowSpellToBuff[id] = nil
+        end
+    end
+end
+
 for catName, category in pairs(BUFF_TABLES) do
     for _, buff in ipairs(category) do
         if not buff.enchantID and not buff.customCheck then
-            local ids = type(buff.spellID) == "table" and buff.spellID or { buff.spellID }
-            for _, id in ipairs(ids) do
-                glowSpellToBuff[id] = { buff = buff, category = catName }
-            end
+            RegisterGlowBuff(buff, catName)
         end
     end
 end
@@ -480,7 +517,7 @@ local function SeedGlowingSpells()
         return
     end
     for spellID, entry in pairs(glowSpellToBuff) do
-        if entry.buff.class == playerClass and IsSpellOverlayed(spellID) then
+        if (not entry.buff.class or entry.buff.class == playerClass) and IsSpellOverlayed(spellID) then
             glowingSpells[spellID] = true
         end
     end
@@ -1038,24 +1075,22 @@ RefreshTestDisplay = function()
         end
     end
 
-    -- Show ALL custom buffs (self buffs)
-    if db.customBuffs then
-        for _, customBuff in pairs(db.customBuffs) do
-            local frame = buffFrames[customBuff.key]
-            if frame then
-                if customBuff.missingText then
-                    frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
-                    frame.count:SetText(customBuff.missingText)
-                    frame.count:Show()
-                else
-                    frame.count:Hide()
-                end
-                if frame.testText and testModeData.showLabels then
-                    frame.testText:SetFont(fontPath, GetFrameFontSize(frame, 0.6), "OUTLINE")
-                    frame.testText:Show()
-                end
-                frame:Show()
+    -- Show ALL custom buffs
+    for _, buff in ipairs(CustomBuffs) do
+        local frame = buffFrames[buff.key]
+        if frame then
+            if buff.missingText then
+                frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
+                frame.count:SetText(buff.missingText)
+                frame.count:Show()
+            else
+                frame.count:Hide()
             end
+            if frame.testText and testModeData.showLabels then
+                frame.testText:SetFont(fontPath, GetFrameFontSize(frame, 0.6), "OUTLINE")
+                frame.testText:Show()
+            end
+            frame:Show()
         end
     end
 
@@ -1157,7 +1192,7 @@ UpdateFallbackDisplay = function()
         local entry = glowSpellToBuff[spellID]
         if entry then
             local buff = entry.buff
-            if buff.class == playerClass and not seenKeys[buff.key] then
+            if (not buff.class or buff.class == playerClass) and not seenKeys[buff.key] then
                 -- Skip targeted buffs when solo (they require a group target)
                 local skipSolo = entry.category == "targeted" and GetNumGroupMembers() == 0
                 -- Skip buffs requiring a specific spec
@@ -1746,17 +1781,10 @@ local function InitializeFrames()
         moverFrames[category] = CreateMoverFrame(category, CATEGORY_LABELS[category])
     end
 
-    -- Create buff frames for all categories
+    -- Create buff frames for all categories (including custom, populated by BuildCustomBuffArray)
     for category, buffArray in pairs(BUFF_TABLES) do
         for _, buff in ipairs(buffArray) do
             buffFrames[buff.key] = CreateBuffFrame(buff, category)
-        end
-    end
-
-    -- Create frames for custom buffs (always self buffs)
-    if db.customBuffs then
-        for _, customBuff in pairs(db.customBuffs) do
-            buffFrames[customBuff.key] = CreateBuffFrame(customBuff, "custom")
         end
     end
 
@@ -1773,8 +1801,9 @@ local function CreateCustomBuffFrameRuntime(customBuff)
         return
     end
     local frame = CreateBuffFrame(customBuff, "custom")
-    frame.isCustomBuff = true
     buffFrames[customBuff.key] = frame
+    table.insert(CustomBuffs, customBuff)
+    RegisterGlowBuff(customBuff, "custom")
 end
 
 -- Reparent all buff frames to appropriate parent based on split status
@@ -1798,9 +1827,17 @@ end
 local function RemoveCustomBuffFrame(key)
     local frame = buffFrames[key]
     if frame then
+        UnregisterGlowSpell(frame.spellIDs)
         frame:Hide()
         frame:SetParent(nil)
         buffFrames[key] = nil
+    end
+    -- Remove from BUFF_TABLES.custom array
+    for i = #CustomBuffs, 1, -1 do
+        if CustomBuffs[i].key == key then
+            table.remove(CustomBuffs, i)
+            break
+        end
     end
 end
 
@@ -1811,12 +1848,20 @@ BR.CustomBuffs = {
     UpdateFrame = function(key, spellIDValue, displayName)
         local frame = buffFrames[key]
         if frame then
+            -- Re-register glow lookup with new spellID
+            UnregisterGlowSpell(frame.spellIDs)
             local texture = GetBuffTexture(spellIDValue)
             if texture then
                 frame.icon:SetTexture(texture)
             end
             frame.displayName = displayName
             frame.spellIDs = spellIDValue
+            -- Rebuild array (modal creates a new object for db.customBuffs[key], staling the old ref)
+            BuildCustomBuffArray()
+            local customBuff = BuffRemindersDB and BuffRemindersDB.customBuffs and BuffRemindersDB.customBuffs[key]
+            if customBuff then
+                RegisterGlowBuff(customBuff, "custom")
+            end
         end
     end,
 }
@@ -2251,7 +2296,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         -- ====================================================================
         -- Versioned migrations — each runs exactly once, tracked by dbVersion
         -- ====================================================================
-        local DB_VERSION = 6
+        local DB_VERSION = 7
 
         local migrations = {
             -- [1] Consolidate all pre-versioning migrations (v2.8 → v3.x)
@@ -2459,6 +2504,18 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
                     }
                 end
             end,
+
+            -- [7] Rename custom buff specId → requireSpecId (unify with built-in buff field names)
+            [7] = function()
+                if db.customBuffs then
+                    for _, customBuff in pairs(db.customBuffs) do
+                        if customBuff.specId ~= nil then
+                            customBuff.requireSpecId = customBuff.specId
+                            customBuff.specId = nil
+                        end
+                    end
+                end
+            end,
         }
 
         -- Run pending migrations
@@ -2480,9 +2537,15 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
             db.defaults.textSize = nil
         end
 
-        -- Initialize custom buffs storage
+        -- Initialize custom buffs storage and populate BUFF_TABLES.custom
         if not db.customBuffs then
             db.customBuffs = {}
+        end
+        BuildCustomBuffArray()
+
+        -- Register custom buffs in glow fallback lookup (so they work in M+/combat)
+        for _, customBuff in ipairs(CustomBuffs) do
+            RegisterGlowBuff(customBuff, "custom")
         end
 
         -- Set up metatable so db.defaults inherits from code defaults
