@@ -100,7 +100,6 @@ end
 -- Default settings
 -- Note: enabledBuffs defaults to all enabled - only set false to disable by default
 local defaults = {
-    position = { point = "CENTER", x = 0, y = 0 },
     locked = true,
     enabledBuffs = {},
     showOnlyInGroup = false,
@@ -217,6 +216,7 @@ local inCombat = false
 
 -- Category frame system
 local categoryFrames = {}
+local moverFrames = {} -- Per-category mover frames (shown when unlocked for drag positioning)
 local CATEGORIES = { "raid", "presence", "targeted", "self", "pet", "consumable", "custom" }
 local CATEGORY_LABELS = {
     raid = "Raid",
@@ -469,9 +469,6 @@ end
 local UpdateDisplay, UpdateAnchor, ToggleTestMode, RefreshTestDisplay
 local UpdateFallbackDisplay
 
--- Track if any frame is currently being dragged (to prevent repositioning during drag)
-local isDraggingFrame = false
-
 -- Glow style definitions
 local GlowStyles = {
     {
@@ -644,20 +641,6 @@ local DIRECTION_ANCHORS = {
     CENTER = "CENTER",
 }
 
--- Get anchor position offset from frame center based on anchor type and frame size
-local function GetAnchorOffset(anchor, width, height)
-    if anchor == "LEFT" then
-        return -width / 2, 0
-    elseif anchor == "RIGHT" then
-        return width / 2, 0
-    elseif anchor == "TOP" then
-        return 0, height / 2
-    elseif anchor == "BOTTOM" then
-        return 0, -height / 2
-    end
-    return 0, 0 -- CENTER
-end
-
 -- Create a category frame for grouped display mode
 local function CreateCategoryFrame(category)
     local db = BuffRemindersDB
@@ -666,70 +649,9 @@ local function CreateCategoryFrame(category)
 
     local frame = CreateFrame("Frame", "BuffReminders_Category_" .. category, UIParent)
     frame:SetSize(200, 50)
-    frame:SetPoint(pos.point or "CENTER", UIParent, pos.point or "CENTER", pos.x or 0, pos.y or 0)
+    frame:SetPoint("CENTER", UIParent, "CENTER", pos.x or 0, pos.y or 0)
     frame.category = category
-
-    -- Edit mode padding (how much larger the background is than the icons)
-    local EDIT_PADDING = 8
-
-    -- Border for edit mode (outermost, creates the green border)
-    frame.editBorder = frame:CreateTexture(nil, "BACKGROUND", nil, -2)
-    frame.editBorder:SetPoint("TOPLEFT", -EDIT_PADDING - 2, EDIT_PADDING + 2)
-    frame.editBorder:SetPoint("BOTTOMRIGHT", EDIT_PADDING + 2, -EDIT_PADDING - 2)
-    frame.editBorder:SetColorTexture(0, 0.7, 0, 0.9)
-    frame.editBorder:Hide()
-
-    -- Background (shown when unlocked, like WoW edit mode)
-    frame.editBg = frame:CreateTexture(nil, "BACKGROUND", nil, -1)
-    frame.editBg:SetPoint("TOPLEFT", -EDIT_PADDING, EDIT_PADDING)
-    frame.editBg:SetPoint("BOTTOMRIGHT", EDIT_PADDING, -EDIT_PADDING)
-    frame.editBg:SetColorTexture(0.05, 0.2, 0.05, 0.7)
-    frame.editBg:Hide()
-
-    -- Label text at top
-    frame.editLabel = frame:CreateFontString(nil, "OVERLAY")
-    frame.editLabel:SetPoint("BOTTOM", frame, "TOP", 0, EDIT_PADDING + 6)
-    frame.editLabel:SetFont(fontPath, 11, "OUTLINE")
-    frame.editLabel:SetTextColor(0.4, 1, 0.4, 1)
-    frame.editLabel:SetText(CATEGORY_LABELS[category] or category)
-    frame.editLabel:Hide()
-
-    -- Expand hit rectangle to match the green border visual
-    -- Negative values expand the clickable area outward
-    frame:SetHitRectInsets(-(EDIT_PADDING + 2), -(EDIT_PADDING + 2), -(EDIT_PADDING + 2), -(EDIT_PADDING + 2))
-
-    -- Make frame draggable
-    frame:SetMovable(true)
-    frame:EnableMouse(not db.locked)
-    frame:RegisterForDrag("LeftButton")
-
-    frame:SetScript("OnDragStart", function(self)
-        if not BuffRemindersDB.locked then
-            isDraggingFrame = true
-            self:StartMoving()
-        end
-    end)
-
-    frame:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        isDraggingFrame = false
-        -- Save anchor position (based on growth direction) relative to UIParent CENTER
-        local dragCatSettings = GetCategorySettings(category)
-        local direction = dragCatSettings.growDirection or "CENTER"
-        local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
-        local cx, cy = self:GetCenter()
-        local px, py = UIParent:GetCenter()
-        local w, h = self:GetSize()
-        local offsetX, offsetY = GetAnchorOffset(anchor, w, h)
-        local x, y = (cx - px) + offsetX, (cy - py) + offsetY
-        if not BuffRemindersDB.categorySettings then
-            BuffRemindersDB.categorySettings = {}
-        end
-        if not BuffRemindersDB.categorySettings[category] then
-            BuffRemindersDB.categorySettings[category] = {}
-        end
-        BuffRemindersDB.categorySettings[category].position = { point = "CENTER", x = x, y = y }
-    end)
+    frame:EnableMouse(false)
 
     frame:Hide()
     return frame
@@ -833,54 +755,8 @@ local function CreateBuffFrame(buff, category)
     frame.testText:SetText("TEST")
     frame.testText:Hide()
 
-    -- Dragging (handles both single-frame and category-frame modes)
-    frame:EnableMouse(not BuffRemindersDB.locked)
-    frame:RegisterForDrag("LeftButton")
-    frame:SetScript("OnDragStart", function(self)
-        if not BuffRemindersDB.locked then
-            isDraggingFrame = true
-            local parent = self:GetParent()
-            if parent then
-                parent:StartMoving()
-            end
-        end
-    end)
-    frame:SetScript("OnDragStop", function(self)
-        local parent = self:GetParent()
-        if not parent then
-            isDraggingFrame = false
-            return
-        end
-        parent:StopMovingOrSizing()
-        isDraggingFrame = false
-        -- Save anchor position (based on growth direction) relative to UIParent CENTER
-        local settings = BuffRemindersDB
-        local catKey = parent.category or "main"
-        local dragCatSettings = GetCategorySettings(catKey)
-        local direction = dragCatSettings.growDirection or "CENTER"
-        local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
-        local cx, cy = parent:GetCenter()
-        local px, py = UIParent:GetCenter()
-        local w, h = parent:GetSize()
-        local offsetX, offsetY = GetAnchorOffset(anchor, w, h)
-        local x, y = (cx - px) + offsetX, (cy - py) + offsetY
-        if parent.category then
-            -- Save to category-specific position (this is a split category frame)
-            if not settings.categorySettings then
-                settings.categorySettings = {}
-            end
-            if not settings.categorySettings[parent.category] then
-                settings.categorySettings[parent.category] = {}
-            end
-            settings.categorySettings[parent.category].position = { point = "CENTER", x = x, y = y }
-        else
-            -- Save to main frame position (both legacy and new locations)
-            settings.position = { point = "CENTER", x = x, y = y }
-            if settings.categorySettings and settings.categorySettings.main then
-                settings.categorySettings.main.position = { point = "CENTER", x = x, y = y }
-            end
-        end
-    end)
+    -- Always click-through (dragging is handled by anchor handles)
+    frame:EnableMouse(false)
 
     frame:Hide()
     return frame
@@ -959,22 +835,13 @@ local function PositionMainContainer(mainFrameBuffs)
 
         -- Re-anchor based on growth direction so first icon stays at anchor position
         local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
-        local pos = db.position
+        local pos = (db.categorySettings and db.categorySettings.main and db.categorySettings.main.position)
+            or db.position
+            or { point = "CENTER", x = 0, y = 0 }
         mainFrame:ClearAllPoints()
         mainFrame:SetPoint(anchor, UIParent, "CENTER", pos.x or 0, pos.y or 0)
 
         PositionFramesInContainer(mainFrame, mainFrameBuffs, iconSize, spacing, direction)
-        mainFrame:Show()
-    elseif not db.locked then
-        -- Keep mainFrame visible when unlocked for positioning
-        local mainSettings = GetCategorySettings("main")
-        local iconSize = mainSettings.iconSize or 64
-        local direction = mainSettings.growDirection or "CENTER"
-        local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
-        local pos = db.position
-        mainFrame:SetSize(iconSize, iconSize)
-        mainFrame:ClearAllPoints()
-        mainFrame:SetPoint(anchor, UIParent, "CENTER", pos.x or 0, pos.y or 0)
         mainFrame:Show()
     else
         mainFrame:Hide()
@@ -983,7 +850,6 @@ end
 
 -- Position and size a split category frame with the given buff frames
 local function PositionSplitCategory(category, frames)
-    local db = BuffRemindersDB
     local catFrame = categoryFrames[category]
     if not catFrame then
         return
@@ -1017,13 +883,6 @@ local function PositionSplitCategory(category, frames)
 
         PositionFramesInContainer(catFrame, frames, iconSize, spacing, direction)
         catFrame:Show()
-    elseif not db.locked then
-        -- Keep split frame visible when unlocked for positioning
-        local iconSize = catSettings.iconSize or 64
-        catFrame:SetSize(iconSize, iconSize)
-        catFrame:ClearAllPoints()
-        catFrame:SetPoint(anchor, UIParent, "CENTER", pos.x or 0, pos.y or 0)
-        catFrame:Show()
     else
         catFrame:Hide()
     end
@@ -1037,7 +896,7 @@ local function PositionSplitCategories(visibleByCategory)
             if IsCategorySplit(category) then
                 local entries = visibleByCategory[category]
                 if not entries or #entries == 0 then
-                    -- No visible buffs: show empty frame when unlocked, hide when locked
+                    -- No visible buffs: still position (mover handles visibility)
                     PositionSplitCategory(category, {})
                 end
             else
@@ -1251,10 +1110,6 @@ end
 
 -- Helper to hide all display frames (mainFrame, category frames, and all buff frames)
 local function HideAllDisplayFrames()
-    -- Skip hiding if any frame is being dragged
-    if isDraggingFrame then
-        return
-    end
     mainFrame:Hide()
     for _, category in ipairs(CATEGORIES) do
         if categoryFrames[category] then
@@ -1480,10 +1335,10 @@ UpdateDisplay = function()
     -- Position main container
     PositionMainContainer(mainFrameBuffs)
 
-    -- Handle split category frames with no visible buffs (show empty when unlocked)
+    -- Handle split category frames with no visible buffs
     PositionSplitCategories(visibleByCategory)
 
-    if not anyVisible and db.locked then
+    if not anyVisible then
         HideAllDisplayFrames()
     end
     UpdateAnchor()
@@ -1506,40 +1361,214 @@ local function StopUpdates()
     end
 end
 
--- Make frame draggable
-local function SetupDragging()
-    mainFrame:SetMovable(true)
-    mainFrame:EnableMouse(not BuffRemindersDB.locked)
-    mainFrame:RegisterForDrag("LeftButton")
-
-    mainFrame:SetScript("OnDragStart", function(self)
-        if not BuffRemindersDB.locked then
-            isDraggingFrame = true
-            self:StartMoving()
-        end
-    end)
-
-    mainFrame:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        isDraggingFrame = false
-        -- Save anchor position (based on growth direction) relative to UIParent CENTER
-        local mainSettings = GetCategorySettings("main")
-        local direction = mainSettings.growDirection or "CENTER"
-        local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
-        local cx, cy = self:GetCenter()
-        local px, py = UIParent:GetCenter()
-        local w, h = self:GetSize()
-        local offsetX, offsetY = GetAnchorOffset(anchor, w, h)
-        local x, y = (cx - px) + offsetX, (cy - py) + offsetY
-        BuffRemindersDB.position = { point = "CENTER", x = x, y = y }
-        if BuffRemindersDB.categorySettings and BuffRemindersDB.categorySettings.main then
-            BuffRemindersDB.categorySettings.main.position = { point = "CENTER", x = x, y = y }
-        end
-    end)
-end
-
 -- Forward declaration for ReparentBuffFrames (defined after InitializeFrames)
 local ReparentBuffFrames
+
+-- Forward declaration for PositionMoverFrame
+local PositionMoverFrame
+
+---Round a number to the nearest integer
+local function RoundCoord(x)
+    return math.floor(x + 0.5)
+end
+
+---Get the saved position table for a category key
+---@param catKey string "main" or a category name
+---@return table position {point, x, y}
+local function GetSavedPosition(catKey)
+    local db = BuffRemindersDB
+    if catKey == "main" then
+        return (db.categorySettings and db.categorySettings.main and db.categorySettings.main.position)
+            or db.position
+            or { point = "CENTER", x = 0, y = 0 }
+    end
+    local catSettings = db.categorySettings and db.categorySettings[catKey]
+    return (catSettings and catSettings.position)
+        or (defaults.categorySettings[catKey] and defaults.categorySettings[catKey].position)
+        or { point = "CENTER", x = 0, y = 0 }
+end
+
+---Save a position for a category key and reposition its frame
+---@param catKey string "main" or a category name
+---@param x number
+---@param y number
+local function SavePosition(catKey, x, y)
+    local db = BuffRemindersDB
+    if not db.categorySettings then
+        db.categorySettings = {}
+    end
+    if not db.categorySettings[catKey] then
+        db.categorySettings[catKey] = {}
+    end
+    db.categorySettings[catKey].position = { x = x, y = y }
+
+    -- Reposition the icon container frame
+    if catKey == "main" then
+        if mainFrame then
+            local mainSettings = GetCategorySettings("main")
+            local direction = mainSettings.growDirection or "CENTER"
+            local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
+            mainFrame:ClearAllPoints()
+            mainFrame:SetPoint(anchor, UIParent, "CENTER", x, y)
+        end
+    else
+        local catFrame = categoryFrames[catKey]
+        if catFrame then
+            local cs = GetCategorySettings(catKey)
+            local direction = cs.growDirection or "CENTER"
+            local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
+            catFrame:ClearAllPoints()
+            catFrame:SetPoint(anchor, UIParent, "CENTER", x, y)
+        end
+    end
+
+    -- Keep the mover frame in sync
+    PositionMoverFrame(catKey)
+end
+
+-- Build a label showing which categories are in mainFrame
+local function GetMainFrameLabel()
+    local parts = {}
+    for _, category in ipairs(CATEGORIES) do
+        if not IsCategorySplit(category) then
+            table.insert(parts, CATEGORY_LABELS[category])
+        end
+    end
+    if #parts == 0 then
+        return "Main (empty)"
+    elseif #parts == #CATEGORIES then
+        return "Main (all)"
+    else
+        return table.concat(parts, " + ")
+    end
+end
+
+-- Dim/restore the icon container for a specific mover during drag
+local EDIT_MODE_DIM_ALPHA = 0.3
+
+local function GetContainerForCatKey(catKey)
+    if catKey == "main" then
+        return mainFrame
+    end
+    return categoryFrames[catKey]
+end
+
+local function DimContainer(catKey)
+    local container = GetContainerForCatKey(catKey)
+    if container then
+        container:SetAlpha(EDIT_MODE_DIM_ALPHA)
+    end
+end
+
+local function RestoreContainer(catKey)
+    local container = GetContainerForCatKey(catKey)
+    if container then
+        container:SetAlpha(1)
+    end
+end
+
+-- Finish a mover drag: read the direction-anchor edge, re-anchor, save
+local function FinishMoverDrag(mover, catKey)
+    mover:StopMovingOrSizing()
+    local settings = GetCategorySettings(catKey)
+    local direction = settings.growDirection or "CENTER"
+    local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
+    local px, py = UIParent:GetCenter()
+    local x, y
+    if anchor == "LEFT" then
+        x = RoundCoord(mover:GetLeft() - px)
+        y = RoundCoord(select(2, mover:GetCenter()) - py)
+    elseif anchor == "RIGHT" then
+        x = RoundCoord(mover:GetRight() - px)
+        y = RoundCoord(select(2, mover:GetCenter()) - py)
+    elseif anchor == "TOP" then
+        x = RoundCoord((mover:GetCenter()) - px)
+        y = RoundCoord(mover:GetTop() - py)
+    elseif anchor == "BOTTOM" then
+        x = RoundCoord((mover:GetCenter()) - px)
+        y = RoundCoord(mover:GetBottom() - py)
+    else -- CENTER
+        local cx, cy = mover:GetCenter()
+        x = RoundCoord(cx - px)
+        y = RoundCoord(cy - py)
+    end
+    mover:ClearAllPoints()
+    mover:SetPoint(anchor, UIParent, "CENTER", x, y)
+    SavePosition(catKey, x, y)
+    RestoreContainer(catKey)
+end
+
+-- Create a mover frame for positioning a category.
+-- The mover is a 48×48 draggable frame parented to UIParent. Shown when unlocked.
+local function CreateMoverFrame(catKey, displayName)
+    local MOVER_SIZE = 48
+
+    local mover = CreateFrame("Frame", nil, UIParent)
+    mover:SetSize(MOVER_SIZE, MOVER_SIZE)
+    mover:SetFrameStrata("HIGH")
+    mover:SetClampedToScreen(true)
+    mover:SetMovable(true)
+    mover:EnableMouse(true)
+    mover:RegisterForDrag("LeftButton")
+
+    -- Green background
+    local bg = mover:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0, 0.7, 0, 0.6)
+
+    -- Label above the mover
+    mover.label = mover:CreateFontString(nil, "OVERLAY")
+    mover.label:SetPoint("BOTTOM", mover, "TOP", 0, 4)
+    mover.label:SetFont(fontPath, 11, "OUTLINE")
+    mover.label:SetTextColor(0.4, 1, 0.4, 1)
+    mover.label:SetText(displayName or catKey)
+
+    -- "Anchor" text below the green box (updated with growth direction in UpdateAnchor)
+    mover.anchorText = mover:CreateFontString(nil, "OVERLAY")
+    mover.anchorText:SetPoint("TOP", mover, "BOTTOM", 0, -4)
+    mover.anchorText:SetFont(fontPath, 11, "OUTLINE")
+    mover.anchorText:SetTextColor(0.4, 1, 0.4, 1)
+
+    mover.catKey = catKey
+
+    -- Position at saved location using direction-based anchor
+    local pos = GetSavedPosition(catKey)
+    local initSettings = GetCategorySettings(catKey)
+    local initDirection = initSettings.growDirection or "CENTER"
+    local initAnchor = DIRECTION_ANCHORS[initDirection] or "CENTER"
+    mover:SetPoint(initAnchor, UIParent, "CENTER", pos.x or 0, pos.y or 0)
+
+    -- Drag scripts
+    mover:SetScript("OnDragStart", function(self)
+        DimContainer(catKey)
+        self:StartMoving()
+    end)
+    mover:SetScript("OnDragStop", function(self)
+        FinishMoverDrag(self, catKey)
+    end)
+    mover:SetScript("OnHide", function(self)
+        if self:IsMovable() then
+            FinishMoverDrag(self, catKey)
+        end
+    end)
+
+    mover:Hide()
+    return mover
+end
+
+-- Position a mover frame at its saved coordinates using direction-based anchor
+PositionMoverFrame = function(catKey)
+    local mover = moverFrames[catKey]
+    if not mover then
+        return
+    end
+    local pos = GetSavedPosition(catKey)
+    local settings = GetCategorySettings(catKey)
+    local direction = settings.growDirection or "CENTER"
+    local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
+    mover:ClearAllPoints()
+    mover:SetPoint(anchor, UIParent, "CENTER", pos.x or 0, pos.y or 0)
+end
 
 -- Initialize main frame
 local function InitializeFrames()
@@ -1547,62 +1576,21 @@ local function InitializeFrames()
     mainFrame:SetSize(200, 50)
 
     local db = BuffRemindersDB
-    mainFrame:SetPoint(
-        db.position.point or "CENTER",
-        UIParent,
-        db.position.point or "CENTER",
-        db.position.x or 0,
-        db.position.y or 0
-    )
-
-    SetupDragging()
-
-    -- Edit mode padding (how much larger the background is than the icons)
-    local EDIT_PADDING = 8
-
-    -- Border for edit mode (outermost, creates the green border)
-    mainFrame.editBorder = mainFrame:CreateTexture(nil, "BACKGROUND", nil, -2)
-    mainFrame.editBorder:SetPoint("TOPLEFT", -EDIT_PADDING - 2, EDIT_PADDING + 2)
-    mainFrame.editBorder:SetPoint("BOTTOMRIGHT", EDIT_PADDING + 2, -EDIT_PADDING - 2)
-    mainFrame.editBorder:SetColorTexture(0, 0.7, 0, 0.9)
-    mainFrame.editBorder:Hide()
-
-    -- Edit mode background (shown when unlocked, like WoW edit mode)
-    mainFrame.editBg = mainFrame:CreateTexture(nil, "BACKGROUND", nil, -1)
-    mainFrame.editBg:SetPoint("TOPLEFT", -EDIT_PADDING, EDIT_PADDING)
-    mainFrame.editBg:SetPoint("BOTTOMRIGHT", EDIT_PADDING, -EDIT_PADDING)
-    mainFrame.editBg:SetColorTexture(0.05, 0.2, 0.05, 0.7)
-    mainFrame.editBg:Hide()
-
-    -- Label text at top
-    mainFrame.editLabel = mainFrame:CreateFontString(nil, "OVERLAY")
-    mainFrame.editLabel:SetPoint("BOTTOM", mainFrame, "TOP", 0, EDIT_PADDING + 6)
-    mainFrame.editLabel:SetFont(fontPath, 11, "OUTLINE")
-    mainFrame.editLabel:SetTextColor(0.4, 1, 0.4, 1)
-    mainFrame.editLabel:SetText("Main")
-    mainFrame.editLabel:Hide()
-
-    -- Expand hit rectangle to match the green border visual
-    -- Negative values expand the clickable area outward
-    mainFrame:SetHitRectInsets(-(EDIT_PADDING + 2), -(EDIT_PADDING + 2), -(EDIT_PADDING + 2), -(EDIT_PADDING + 2))
-
-    -- Legacy anchor frame (keeping for compatibility, but edit visuals are better)
-    mainFrame.anchorFrame = CreateFrame("Frame", nil, mainFrame)
-    mainFrame.anchorFrame:SetSize(65, 26)
-    mainFrame.anchorFrame:SetFrameLevel(mainFrame:GetFrameLevel() + 100)
-    mainFrame.anchor = mainFrame.anchorFrame:CreateTexture(nil, "BACKGROUND")
-    mainFrame.anchor:SetAllPoints()
-    mainFrame.anchor:SetColorTexture(0, 0.8, 0, 0.9)
-    mainFrame.anchorText = mainFrame.anchorFrame:CreateFontString(nil, "OVERLAY")
-    mainFrame.anchorText:SetPoint("CENTER", 0, 0)
-    mainFrame.anchorText:SetFont(fontPath, 10, "OUTLINE")
-    mainFrame.anchorText:SetTextColor(1, 1, 1, 1)
-    mainFrame.anchorText:SetText("ANCHOR")
-    mainFrame.anchorFrame:Hide()
+    local pos = (db.categorySettings and db.categorySettings.main and db.categorySettings.main.position)
+        or db.position
+        or { point = "CENTER", x = 0, y = 0 }
+    mainFrame:SetPoint("CENTER", UIParent, "CENTER", pos.x or 0, pos.y or 0)
+    mainFrame:EnableMouse(false)
 
     -- Create category frames for grouped display mode
     for _, category in ipairs(CATEGORIES) do
         categoryFrames[category] = CreateCategoryFrame(category)
+    end
+
+    -- Create mover frames (shown when unlocked for drag positioning)
+    moverFrames["main"] = CreateMoverFrame("main", GetMainFrameLabel())
+    for _, category in ipairs(CATEGORIES) do
+        moverFrames[category] = CreateMoverFrame(category, CATEGORY_LABELS[category])
     end
 
     -- Create buff frames for all categories
@@ -1680,102 +1668,59 @@ BR.CustomBuffs = {
     end,
 }
 
--- Helper to show/hide edit mode visuals for a frame
-local function SetEditModeVisuals(frame, show, label)
-    if not frame then
-        return
-    end
-    if show then
-        if frame.editBorder then
-            frame.editBorder:Show()
-        end
-        if frame.editBg then
-            frame.editBg:Show()
-        end
-        if frame.editLabel then
-            if label then
-                frame.editLabel:SetText(label)
-            end
-            frame.editLabel:Show()
-        end
-    else
-        if frame.editBorder then
-            frame.editBorder:Hide()
-        end
-        if frame.editBg then
-            frame.editBg:Hide()
-        end
-        if frame.editLabel then
-            frame.editLabel:Hide()
-        end
-    end
-end
-
--- Build a label showing which categories are in mainFrame
-local function GetMainFrameLabel()
-    local parts = {}
-    for _, category in ipairs(CATEGORIES) do
-        if not IsCategorySplit(category) then
-            table.insert(parts, CATEGORY_LABELS[category])
-        end
-    end
-    if #parts == 0 then
-        return "Main (empty)"
-    elseif #parts == #CATEGORIES then
-        return "Main (all)"
-    else
-        return table.concat(parts, " + ")
-    end
-end
-
--- Update anchor position and visibility
+-- Update mover frame visibility and labels based on lock/split state.
+-- IMPORTANT: Never reposition a mover that is already shown — doing so would cancel
+-- an active StartMoving() drag via ClearAllPoints(). Only position on first show.
 UpdateAnchor = function()
     if not mainFrame then
         return
     end
+
     local db = BuffRemindersDB
     local unlocked = not db.locked
 
-    -- Hide legacy anchor frames (we use edit mode visuals now)
-    if mainFrame.anchorFrame then
-        mainFrame.anchorFrame:Hide()
-    end
-
-    -- Update mainFrame edit mode visuals (frame visibility is handled by positioning helpers)
+    -- Main mover: show when unlocked AND not all categories split
     local allSplit = AreAllCategoriesSplit()
-    if unlocked and not allSplit and mainFrame:IsShown() then
-        SetEditModeVisuals(mainFrame, true, GetMainFrameLabel())
-    else
-        SetEditModeVisuals(mainFrame, false)
+    local mainMover = moverFrames["main"]
+    if mainMover then
+        if unlocked and not allSplit then
+            local mainSettings = GetCategorySettings("main")
+            mainMover.label:SetText(GetMainFrameLabel())
+            mainMover.anchorText:SetText("Anchor \194\183 Growth " .. (mainSettings.growDirection or "CENTER"))
+            if not mainMover:IsShown() then
+                PositionMoverFrame("main")
+                mainMover:Show()
+            end
+        else
+            mainMover:Hide()
+        end
     end
 
-    -- Update edit mode visuals for split category frames (frame visibility is handled by positioning helpers)
+    -- Category movers: show when unlocked AND that category is split
     for _, category in ipairs(CATEGORIES) do
-        local catFrame = categoryFrames[category]
-        if catFrame then
-            local isSplit = IsCategorySplit(category)
-
-            if isSplit and unlocked and catFrame:IsShown() then
-                SetEditModeVisuals(catFrame, true, CATEGORY_LABELS[category])
+        local mover = moverFrames[category]
+        if mover then
+            if unlocked and IsCategorySplit(category) then
+                local catSettings = GetCategorySettings(category)
+                mover.label:SetText(CATEGORY_LABELS[category])
+                mover.anchorText:SetText("Anchor \194\183 Growth " .. (catSettings.growDirection or "CENTER"))
+                if not mover:IsShown() then
+                    PositionMoverFrame(category)
+                    mover:Show()
+                end
             else
-                SetEditModeVisuals(catFrame, false)
+                mover:Hide()
             end
         end
     end
+end
 
-    -- Update mouse enabled state (click-through when locked)
-    mainFrame:EnableMouse(unlocked)
-    for _, category in ipairs(CATEGORIES) do
-        local catFrame = categoryFrames[category]
-        if catFrame then
-            catFrame:EnableMouse(unlocked and IsCategorySplit(category))
+-- Hide all mover frames
+local function HideAllMovers()
+    for _, mover in pairs(moverFrames) do
+        if mover then
+            mover:Hide()
         end
-    end
-    for _, frame in pairs(buffFrames) do
-        -- Only enable mouse on buff frames if they're in mainFrame (not in a split category)
-        local category = frame.buffCategory
-        local inSplitCategory = category and IsCategorySplit(category)
-        frame:EnableMouse(unlocked and not inSplitCategory)
     end
 end
 
@@ -1907,28 +1852,34 @@ BR.Helpers = {
     GenerateCustomBuffKey = GenerateCustomBuffKey,
 }
 
+-- Toggle lock state: when unlocked, show mover frames for dragging
+local function ToggleLock()
+    local db = BuffRemindersDB
+    db.locked = not db.locked
+    if db.locked then
+        HideAllMovers()
+    else
+        UpdateAnchor()
+    end
+    return db.locked
+end
+
 -- Export display functions for Options.lua
 BR.Display = {
     Update = UpdateDisplay,
     RefreshTest = RefreshTestDisplay,
     ToggleTestMode = ToggleTestMode,
+    ToggleLock = ToggleLock,
     UpdateVisuals = UpdateVisuals,
     UpdateFallback = UpdateFallbackDisplay,
     IsTestMode = function()
         return testMode
     end,
-    ResetMainFramePosition = function(point, x, y)
-        if mainFrame then
-            mainFrame:ClearAllPoints()
-            mainFrame:SetPoint(point, UIParent, point, x, y)
-        end
+    ResetMainFramePosition = function(x, y)
+        SavePosition("main", x or 0, y or 0)
     end,
-    ResetCategoryFramePosition = function(category, point, x, y)
-        local frame = categoryFrames[category]
-        if frame then
-            frame:ClearAllPoints()
-            frame:SetPoint(point, UIParent, point, x, y)
-        end
+    ResetCategoryFramePosition = function(category, x, y)
+        SavePosition(category, x or 0, y or 0)
     end,
 }
 
@@ -1971,9 +1922,9 @@ end
 local function ExportSettings()
     local export = {}
 
-    -- Only export fields that exist in defaults (excluding locked)
+    -- Only export fields that exist in defaults
     for key in pairs(defaults) do
-        if key ~= "locked" and BuffRemindersDB[key] ~= nil then
+        if BuffRemindersDB[key] ~= nil then
             export[key] = DeepCopy(BuffRemindersDB[key])
         end
     end
@@ -1990,23 +1941,17 @@ local function ExportSettings()
     return result
 end
 
--- Import settings from a serialized string (preserves locked state)
+-- Import settings from a serialized string
 local function ImportSettings(str)
     local data, err = DeserializeTable(str)
     if not data then
         return false, err
     end
 
-    -- Preserve current locked state
-    local currentLocked = BuffRemindersDB.locked
-
     -- Deep merge imported data into BuffRemindersDB
     for k, v in pairs(data) do
         BuffRemindersDB[k] = DeepCopy(v)
     end
-
-    -- Restore locked state
-    BuffRemindersDB.locked = currentLocked
 
     -- Re-apply metatable on defaults (DeepCopy produces a plain table)
     if BuffRemindersDB.defaults then
@@ -2139,7 +2084,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         -- ====================================================================
         -- Versioned migrations — each runs exactly once, tracked by dbVersion
         -- ====================================================================
-        local DB_VERSION = 4
+        local DB_VERSION = 5
 
         local migrations = {
             -- [1] Consolidate all pre-versioning migrations (v2.8 → v3.x)
@@ -2296,6 +2241,25 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
             -- [4] Remove useGlowFallback (glow fallback is now always enabled)
             [4] = function()
                 db.useGlowFallback = nil
+            end,
+
+            -- [5] Remove vestigial db.position (now fully in categorySettings.main.position)
+            [5] = function()
+                if db.position then
+                    if not db.categorySettings then
+                        db.categorySettings = {}
+                    end
+                    if not db.categorySettings.main then
+                        db.categorySettings.main = {}
+                    end
+                    if not db.categorySettings.main.position then
+                        db.categorySettings.main.position = {
+                            x = db.position.x or 0,
+                            y = db.position.y or 0,
+                        }
+                    end
+                    db.position = nil
+                end
             end,
         }
 

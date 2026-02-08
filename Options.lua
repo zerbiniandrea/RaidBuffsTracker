@@ -768,23 +768,7 @@ local function CreateOptionsPanel()
     local resetMainPosBtn = CreateButton(appearanceContent, "Reset Main Frame Position", function()
         local mainDefaults = defaults.categorySettings.main
         if mainDefaults and mainDefaults.position then
-            BR.Display.ResetMainFramePosition(
-                mainDefaults.position.point,
-                mainDefaults.position.x,
-                mainDefaults.position.y
-            )
-            BuffRemindersDB.position = {
-                point = mainDefaults.position.point,
-                x = mainDefaults.position.x,
-                y = mainDefaults.position.y,
-            }
-            if BuffRemindersDB.categorySettings and BuffRemindersDB.categorySettings.main then
-                BuffRemindersDB.categorySettings.main.position = {
-                    point = mainDefaults.position.point,
-                    x = mainDefaults.position.x,
-                    y = mainDefaults.position.y,
-                }
-            end
+            BR.Display.ResetMainFramePosition(mainDefaults.position.x, mainDefaults.position.y)
         end
     end, { title = "Reset Position", desc = "Reset the main buff frame to center of screen." })
     appLayout:Add(resetMainPosBtn, 22, SECTION_GAP)
@@ -1035,23 +1019,7 @@ local function CreateOptionsPanel()
         local resetBtn = CreateButton(catContent, "Reset Pos", function()
             local catDefaults = defaults.categorySettings[category]
             if catDefaults and catDefaults.position then
-                ResetCategoryFramePosition(
-                    category,
-                    catDefaults.position.point,
-                    catDefaults.position.x,
-                    catDefaults.position.y
-                )
-                if not db.categorySettings then
-                    db.categorySettings = {}
-                end
-                if not db.categorySettings[category] then
-                    db.categorySettings[category] = {}
-                end
-                db.categorySettings[category].position = {
-                    point = catDefaults.position.point,
-                    x = catDefaults.position.x,
-                    y = catDefaults.position.y,
-                }
+                ResetCategoryFramePosition(category, catDefaults.position.x, catDefaults.position.y)
             end
         end)
         resetBtn:SetPoint("LEFT", dirHolder, "RIGHT", 10, 0)
@@ -1468,17 +1436,12 @@ local function CreateOptionsPanel()
     local BTN_WIDTH = 80
 
     local lockBtn = CreateButton(btnHolder, "Unlock", function(self)
-        BuffRemindersDB.locked = not BuffRemindersDB.locked
-        self.text:SetText(BuffRemindersDB.locked and "Unlock" or "Lock")
-        if BR.Display.IsTestMode() then
-            RefreshTestDisplay()
-        else
-            UpdateDisplay()
-        end
-    end, { title = "Lock/Unlock", desc = "Unlock to drag and reposition the buff frames." })
-    lockBtn:SetText(BuffRemindersDB.locked and "Unlock" or "Lock")
+        local locked = BR.Display.ToggleLock()
+        self.text:SetText(locked and "Unlock" or "Lock")
+    end, { title = "Lock / Unlock", desc = "Unlock to show anchor handles for repositioning buff frames." })
     lockBtn:SetSize(BTN_WIDTH, 22)
     lockBtn:SetPoint("RIGHT", btnHolder, "CENTER", -4, 0)
+    lockBtn.text:SetText(BuffRemindersDB.locked and "Unlock" or "Lock")
     panel.lockBtn = lockBtn
 
     local testBtn = CreateButton(btnHolder, "Stop Test", function(self)
@@ -1512,14 +1475,13 @@ local function ToggleOptions()
         if optionsPanel.RenderCustomBuffRows then
             optionsPanel.RenderCustomBuffRows()
         end
-        -- Update lock button text
-        optionsPanel.lockBtn.text:SetText(BuffRemindersDB.locked and "Unlock" or "Lock")
-        -- Update test button text
+        -- Update button texts
         if BR.Display.IsTestMode() then
             optionsPanel.testBtn.text:SetText("Stop Test")
         else
             optionsPanel.testBtn.text:SetText("Test")
         end
+        optionsPanel.lockBtn.text:SetText(BuffRemindersDB.locked and "Unlock" or "Lock")
         optionsPanel:Show()
     end
 end

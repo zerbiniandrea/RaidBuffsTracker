@@ -49,6 +49,7 @@ read_globals = {
 	"IsInRaid",
 	"IsMounted",
 	"IsMouseButtonDown",
+	"IsShiftKeyDown",
 	"ReloadUI",
 	"Settings",
 	"SettingsPanel",

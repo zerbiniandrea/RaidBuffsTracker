@@ -173,9 +173,6 @@
 
 ---@class CategoryFrame: Frame
 ---@field category CategoryName
----@field editBg? Texture
----@field editBorder? Texture
----@field editLabel? FontString
 
 ---@alias SplitCategories table<CategoryName, boolean>
 
