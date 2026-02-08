@@ -849,11 +849,12 @@ function BuffState.Refresh()
     if BuffRemindersDB.hidePetWhileMounted ~= false and IsMounted() then
         petVisible = false
     end
+    local petPassiveHidden = BuffRemindersDB.petPassiveOnlyInCombat and not UnitAffectingCombat("player")
     for i, buff in ipairs(PetBuffs) do
         local entry = GetOrCreateEntry(buff.key, "pet", i)
         local settingKey = buff.groupId or buff.key
 
-        if IsBuffEnabled(settingKey) and petVisible then
+        if IsBuffEnabled(settingKey) and petVisible and not (buff.key == "petPassive" and petPassiveHidden) then
             local shouldShow = ShouldShowSelfBuff(
                 buff.spellID,
                 buff.class,

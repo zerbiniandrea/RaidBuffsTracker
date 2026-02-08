@@ -49,6 +49,7 @@ read_globals = {
 	"IsInInstance",
 	"IsInRaid",
 	"IsMounted",
+	"IsResting",
 	"IsMouseButtonDown",
 	"IsShiftKeyDown",
 	"ReloadUI",
@@ -59,6 +60,7 @@ read_globals = {
 	"UIParent",
 	"IsPlayerSpell",
 	"NUM_PET_ACTION_SLOTS",
+	"UnitAffectingCombat",
 	"UnitCanAssist",
 	"UnitClass",
 	"UnitExists",
@@ -72,6 +74,7 @@ read_globals = {
 	"UnitLevel",
 
 	"strsplit",
+	"strtrim",
 	"tinsert",
 	"wipe",
 

@@ -128,6 +128,7 @@ local defaults = {
     showOnlyPlayerMissing = false,
     showOnlyOnReadyCheck = false,
     hidePetWhileMounted = true,
+    petPassiveOnlyInCombat = false,
     readyCheckDuration = 15, -- seconds
     optionsPanelScale = 1.2, -- base scale (displayed as 100%)
     showLoginMessages = true,

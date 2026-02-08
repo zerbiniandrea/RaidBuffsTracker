@@ -977,6 +977,22 @@ local function CreateOptionsPanel()
                 end,
             })
             catLayout:Add(hideMountHolder, nil, COMPONENT_GAP)
+
+            local passiveCombatHolder = Components.Checkbox(catContent, {
+                label = "Pet passive only in combat",
+                get = function()
+                    return BuffRemindersDB.petPassiveOnlyInCombat == true
+                end,
+                tooltip = {
+                    title = "Pet passive only in combat",
+                    desc = "Only show the passive pet reminder while in combat. When disabled, the reminder is always shown.",
+                },
+                onChange = function(checked)
+                    BuffRemindersDB.petPassiveOnlyInCombat = checked
+                    UpdateDisplay()
+                end,
+            })
+            catLayout:Add(passiveCombatHolder, nil, COMPONENT_GAP)
         end
 
         -- "BUFF!" text (raid only)
