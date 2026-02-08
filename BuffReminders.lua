@@ -2006,6 +2006,16 @@ local function SlashHandler(msg)
 
     if cmd == "test" then
         ToggleTestMode(false) -- no labels, for previews
+    elseif cmd == "lock" then
+        BuffRemindersDB.locked = true
+        HideAllMovers()
+        BR.Components.RefreshAll()
+        print("|cff00ccffBuffReminders:|r Frames locked.")
+    elseif cmd == "unlock" then
+        BuffRemindersDB.locked = false
+        UpdateAnchor()
+        BR.Components.RefreshAll()
+        print("|cff00ccffBuffReminders:|r Frames unlocked.")
     else
         BR.Options.Toggle()
     end
@@ -2341,7 +2351,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
 
         local slashInfo = settingsPanel:CreateFontString(nil, "ARTWORK", "GameFontDisable")
         slashInfo:SetPoint("TOPLEFT", openBtn, "BOTTOMLEFT", 0, -12)
-        slashInfo:SetText("Slash commands: /br or /buffreminders")
+        slashInfo:SetText("Slash commands: /br, /br lock, /br unlock, /br test")
 
         local category = Settings.RegisterCanvasLayoutCategory(settingsPanel, settingsPanel.name)
         Settings.RegisterAddOnCategory(category)

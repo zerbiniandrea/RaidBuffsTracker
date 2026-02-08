@@ -1504,14 +1504,18 @@ local function CreateOptionsPanel()
 
     local BTN_WIDTH = 80
 
-    local lockBtn = CreateButton(btnHolder, "Unlock", function(self)
-        local locked = BR.Display.ToggleLock()
-        self.text:SetText(locked and "Unlock" or "Lock")
+    local lockBtn = CreateButton(btnHolder, "Unlock", function()
+        BR.Display.ToggleLock()
+        Components.RefreshAll()
     end, { title = "Lock / Unlock", desc = "Unlock to show anchor handles for repositioning buff frames." })
     lockBtn:SetSize(BTN_WIDTH, 22)
     lockBtn:SetPoint("RIGHT", btnHolder, "CENTER", -4, 0)
-    lockBtn.text:SetText(BuffRemindersDB.locked and "Unlock" or "Lock")
-    panel.lockBtn = lockBtn
+
+    function lockBtn:Refresh()
+        self.text:SetText(BuffRemindersDB.locked and "Unlock" or "Lock")
+    end
+    lockBtn:Refresh()
+    table.insert(BR.RefreshableComponents, lockBtn)
 
     local testBtn = CreateButton(btnHolder, "Stop Test", function(self)
         local isOn = ToggleTestMode()
@@ -1550,7 +1554,6 @@ local function ToggleOptions()
         else
             optionsPanel.testBtn.text:SetText("Test")
         end
-        optionsPanel.lockBtn.text:SetText(BuffRemindersDB.locked and "Unlock" or "Lock")
         optionsPanel:Show()
     end
 end
