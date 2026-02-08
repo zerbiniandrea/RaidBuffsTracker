@@ -1500,6 +1500,124 @@ local function FinishMoverDrag(mover, catKey)
     RestoreContainer(catKey)
 end
 
+-- Coordinate popup: shared popup for typing exact X/Y positions on mover frames
+local coordPopup
+
+local function CreateCoordinatePopup()
+    local popup = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+    popup:SetSize(190, 110)
+    popup:SetFrameStrata("DIALOG")
+    popup:SetClampedToScreen(true)
+    popup:EnableMouse(true)
+    popup:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    popup:SetBackdropColor(0.1, 0.1, 0.1, 0.95)
+    popup:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+
+    -- Title
+    local title = popup:CreateFontString(nil, "OVERLAY")
+    title:SetFont(fontPath, 11, "OUTLINE")
+    title:SetPoint("TOP", 0, -8)
+    title:SetText("Set Position")
+    title:SetTextColor(1, 0.82, 0, 1)
+
+    -- X row
+    local xLabel = popup:CreateFontString(nil, "OVERLAY")
+    xLabel:SetFont(fontPath, 11, "OUTLINE")
+    xLabel:SetPoint("TOPLEFT", 10, -30)
+    xLabel:SetText("X")
+    xLabel:SetTextColor(1, 1, 1, 1)
+
+    local xEdit = CreateFrame("EditBox", nil, popup)
+    xEdit:SetSize(130, 20)
+    xEdit:SetFont(fontPath, 11, "")
+    xEdit:SetAutoFocus(false)
+    local xContainer = BR.StyleEditBox(xEdit)
+    xContainer:SetSize(130, 20)
+    xContainer:SetPoint("LEFT", xLabel, "RIGHT", 8, 0)
+
+    -- Y row
+    local yLabel = popup:CreateFontString(nil, "OVERLAY")
+    yLabel:SetFont(fontPath, 11, "OUTLINE")
+    yLabel:SetPoint("TOPLEFT", 10, -56)
+    yLabel:SetText("Y")
+    yLabel:SetTextColor(1, 1, 1, 1)
+
+    local yEdit = CreateFrame("EditBox", nil, popup)
+    yEdit:SetSize(130, 20)
+    yEdit:SetFont(fontPath, 11, "")
+    yEdit:SetAutoFocus(false)
+    local yContainer = BR.StyleEditBox(yEdit)
+    yContainer:SetSize(130, 20)
+    yContainer:SetPoint("LEFT", yLabel, "RIGHT", 8, 0)
+
+    -- Apply button
+    local applyBtn = BR.CreateButton(popup, "Apply", function()
+        local xVal = tonumber(xEdit:GetText())
+        local yVal = tonumber(yEdit:GetText())
+        if not xVal or not yVal then
+            return
+        end
+        local catKey = popup.catKey
+        xVal = RoundCoord(xVal)
+        yVal = RoundCoord(yVal)
+        SavePosition(catKey, xVal, yVal)
+        popup:Hide()
+    end)
+    applyBtn:SetPoint("BOTTOM", 0, 8)
+
+    -- Tab from X to Y
+    xEdit:SetScript("OnTabPressed", function()
+        yEdit:SetFocus()
+    end)
+
+    -- Enter triggers Apply on either editbox
+    xEdit:SetScript("OnEnterPressed", function()
+        applyBtn:Click()
+    end)
+    yEdit:SetScript("OnEnterPressed", function()
+        applyBtn:Click()
+    end)
+    yEdit:SetScript("OnTabPressed", function()
+        xEdit:SetFocus()
+    end)
+
+    -- Escape to close
+    popup:SetScript("OnKeyDown", function(self, key)
+        if key == "ESCAPE" then
+            self:SetPropagateKeyboardInput(false)
+            self:Hide()
+        else
+            self:SetPropagateKeyboardInput(true)
+        end
+    end)
+
+    popup.xEdit = xEdit
+    popup.yEdit = yEdit
+    popup:Hide()
+    return popup
+end
+
+local function ShowCoordinatePopup(catKey, mover)
+    if not coordPopup then
+        coordPopup = CreateCoordinatePopup()
+    end
+    coordPopup.catKey = catKey
+    coordPopup.mover = mover
+    coordPopup:ClearAllPoints()
+    coordPopup:SetPoint("LEFT", mover, "RIGHT", 10, 0)
+
+    local pos = GetSavedPosition(catKey)
+    coordPopup.xEdit:SetText(tostring(pos.x or 0))
+    coordPopup.yEdit:SetText(tostring(pos.y or 0))
+
+    coordPopup:Show()
+    coordPopup.xEdit:SetFocus()
+end
+
 -- Create a mover frame for positioning a category.
 -- The mover is a 48×48 draggable frame parented to UIParent. Shown when unlocked.
 local function CreateMoverFrame(catKey, displayName)
@@ -1540,8 +1658,15 @@ local function CreateMoverFrame(catKey, displayName)
     local initAnchor = DIRECTION_ANCHORS[initDirection] or "CENTER"
     mover:SetPoint(initAnchor, UIParent, "CENTER", pos.x or 0, pos.y or 0)
 
+    -- Tooltip
+    BR.SetupTooltip(mover, "Buff Anchor", "Drag to reposition\nRight-click to set exact coordinates")
+
     -- Drag scripts
     mover:SetScript("OnDragStart", function(self)
+        GameTooltip:Hide()
+        if coordPopup then
+            coordPopup:Hide()
+        end
         DimContainer(catKey)
         self:StartMoving()
     end)
@@ -1551,6 +1676,13 @@ local function CreateMoverFrame(catKey, displayName)
     mover:SetScript("OnHide", function(self)
         if self:IsMovable() then
             FinishMoverDrag(self, catKey)
+        end
+    end)
+
+    -- Right-click to open coordinate popup
+    mover:SetScript("OnMouseDown", function(self, button)
+        if button == "RightButton" then
+            ShowCoordinatePopup(catKey, self)
         end
     end)
 
@@ -1719,6 +1851,9 @@ end
 
 -- Hide all mover frames
 local function HideAllMovers()
+    if coordPopup then
+        coordPopup:Hide()
+    end
     for _, mover in pairs(moverFrames) do
         if mover then
             mover:Hide()
