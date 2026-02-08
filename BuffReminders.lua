@@ -167,8 +167,8 @@ local defaults = {
             dungeonDifficulty = {
                 normal = false,
                 heroic = false,
-                mythic = false,
-                mythicPlus = true,
+                mythic = true,
+                mythicPlus = false,
                 timewalking = false,
                 follower = false,
             },
@@ -2329,7 +2329,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         -- ====================================================================
         -- Versioned migrations — each runs exactly once, tracked by dbVersion
         -- ====================================================================
-        local DB_VERSION = 8
+        local DB_VERSION = 9
 
         local migrations = {
             -- [1] Consolidate all pre-versioning migrations (v2.8 → v3.x)
@@ -2507,7 +2507,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
                 end
             end,
 
-            -- [6] Add sensible difficulty defaults for consumables (M+ only, no LFR)
+            -- [6] Add sensible difficulty defaults for consumables (mythic only, no LFR)
             [6] = function()
                 if not db.categoryVisibility then
                     return
@@ -2516,13 +2516,13 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
                 if not vis then
                     return
                 end
-                -- Add dungeon difficulty defaults (M+ only) if not already set
+                -- Add dungeon difficulty defaults (mythic only) if not already set
                 if not vis.dungeonDifficulty then
                     vis.dungeonDifficulty = {
                         normal = false,
                         heroic = false,
-                        mythic = false,
-                        mythicPlus = true,
+                        mythic = true,
+                        mythicPlus = false,
                         timewalking = false,
                         follower = false,
                     }
@@ -2571,6 +2571,20 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
                 end
                 if db.enabledBuffs[key] == nil then
                     db.enabledBuffs[key] = false
+                end
+            end,
+
+            -- [9] Fix consumable dungeon difficulty default: mythic not M+
+            [9] = function()
+                local vis = db.categoryVisibility and db.categoryVisibility.consumable
+                if not vis or not vis.dungeonDifficulty then
+                    return
+                end
+                local dd = vis.dungeonDifficulty
+                -- Only fix if the user still has the old wrong defaults (M+ on, mythic off)
+                if dd.mythicPlus == true and dd.mythic == false then
+                    dd.mythic = true
+                    dd.mythicPlus = false
                 end
             end,
         }
