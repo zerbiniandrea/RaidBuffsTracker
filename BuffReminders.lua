@@ -1185,20 +1185,44 @@ UpdateFallbackDisplay = function()
         return
     end
 
-    -- Show frames for any glowing spells
+    -- Show frames for any glowing spells (skip invertGlow buffs — handled in second pass)
     local seenKeys = {}
     local GetPlayerSpecId = BR.StateHelpers.GetPlayerSpecId
     for spellID, _ in pairs(glowingSpells) do
         local entry = glowSpellToBuff[spellID]
         if entry then
             local buff = entry.buff
-            if (not buff.class or buff.class == playerClass) and not seenKeys[buff.key] then
+            if not buff.invertGlow and (not buff.class or buff.class == playerClass) and not seenKeys[buff.key] then
                 -- Skip targeted buffs when solo (they require a group target)
                 local skipSolo = entry.category == "targeted" and GetNumGroupMembers() == 0
                 -- Skip buffs requiring a specific spec
                 local skipSpec = buff.requireSpecId and GetPlayerSpecId() ~= buff.requireSpecId
                 if not skipSolo and not skipSpec then
                     seenKeys[buff.key] = true
+                    local frame = buffFrames[buff.key]
+                    if frame and IsBuffEnabled(buff.key) then
+                        ShowMissingFrame(frame, buff.missingText or "NO\nBUFF!")
+                    end
+                end
+            end
+        end
+    end
+
+    -- Second pass: show invertGlow buffs where NONE of their spells are glowing
+    local invertedHasGlow = {}
+    for spellID, _ in pairs(glowingSpells) do
+        local entry = glowSpellToBuff[spellID]
+        if entry and entry.buff.invertGlow then
+            invertedHasGlow[entry.buff.key] = true
+        end
+    end
+    for _, entry in pairs(glowSpellToBuff) do
+        local buff = entry.buff
+        if buff.invertGlow and not seenKeys[buff.key] and not invertedHasGlow[buff.key] then
+            seenKeys[buff.key] = true
+            if not buff.class or buff.class == playerClass then
+                local skipSpec = buff.requireSpecId and GetPlayerSpecId() ~= buff.requireSpecId
+                if not skipSpec then
                     local frame = buffFrames[buff.key]
                     if frame and IsBuffEnabled(buff.key) then
                         ShowMissingFrame(frame, buff.missingText or "NO\nBUFF!")

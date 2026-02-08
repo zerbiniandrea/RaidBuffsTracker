@@ -910,7 +910,9 @@ function BuffState.Refresh()
                 buff.requireSpecId,
                 skipSpellKnown
             )
-            if shouldShow then
+            local wantPresent = buff.showWhenPresent
+            local show = (wantPresent and shouldShow == false) or (not wantPresent and shouldShow)
+            if show then
                 entry.visible = true
                 entry.displayType = "missing"
                 entry.missingText = buff.missingText
