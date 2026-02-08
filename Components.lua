@@ -1947,6 +1947,7 @@ end
 ---@field label string Display label
 ---@field value? string Initial value (deprecated: prefer get)
 ---@field get? fun(): string Getter for initial value and refresh (preferred over value)
+---@field enabled? fun(): boolean Predicate for enabled state (refreshed on RefreshAll)
 ---@field width? number Input width (default 150)
 ---@field labelWidth? number Label width (default 80)
 ---@field numeric? boolean Numeric only input
@@ -2029,10 +2030,13 @@ function Components.TextInput(parent, config)
         if config.get then
             editBox:SetText(config.get() or "")
         end
+        if config.enabled then
+            holder:SetEnabled(config.enabled())
+        end
     end
 
     -- Auto-register if refreshable
-    if config.get then
+    if config.get or config.enabled then
         table.insert(RefreshableComponents, holder)
     end
 

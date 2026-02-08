@@ -111,6 +111,7 @@
 ---@field key string
 ---@field spellIDs SpellID
 ---@field displayName string
+---@field buffDef table
 ---@field icon Texture
 ---@field border Texture
 ---@field count FontString
@@ -122,6 +123,8 @@
 ---@field glowAnim? AnimationGroup
 ---@field glowShowing? boolean
 ---@field currentGlowStyle? number
+---@field clickOverlay? Button
+---@field actionButtons? Button[]
 
 ---@alias CategoryName "raid"|"presence"|"targeted"|"self"|"pet"|"consumable"|"custom"
 
@@ -160,6 +163,7 @@
 ---@field showText? boolean
 ---@field useCustomAppearance? boolean
 ---@field split? boolean
+---@field clickable? boolean
 ---@field priority? number
 
 --- All category settings must be defined here. When adding a new category:

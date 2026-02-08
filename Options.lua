@@ -1029,6 +1029,34 @@ local function CreateOptionsPanel()
             catLayout:Add(showTextHolder, nil, COMPONENT_GAP)
         end
 
+        -- Click to cast checkbox (raid and consumable only)
+        if category == "raid" or category == "consumable" then
+            local clickableHolder = Components.Checkbox(catContent, {
+                label = "Click to cast",
+                get = function()
+                    local cs = db.categorySettings and db.categorySettings[category]
+                    return cs and cs.clickable == true
+                end,
+                tooltip = {
+                    title = "Click to cast",
+                    desc = "Make buff icons clickable to cast the corresponding spell (out of combat only). "
+                        .. "Only works for spells your character can cast.",
+                },
+                onChange = function(checked)
+                    if not db.categorySettings then
+                        db.categorySettings = {}
+                    end
+                    if not db.categorySettings[category] then
+                        db.categorySettings[category] = {}
+                    end
+                    db.categorySettings[category].clickable = checked
+                    BR.Display.UpdateActionButtons(category)
+                    Components.RefreshAll()
+                end,
+            })
+            catLayout:Add(clickableHolder, nil, COMPONENT_GAP)
+        end
+
         -- Split frame checkbox
         local splitHolder = Components.Checkbox(catContent, {
             label = "Split into separate frame",

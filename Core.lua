@@ -89,6 +89,7 @@ local CategorySettingKeys = {
     -- Toggles
     useCustomAppearance = nil, -- No refresh, just toggle state
     split = "FramesReparent",
+    clickable = nil, -- No auto-refresh, handled manually via UpdateClickOverlays
 }
 
 -- Defaults settings (path = defaults.{key})
@@ -207,6 +208,7 @@ local function ValidatePath(segments)
                 "showText",
                 "useCustomAppearance",
                 "split",
+                "clickable",
             }
             for _, key in ipairs(knownKeys) do
                 if setting == key then

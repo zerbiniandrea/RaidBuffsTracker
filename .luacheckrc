@@ -25,6 +25,7 @@ read_globals = {
 	-- WoW API
 	"C_ActionBar",
 	"C_AddOns",
+	"C_Container",
 	"C_ChallengeMode",
 	"C_Housing",
 	"C_EncodingUtil",
@@ -52,6 +53,7 @@ read_globals = {
 	"IsResting",
 	"IsMouseButtonDown",
 	"IsShiftKeyDown",
+	"NUM_BAG_SLOTS",
 	"ReloadUI",
 	"Settings",
 	"SettingsPanel",
@@ -59,6 +61,7 @@ read_globals = {
 	"time",
 	"UIParent",
 	"IsPlayerSpell",
+	"IsResting",
 	"NUM_PET_ACTION_SLOTS",
 	"UnitAffectingCombat",
 	"UnitCanAssist",
@@ -87,9 +90,12 @@ read_globals = {
 	"ColorPickerFrame",
 	"DynamicResizeButton_Resize",
 	"GameTooltip",
+	"GameTooltip_Hide",
 	"HideUIPanel",
+	"RegisterStateDriver",
 	"STANDARD_TEXT_FONT",
 	"UISpecialFrames",
+	"UnregisterStateDriver",
 
 	-- Libraries
 	"LibStub",
