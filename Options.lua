@@ -316,7 +316,7 @@ local function CreateOptionsPanel()
             scrollbarWidth = SCROLLBAR_WIDTH,
         })
         scrollFrame:SetPoint("TOPLEFT", 0, CONTENT_TOP)
-        scrollFrame:SetPoint("BOTTOMRIGHT", 0, 50)
+        scrollFrame:SetPoint("BOTTOMRIGHT", 0, 46)
         scrollFrame:Hide()
 
         contentContainers[name] = scrollFrame
@@ -376,7 +376,7 @@ local function CreateOptionsPanel()
             container:ClearAllPoints()
             container:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, newTop)
             if container.GetContentFrame then
-                container:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 50)
+                container:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 46)
             end
         end
     end
@@ -602,9 +602,14 @@ local function CreateOptionsPanel()
     customNote:SetText("(track any buff/glow by spell ID)")
     buffsRightY = buffsRightY - 14
 
+    local customSectionStartY = buffsRightY
     local customBuffsContainer = CreateFrame("Frame", nil, buffsContent)
     customBuffsContainer:SetPoint("TOPLEFT", buffsRightX, buffsRightY)
     customBuffsContainer:SetSize(COL_WIDTH, 200)
+
+    local ADD_BTN_GAP = 4
+    local ADD_BTN_HEIGHT = 22
+    local CUSTOM_CONTAINER_PAD = ADD_BTN_GAP + ADD_BTN_HEIGHT + 2
 
     local function RenderCustomBuffRows()
         for _, row in ipairs(panel.customBuffRows) do
@@ -653,20 +658,20 @@ local function CreateOptionsPanel()
         local addBtn = CreateButton(customBuffsContainer, "+ Add Custom Buff", function()
             ShowCustomBuffModal(nil, RenderCustomBuffRows)
         end)
-        addBtn:SetPoint("TOPLEFT", 0, rowY - 4)
+        addBtn:SetPoint("TOPLEFT", 0, rowY - ADD_BTN_GAP)
         table.insert(panel.customBuffRows, addBtn)
 
-        customBuffsContainer:SetHeight(math.abs(rowY) + 30)
+        customBuffsContainer:SetHeight(math.abs(rowY) + CUSTOM_CONTAINER_PAD)
+
+        -- Recalculate content height when custom buffs change
+        local effectiveRightY = customSectionStartY + rowY - CUSTOM_CONTAINER_PAD
+        buffsContent:SetHeight(math.max(math.abs(buffsLeftY), math.abs(effectiveRightY)) + 4)
 
         return rowY
     end
 
     panel.RenderCustomBuffRows = RenderCustomBuffRows
-    local customEndY = RenderCustomBuffRows()
-    buffsRightY = buffsRightY + customEndY - 20
-
-    -- Set buffs content height (use the taller column)
-    buffsContent:SetHeight(math.max(math.abs(buffsLeftY), math.abs(buffsRightY)) + 10)
+    RenderCustomBuffRows()
 
     -- ========== APPEARANCE TAB ==========
     local appearanceContent, _ = CreateScrollableContent("appearance")
