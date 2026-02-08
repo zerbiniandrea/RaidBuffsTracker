@@ -105,7 +105,7 @@
 ---@field class? ClassName
 ---@field requireSpecId? number
 ---@field showWhenPresent? boolean  -- Show icon when buff IS on player (default: show when missing)
----@field invertGlow? boolean       -- Fallback triggers when spell is NOT glowing (default: when glowing)
+---@field invertGlow? boolean       -- TODO: rename to something clearer (e.g. showWhenNotGlowing) — "invertGlow" doesn't convey the actual behavior: fallback triggers when spell is NOT glowing (default: when glowing)
 
 ---@class BuffFrame: Button
 ---@field key string

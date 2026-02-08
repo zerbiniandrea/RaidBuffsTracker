@@ -121,6 +121,7 @@ local defaults = {
     locked = true,
     enabledBuffs = {
         delveFood = false,
+        burningRush = false,
     },
     showOnlyInGroup = false,
     showOnlyPlayerClassBuff = false,
@@ -2327,7 +2328,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         -- ====================================================================
         -- Versioned migrations — each runs exactly once, tracked by dbVersion
         -- ====================================================================
-        local DB_VERSION = 7
+        local DB_VERSION = 8
 
         local migrations = {
             -- [1] Consolidate all pre-versioning migrations (v2.8 → v3.x)
@@ -2545,6 +2546,30 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
                             customBuff.specId = nil
                         end
                     end
+                end
+            end,
+
+            -- [8] Seed pre-configured Burning Rush custom buff (disabled by default)
+            [8] = function()
+                if not db.customBuffs then
+                    db.customBuffs = {}
+                end
+                local key = "burningRush"
+                if not db.customBuffs[key] then
+                    db.customBuffs[key] = {
+                        spellID = 111400,
+                        key = key,
+                        name = "Burning Rush",
+                        missingText = "",
+                        class = "WARLOCK",
+                        showWhenPresent = true,
+                    }
+                end
+                if not db.enabledBuffs then
+                    db.enabledBuffs = {}
+                end
+                if db.enabledBuffs[key] == nil then
+                    db.enabledBuffs[key] = false
                 end
             end,
         }
