@@ -1510,8 +1510,7 @@ function Components.VisibilityToggles(parent, config)
     }
 
     -- Arrow indicator between content bar and difficulty bar (hidden when no diff bar is open)
-    local expandArrow = CreateFrame("Frame", nil, UIParent)
-    expandArrow:SetFrameStrata("TOOLTIP")
+    local expandArrow = CreateFrame("Frame", nil, holder)
     expandArrow:SetSize(10, BAR_H)
     expandArrow:SetPoint("LEFT", contentBar, "RIGHT", 2, 0)
     local arrowTex = expandArrow:CreateTexture(nil, "OVERLAY")
@@ -1523,9 +1522,8 @@ function Components.VisibilityToggles(parent, config)
 
     -- Pre-create difficulty bars
     for _, mapping in ipairs(diffMappings) do
-        -- Difficulty bar: parented to UIParent so it's not clipped by scroll frame,
-        -- but anchored to expandArrow so it follows scroll position
-        local bar, buttons = CreateSegmentedBar(UIParent, {
+        -- Difficulty bar: parented to holder so it's clipped by scroll frame
+        local bar, buttons = CreateSegmentedBar(holder, {
             toggleDefs = mapping.diffDefs,
             segmentWidth = DIFF_SEGMENT_W,
             getState = function(key)
@@ -1569,7 +1567,6 @@ function Components.VisibilityToggles(parent, config)
                 config.onChange()
             end,
         })
-        bar:SetFrameStrata("TOOLTIP")
         bar:SetPoint("LEFT", expandArrow, "RIGHT", 2, 0)
         bar:Hide()
 
