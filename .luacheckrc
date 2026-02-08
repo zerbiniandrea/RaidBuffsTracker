@@ -35,6 +35,7 @@ read_globals = {
 	"C_UnitAuras",
 	"CreateFrame",
 	"GetActionInfo",
+	"GetInstanceInfo",
 	"GetPetActionInfo",
 	"GetCursorPosition",
 	"GetNumGroupMembers",

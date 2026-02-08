@@ -43,6 +43,25 @@ local inReadyCheck = false
 -- Content type cache (invalidated on PLAYER_ENTERING_WORLD)
 local cachedContentType = nil
 
+-- Difficulty cache (invalidated alongside content type)
+local cachedDifficultyKey = nil
+
+local DUNGEON_DIFFICULTY_KEYS = {
+    [1] = "normal", -- Normal
+    [2] = "heroic", -- Heroic
+    [23] = "mythic", -- Mythic
+    [8] = "mythicPlus", -- Mythic Keystone
+    [24] = "timewalking", -- Timewalking
+    [205] = "follower", -- Follower Dungeon
+}
+
+local RAID_DIFFICULTY_KEYS = {
+    [17] = "lfr", -- Looking for Raid
+    [14] = "normal", -- Normal
+    [15] = "heroic", -- Heroic
+    [16] = "mythic", -- Mythic
+}
+
 -- Talent/spell knowledge cache (invalidated on PLAYER_SPECIALIZATION_CHANGED)
 local cachedSpellKnowledge = {}
 
@@ -287,6 +306,32 @@ local function GetCurrentContentType()
     return cachedContentType
 end
 
+---Get the current difficulty key (cached)
+---Only caches valid keys; returns nil (retried next call) if the API returns
+---an unmapped difficultyID (e.g. 0 during a loading transition).
+---@return string? difficultyKey or nil if not in a dungeon/raid or unknown difficulty
+local function GetCurrentDifficultyKey()
+    if cachedDifficultyKey ~= nil then
+        return cachedDifficultyKey
+    end
+    local difficultyID = select(3, GetInstanceInfo())
+    local contentType = GetCurrentContentType()
+    if contentType == "dungeon" then
+        local key = DUNGEON_DIFFICULTY_KEYS[difficultyID]
+        if key then
+            cachedDifficultyKey = key
+        end
+        return key
+    elseif contentType == "raid" then
+        local key = RAID_DIFFICULTY_KEYS[difficultyID]
+        if key then
+            cachedDifficultyKey = key
+        end
+        return key
+    end
+    return nil
+end
+
 ---Check if a category should be visible for the current content type
 ---@param category CategoryName
 ---@return boolean
@@ -300,7 +345,19 @@ local function IsCategoryVisibleForContent(category)
         return true
     end
     local contentType = GetCurrentContentType()
-    return visibility[contentType] ~= false
+    if visibility[contentType] == false then
+        return false
+    end
+    -- Check difficulty sub-filter
+    local diffKey = GetCurrentDifficultyKey()
+    if diffKey then
+        if contentType == "dungeon" and visibility.dungeonDifficulty then
+            return visibility.dungeonDifficulty[diffKey] ~= false
+        elseif contentType == "raid" and visibility.raidDifficulty then
+            return visibility.raidDifficulty[diffKey] ~= false
+        end
+    end
+    return true
 end
 
 -- ============================================================================
@@ -894,6 +951,7 @@ end
 ---Invalidate content type cache (call on PLAYER_ENTERING_WORLD)
 function BuffState.InvalidateContentTypeCache()
     cachedContentType = nil
+    cachedDifficultyKey = nil
 end
 
 ---Invalidate spec ID cache (call on PLAYER_ENTERING_WORLD, PLAYER_SPECIALIZATION_CHANGED)

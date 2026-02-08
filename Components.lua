@@ -1227,28 +1227,55 @@ function Components.DirectionButtons(parent, config)
     return holder
 end
 
-local TOGGLE_DEFS = {
+local CONTENT_TOGGLE_DEFS = {
     { key = "openWorld", label = "W", tooltip = "Open World" },
     { key = "scenario", label = "S", tooltip = "Scenarios (Delves, Torghast, etc.)" },
     { key = "dungeon", label = "D", tooltip = "Dungeons (including M+)" },
     { key = "raid", label = "R", tooltip = "Raids" },
 }
 
-local SEGMENT_W, SEGMENT_H = 22, 16
+local DUNGEON_DIFF_DEFS = {
+    { key = "normal", label = "N", tooltip = "Normal Dungeons" },
+    { key = "heroic", label = "H", tooltip = "Heroic Dungeons" },
+    { key = "mythic", label = "M", tooltip = "Mythic Dungeons" },
+    { key = "mythicPlus", label = "M+", tooltip = "Mythic+ Keystones" },
+    { key = "timewalking", label = "TW", tooltip = "Timewalking Dungeons" },
+    { key = "follower", label = "F", tooltip = "Follower Dungeons" },
+}
+
+local RAID_DIFF_DEFS = {
+    { key = "lfr", label = "LFR", tooltip = "Looking for Raid" },
+    { key = "normal", label = "N", tooltip = "Normal Raids" },
+    { key = "heroic", label = "H", tooltip = "Heroic Raids" },
+    { key = "mythic", label = "M", tooltip = "Mythic Raids" },
+}
+
+local SEGMENT_H = 16
 local DIVIDER_W = 1
--- 4 segments + 3 dividers + 2px border (1px each side)
-local BAR_W = 4 * SEGMENT_W + 3 * DIVIDER_W + 2
+local DEFAULT_SEGMENT_W = 22
+
+---Compute bar width for a given number of segments and segment width
+---@param numSegments number
+---@param segW number
+---@return number
+local function ComputeBarWidth(numSegments, segW)
+    return numSegments * segW + (numSegments - 1) * DIVIDER_W + 2
+end
+
 local BAR_H = SEGMENT_H + 2
 
----Create a segmented toggle bar (W/S/D/R) as a connected BackdropTemplate control
+---Create a generic segmented toggle bar
 ---@param parent table Parent frame
----@param category CategoryName Category key for visibility DB
----@param onChange fun() Callback when visibility changes
+---@param barConfig table { toggleDefs, segmentWidth, getState, setState, onChange }
 ---@return table container The bar container frame
 ---@return table toggleButtons Array of segment button frames
-local function CreateSegmentedBar(parent, category, onChange)
+local function CreateSegmentedBar(parent, barConfig)
+    local toggleDefs = barConfig.toggleDefs
+    local segW = barConfig.segmentWidth or DEFAULT_SEGMENT_W
+    local barW = ComputeBarWidth(#toggleDefs, segW)
+
     local container = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    container:SetSize(BAR_W, BAR_H)
+    container:SetSize(barW, BAR_H)
     container:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
@@ -1257,28 +1284,40 @@ local function CreateSegmentedBar(parent, category, onChange)
     container:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
     container:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
 
+    local barDisabled = false
     local toggleButtons = {}
-    for i, toggle in ipairs(TOGGLE_DEFS) do
+    for i, toggle in ipairs(toggleDefs) do
         local btn = CreateFrame("Button", nil, container)
-        btn:SetSize(SEGMENT_W, SEGMENT_H)
-        -- Position: 1px border offset, then (i-1) * (segment + divider)
-        local xOff = 1 + (i - 1) * (SEGMENT_W + DIVIDER_W)
+        btn:SetSize(segW, SEGMENT_H)
+        local xOff = 1 + (i - 1) * (segW + DIVIDER_W)
         btn:SetPoint("TOPLEFT", container, "TOPLEFT", xOff, -1)
 
         local bg = btn:CreateTexture(nil, "BACKGROUND")
         bg:SetAllPoints()
 
         local btnLabel = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        btnLabel:SetPoint("CENTER", 0, 0)
+        btnLabel:SetPoint("CENTER", 0, -1)
         btnLabel:SetText(toggle.label)
 
         local function UpdateToggleVisual()
-            local db = BuffRemindersDB
-            local visibility = db.categoryVisibility and db.categoryVisibility[category]
-            local enabled = not visibility or visibility[toggle.key] ~= false
-            if enabled then
+            if barDisabled then
+                bg:SetColorTexture(0, 0, 0, 0)
+                btnLabel:SetTextColor(0.25, 0.25, 0.25, 1)
+                return
+            end
+            -- Tri-state visual: getVisualState returns "on"/"partial"/"off"
+            local visualState
+            if barConfig.getVisualState then
+                visualState = barConfig.getVisualState(toggle.key)
+            else
+                visualState = barConfig.getState(toggle.key) and "on" or "off"
+            end
+            if visualState == "on" then
                 bg:SetColorTexture(0.18, 0.15, 0.08, 1)
                 btnLabel:SetTextColor(0.9, 0.75, 0.2, 1)
+            elseif visualState == "partial" then
+                bg:SetColorTexture(0.12, 0.08, 0.02, 1)
+                btnLabel:SetTextColor(0.7, 0.5, 0.1, 1)
             else
                 bg:SetColorTexture(0, 0, 0, 0)
                 btnLabel:SetTextColor(0.4, 0.4, 0.4, 1)
@@ -1288,22 +1327,19 @@ local function CreateSegmentedBar(parent, category, onChange)
         UpdateToggleVisual()
 
         btn:SetScript("OnClick", function()
-            local db = BuffRemindersDB
-            if not db.categoryVisibility then
-                db.categoryVisibility = {}
+            if barDisabled then
+                return
             end
-            if not db.categoryVisibility[category] then
-                db.categoryVisibility[category] = { openWorld = true, scenario = true, dungeon = true, raid = true }
-            end
-            db.categoryVisibility[category][toggle.key] = not db.categoryVisibility[category][toggle.key]
+            barConfig.setState(toggle.key)
             UpdateToggleVisual()
-            onChange()
+            if barConfig.onChange then
+                barConfig.onChange()
+            end
         end)
 
         SetupTooltip(btn, toggle.tooltip, "Click to toggle visibility in " .. toggle.tooltip:lower(), "ANCHOR_TOP")
 
-        -- Divider after each segment except the last
-        if i < #TOGGLE_DEFS then
+        if i < #toggleDefs then
             local divider = container:CreateTexture(nil, "ARTWORK")
             divider:SetSize(DIVIDER_W, SEGMENT_H)
             divider:SetPoint("LEFT", btn, "RIGHT", 0, 0)
@@ -1313,7 +1349,43 @@ local function CreateSegmentedBar(parent, category, onChange)
         toggleButtons[i] = btn
     end
 
+    ---Set whether the entire bar is disabled (non-interactive, all gray)
+    ---@param disabled boolean
+    function container:SetBarDisabled(disabled)
+        barDisabled = disabled
+        for _, btn in ipairs(toggleButtons) do
+            btn.UpdateVisual()
+        end
+    end
+
     return container, toggleButtons
+end
+
+---Build barConfig for the content-type (W/S/D/R) bar
+---@param category CategoryName
+---@param onChange fun()
+---@return table barConfig
+local function MakeContentBarConfig(category, onChange)
+    return {
+        toggleDefs = CONTENT_TOGGLE_DEFS,
+        segmentWidth = DEFAULT_SEGMENT_W,
+        getState = function(key)
+            local db = BuffRemindersDB
+            local visibility = db.categoryVisibility and db.categoryVisibility[category]
+            return not visibility or visibility[key] ~= false
+        end,
+        setState = function(key)
+            local db = BuffRemindersDB
+            if not db.categoryVisibility then
+                db.categoryVisibility = {}
+            end
+            if not db.categoryVisibility[category] then
+                db.categoryVisibility[category] = { openWorld = true, scenario = true, dungeon = true, raid = true }
+            end
+            db.categoryVisibility[category][key] = not db.categoryVisibility[category][key]
+        end,
+        onChange = onChange,
+    }
 end
 
 ---Create category header with content visibility toggles [W][S][D][R]
@@ -1325,7 +1397,7 @@ function Components.CategoryHeader(parent, config, updateCallback)
     local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     header:SetText("|cffffcc00" .. config.text .. "|r")
 
-    local bar = CreateSegmentedBar(parent, config.category, updateCallback)
+    local bar = CreateSegmentedBar(parent, MakeContentBarConfig(config.category, updateCallback))
     bar:SetPoint("LEFT", header, "RIGHT", 8, 0)
 
     return header
@@ -1335,29 +1407,232 @@ end
 ---@field category CategoryName Category for visibility toggles
 ---@field onChange fun() Callback when visibility changes
 
----Create standalone W/S/D/R content visibility toggles
+---Create standalone content + difficulty visibility toggles (D/R expand to the right)
 ---@param parent table Parent frame
 ---@param config VisibilityTogglesConfig Configuration table
----@return table holder Frame containing segmented toggle bar
+---@return table holder Frame containing segmented toggle bar with D/R difficulty expansion
 function Components.VisibilityToggles(parent, config)
+    local category = config.category
+    local DIFF_SEGMENT_W = 26
+
     local holder = CreateFrame("Frame", nil, parent)
     holder:SetSize(200, BAR_H)
 
-    local toggleLabel = holder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    toggleLabel:SetPoint("LEFT", 0, 0)
-    toggleLabel:SetText("Show in:")
-    holder.label = toggleLabel
+    -- All toggle buttons across all bars (content + difficulty bars) for Refresh
+    local allToggleButtons = {}
 
-    local bar, toggleButtons = CreateSegmentedBar(holder, config.category, config.onChange)
-    bar:SetPoint("LEFT", toggleLabel, "RIGHT", 6, 0)
+    -- Helper: get/set difficulty sub-table
+    local function getDiffTable(dbKey)
+        local db = BuffRemindersDB
+        local vis = db.categoryVisibility and db.categoryVisibility[category]
+        return vis and vis[dbKey]
+    end
 
-    holder.toggleButtons = toggleButtons
+    local function ensureDiffTable(dbKey)
+        local db = BuffRemindersDB
+        if not db.categoryVisibility then
+            db.categoryVisibility = {}
+        end
+        if not db.categoryVisibility[category] then
+            db.categoryVisibility[category] = { openWorld = true, scenario = true, dungeon = true, raid = true }
+        end
+        if not db.categoryVisibility[category][dbKey] then
+            db.categoryVisibility[category][dbKey] = {}
+        end
+        return db.categoryVisibility[category][dbKey]
+    end
 
-    -- Refresh method
-    function holder:Refresh()
-        for _, btn in ipairs(toggleButtons) do
+    local function isContentEnabled(contentKey)
+        local db = BuffRemindersDB
+        local vis = db.categoryVisibility and db.categoryVisibility[category]
+        return not vis or vis[contentKey] ~= false
+    end
+
+    -- Compute tri-state visual for D/R buttons: "on" (all diffs enabled), "partial" (some), "off" (content disabled)
+    local function getDiffVisualState(contentKey, diffDbKey, diffDefs)
+        if not isContentEnabled(contentKey) then
+            return "off"
+        end
+        local diffTable = getDiffTable(diffDbKey)
+        if not diffTable then
+            return "on" -- nil = all enabled
+        end
+        local anyOn, anyOff = false, false
+        for _, def in ipairs(diffDefs) do
+            if diffTable[def.key] == false then
+                anyOff = true
+            else
+                anyOn = true
+            end
+        end
+        if anyOn and anyOff then
+            return "partial"
+        elseif anyOn then
+            return "on"
+        else
+            return "off"
+        end
+    end
+
+    -- Forward-declare refreshAll so diff bar onChange can call it
+    local refreshAll
+
+    -- Content label (LEFT anchor centers vertically in holder)
+    local contentLabel = holder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    contentLabel:SetPoint("LEFT", 0, 0)
+    contentLabel:SetText("Show in:")
+
+    -- Content bar with custom getVisualState for D/R
+    local contentBarConfig = MakeContentBarConfig(category, config.onChange)
+    contentBarConfig.getVisualState = function(key)
+        if key == "dungeon" then
+            return getDiffVisualState("dungeon", "dungeonDifficulty", DUNGEON_DIFF_DEFS)
+        elseif key == "raid" then
+            return getDiffVisualState("raid", "raidDifficulty", RAID_DIFF_DEFS)
+        else
+            return isContentEnabled(key) and "on" or "off"
+        end
+    end
+    local contentBar, contentButtons = CreateSegmentedBar(holder, contentBarConfig)
+    contentBar:SetPoint("LEFT", contentLabel, "RIGHT", 6, 0)
+
+    for _, btn in ipairs(contentButtons) do
+        allToggleButtons[#allToggleButtons + 1] = btn
+    end
+
+    -- Difficulty bar state
+    local diffBars = {} -- keyed by contentKey ("dungeon", "raid")
+    local activeDiffKey = nil -- which difficulty bar is currently shown
+
+    local diffMappings = {
+        { contentKey = "dungeon", diffDbKey = "dungeonDifficulty", diffDefs = DUNGEON_DIFF_DEFS, btnIndex = 3 },
+        { contentKey = "raid", diffDbKey = "raidDifficulty", diffDefs = RAID_DIFF_DEFS, btnIndex = 4 },
+    }
+
+    -- Arrow indicator between content bar and difficulty bar (hidden when no diff bar is open)
+    local expandArrow = CreateFrame("Frame", nil, UIParent)
+    expandArrow:SetFrameStrata("TOOLTIP")
+    expandArrow:SetSize(10, BAR_H)
+    expandArrow:SetPoint("LEFT", contentBar, "RIGHT", 2, 0)
+    local arrowTex = expandArrow:CreateTexture(nil, "OVERLAY")
+    arrowTex:SetSize(8, 8)
+    arrowTex:SetPoint("CENTER", 0, 0)
+    arrowTex:SetTexture("Interface\\ChatFrame\\ChatFrameExpandArrow")
+    arrowTex:SetVertexColor(0.5, 0.5, 0.5, 1)
+    expandArrow:Hide()
+
+    -- Pre-create difficulty bars
+    for _, mapping in ipairs(diffMappings) do
+        -- Difficulty bar: parented to UIParent so it's not clipped by scroll frame,
+        -- but anchored to expandArrow so it follows scroll position
+        local bar, buttons = CreateSegmentedBar(UIParent, {
+            toggleDefs = mapping.diffDefs,
+            segmentWidth = DIFF_SEGMENT_W,
+            getState = function(key)
+                local diffTable = getDiffTable(mapping.diffDbKey)
+                return not diffTable or diffTable[key] ~= false
+            end,
+            setState = function(key)
+                local t = ensureDiffTable(mapping.diffDbKey)
+                local wasEnabled = t[key] ~= false
+                t[key] = not wasEnabled
+
+                -- Auto-manage content type toggle
+                local db = BuffRemindersDB
+                local vis = db.categoryVisibility and db.categoryVisibility[category]
+                if wasEnabled then
+                    -- Turned off: check if ALL are now off -> disable content type
+                    local anyStillOn = false
+                    for _, def in ipairs(mapping.diffDefs) do
+                        if t[def.key] ~= false then
+                            anyStillOn = true
+                            break
+                        end
+                    end
+                    if not anyStillOn and vis then
+                        vis[mapping.contentKey] = false
+                    end
+                else
+                    -- Turned on from off: if content type was disabled, re-enable it
+                    -- and set only the clicked difficulty to true (others stay off)
+                    if vis and vis[mapping.contentKey] == false then
+                        vis[mapping.contentKey] = true
+                        for _, def in ipairs(mapping.diffDefs) do
+                            t[def.key] = def.key == key
+                        end
+                    end
+                end
+            end,
+            onChange = function()
+                -- Auto-manage may change multiple states; refresh everything
+                refreshAll()
+                config.onChange()
+            end,
+        })
+        bar:SetFrameStrata("TOOLTIP")
+        bar:SetPoint("LEFT", expandArrow, "RIGHT", 2, 0)
+        bar:Hide()
+
+        for _, btn in ipairs(buttons) do
+            allToggleButtons[#allToggleButtons + 1] = btn
+        end
+
+        diffBars[mapping.contentKey] = bar
+    end
+
+    local function closeDiffBar()
+        if activeDiffKey then
+            diffBars[activeDiffKey]:Hide()
+            activeDiffKey = nil
+            expandArrow:Hide()
+        end
+    end
+
+    local function showDiffBar(contentKey)
+        if activeDiffKey == contentKey then
+            -- Toggle off: clicking same button again hides it
+            closeDiffBar()
+            return
+        end
+        -- Hide previous bar if any
+        if activeDiffKey then
+            diffBars[activeDiffKey]:Hide()
+        end
+        diffBars[contentKey]:Show()
+        expandArrow:Show()
+        activeDiffKey = contentKey
+    end
+
+    -- Override D and R button click to toggle difficulty bar to the right
+    for _, mapping in ipairs(diffMappings) do
+        local btn = contentButtons[mapping.btnIndex]
+        btn:SetScript("OnClick", function()
+            showDiffBar(mapping.contentKey)
+        end)
+        local toggle = CONTENT_TOGGLE_DEFS[mapping.btnIndex]
+        SetupTooltip(
+            btn,
+            toggle.tooltip,
+            "Click to filter by " .. toggle.tooltip:lower() .. " difficulty",
+            "ANCHOR_TOP"
+        )
+    end
+
+    -- refreshAll: update all button visuals (used by onChange and Refresh)
+    refreshAll = function()
+        for _, btn in ipairs(allToggleButtons) do
             btn.UpdateVisual()
         end
+    end
+
+    holder.toggleButtons = contentButtons
+
+    -- Close difficulty bar when holder is hidden (e.g. options panel closes)
+    holder:SetScript("OnHide", closeDiffBar)
+
+    -- Refresh method: update all buttons (content bar + both difficulty bars)
+    function holder:Refresh()
+        refreshAll()
     end
 
     table.insert(RefreshableComponents, holder)

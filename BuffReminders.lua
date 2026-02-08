@@ -139,7 +139,26 @@ local defaults = {
         targeted = { openWorld = false, dungeon = true, scenario = true, raid = true },
         self = { openWorld = true, dungeon = true, scenario = true, raid = true },
         pet = { openWorld = true, dungeon = true, scenario = true, raid = true },
-        consumable = { openWorld = false, dungeon = true, scenario = true, raid = true },
+        consumable = {
+            openWorld = false,
+            dungeon = true,
+            scenario = true,
+            raid = true,
+            dungeonDifficulty = {
+                normal = false,
+                heroic = false,
+                mythic = false,
+                mythicPlus = true,
+                timewalking = false,
+                follower = false,
+            },
+            raidDifficulty = {
+                lfr = false,
+                normal = true,
+                heroic = true,
+                mythic = true,
+            },
+        },
         custom = { openWorld = true, dungeon = true, scenario = true, raid = true },
     },
 
@@ -2174,6 +2193,7 @@ eventFrame:RegisterEvent("TRAIT_CONFIG_UPDATED")
 eventFrame:RegisterEvent("UNIT_PET")
 eventFrame:RegisterEvent("PET_BAR_UPDATE")
 eventFrame:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
+eventFrame:RegisterEvent("PLAYER_DIFFICULTY_CHANGED")
 
 eventFrame:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" and arg1 == addonName then
@@ -2231,7 +2251,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         -- ====================================================================
         -- Versioned migrations — each runs exactly once, tracked by dbVersion
         -- ====================================================================
-        local DB_VERSION = 5
+        local DB_VERSION = 6
 
         local migrations = {
             -- [1] Consolidate all pre-versioning migrations (v2.8 → v3.x)
@@ -2408,6 +2428,37 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
                     db.position = nil
                 end
             end,
+
+            -- [6] Add sensible difficulty defaults for consumables (M+ only, no LFR)
+            [6] = function()
+                if not db.categoryVisibility then
+                    return
+                end
+                local vis = db.categoryVisibility.consumable
+                if not vis then
+                    return
+                end
+                -- Add dungeon difficulty defaults (M+ only) if not already set
+                if not vis.dungeonDifficulty then
+                    vis.dungeonDifficulty = {
+                        normal = false,
+                        heroic = false,
+                        mythic = false,
+                        mythicPlus = true,
+                        timewalking = false,
+                        follower = false,
+                    }
+                end
+                -- Add raid difficulty defaults (no LFR) if not already set
+                if not vis.raidDifficulty then
+                    vis.raidDifficulty = {
+                        lfr = false,
+                        normal = true,
+                        heroic = true,
+                        mythic = true,
+                    }
+                end
+            end,
         }
 
         -- Run pending migrations
@@ -2540,6 +2591,9 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     elseif event == "PET_BAR_UPDATE" then
         UpdateDisplay()
     elseif event == "PLAYER_MOUNT_DISPLAY_CHANGED" then
+        UpdateDisplay()
+    elseif event == "PLAYER_DIFFICULTY_CHANGED" then
+        BR.BuffState.InvalidateContentTypeCache()
         UpdateDisplay()
     elseif event == "READY_CHECK" then
         -- Cancel any existing timer

@@ -177,11 +177,27 @@
 
 ---@alias SplitCategories table<CategoryName, boolean>
 
+---@class DungeonDifficulty
+---@field normal? boolean
+---@field heroic? boolean
+---@field mythic? boolean
+---@field mythicPlus? boolean
+---@field timewalking? boolean
+---@field follower? boolean
+
+---@class RaidDifficulty
+---@field lfr? boolean
+---@field normal? boolean
+---@field heroic? boolean
+---@field mythic? boolean
+
 ---@class ContentVisibility
 ---@field openWorld boolean
 ---@field dungeon boolean
 ---@field scenario boolean
 ---@field raid boolean
+---@field dungeonDifficulty? DungeonDifficulty
+---@field raidDifficulty? RaidDifficulty
 
 ---@alias CategoryVisibility table<CategoryName, ContentVisibility>
 
