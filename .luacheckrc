@@ -65,10 +65,12 @@ read_globals = {
 	"UnitIsConnected",
 	"UnitIsDeadOrGhost",
 	"UnitIsPlayer",
+	"UnitGUID",
 	"UnitIsUnit",
 	"UnitIsVisible",
 	"UnitLevel",
 
+	"strsplit",
 	"tinsert",
 
 	-- WoW Mixins

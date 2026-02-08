@@ -566,6 +566,11 @@ end
 ---@param db table Database settings
 ---@return boolean passes
 local function PassesPreChecks(buff, presentClasses, db)
+    -- Custom visibility condition
+    if buff.visibilityCondition and not buff.visibilityCondition() then
+        return false
+    end
+
     -- Ready check only
     local readyCheckOnly = buff.readyCheckOnly or (buff.infoTooltip and buff.infoTooltip:match("^Ready Check Only"))
     if readyCheckOnly and not inReadyCheck then

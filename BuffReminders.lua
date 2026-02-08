@@ -101,7 +101,9 @@ end
 -- Note: enabledBuffs defaults to all enabled - only set false to disable by default
 local defaults = {
     locked = true,
-    enabledBuffs = {},
+    enabledBuffs = {
+        delveFood = false,
+    },
     showOnlyInGroup = false,
     showOnlyPlayerClassBuff = false,
     showOnlyPlayerMissing = false,

@@ -402,6 +402,33 @@ BR.BUFF_TABLES = {
             groupId = "food",
             iconOverride = 136000,
         },
+        -- Delve Food (only when inside a delve with Brann or Valeera)
+        {
+            buffIconID = 133954,
+            key = "delveFood",
+            name = "Delve Food",
+            missingText = "NO\nFOOD",
+            groupId = "delveFood",
+            iconOverride = 133954,
+            infoTooltip = "Delves Only|Only shown inside delves when Brann or Valeera are in your party.",
+            visibilityCondition = function()
+                local inInstance, instanceType = IsInInstance()
+                if not inInstance or instanceType ~= "scenario" then
+                    return false
+                end
+                for i = 1, GetNumGroupMembers() do
+                    local guid = UnitGUID("party" .. i)
+                    if guid then
+                        local npcID = select(6, strsplit("-", guid))
+                        npcID = tonumber(npcID)
+                        if npcID == 210759 or npcID == 248567 then
+                            return true
+                        end
+                    end
+                end
+                return false
+            end,
+        },
         -- Weapon Buffs (oils, stones - but not for classes with imbues)
         {
             checkWeaponEnchant = true, -- Check if any weapon enchant exists
@@ -445,6 +472,7 @@ BR.BuffGroups = {
     -- Consumable groups
     flask = { displayName = "Flask" },
     food = { displayName = "Food" },
+    delveFood = { displayName = "Delve Food" },
     rune = { displayName = "Augment Rune" },
     weaponBuff = { displayName = "Weapon Buff" },
     healthstone = { displayName = "Healthstone!" },

@@ -92,6 +92,7 @@
 ---@field itemID? number|number[] Check if player has this item in inventory
 ---@field readyCheckOnly? boolean Only show during ready checks
 ---@field infoTooltip? string Tooltip text shown on hover (pipe-separated: title|description)
+---@field visibilityCondition? fun(): boolean Custom function that gates visibility (return false to hide)
 
 ---@class BuffGroup
 ---@field displayName string
