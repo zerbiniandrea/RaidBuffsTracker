@@ -549,6 +549,7 @@ end
 -- Forward declarations
 local UpdateDisplay, UpdateAnchor, ToggleTestMode, RefreshTestDisplay
 local UpdateFallbackDisplay, RenderPetEntries
+local UpdateActionButtons
 
 -- Glow style definitions
 local GlowStyles = {
@@ -2261,6 +2262,13 @@ UpdateDisplay = function()
     end
     UpdateAnchor()
     ScheduleSecureSync()
+
+    -- Sync click overlays on expanded extra frames (they are created above but
+    -- UpdateActionButtons is the only place that wires up their click overlays).
+    local displayMode = (BuffRemindersDB.defaults or {}).consumableDisplayMode
+    if displayMode == "expanded" and not InCombatLockdown() then
+        UpdateActionButtons("consumable")
+    end
 end
 
 -- Start update ticker
@@ -2873,7 +2881,7 @@ end
 -- avoid creating them until the feature is actually used).
 -- Must NOT be called during combat lockdown (secure frame operations are forbidden).
 ---@param category string
-local function UpdateActionButtons(category)
+UpdateActionButtons = function(category)
     if InCombatLockdown() then
         return
     end
@@ -3827,6 +3835,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         UpdateDisplay()
     elseif event == "BAG_UPDATE_DELAYED" then
         InvalidateConsumableCache()
+        UpdateDisplay()
         UpdateActionButtons("consumable")
     end
 end)
