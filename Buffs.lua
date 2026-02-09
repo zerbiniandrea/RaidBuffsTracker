@@ -259,6 +259,7 @@ BR.BUFF_TABLES = {
             missingText = "NO\nSELF ES",
             requiresTalentSpellID = 383010,
             groupId = "shamanShields",
+            displaySpellIDs = 974, -- Earth Shield icon for group checkbox
         },
         -- With Elemental Orbit: need Lightning Shield or Water Shield
         {
@@ -269,6 +270,7 @@ BR.BUFF_TABLES = {
             missingText = "NO\nSHIELD",
             requiresTalentSpellID = 383010,
             groupId = "shamanShields",
+            displaySpellIDs = 192106, -- Lightning Shield icon for group checkbox
             iconByRole = { HEALER = 52127, DAMAGER = 192106, TANK = 192106 },
         },
         -- Without Elemental Orbit: need either Earth Shield, Lightning Shield, or Water Shield on self
@@ -280,6 +282,7 @@ BR.BUFF_TABLES = {
             missingText = "NO\nSHIELD",
             excludeTalentSpellID = 383010,
             groupId = "shamanShields",
+            displaySpellIDs = 52127, -- Water Shield icon for group checkbox
             iconByRole = { HEALER = 52127, DAMAGER = 192106, TANK = 192106 },
         },
     },
