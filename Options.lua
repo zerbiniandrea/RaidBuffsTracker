@@ -1112,6 +1112,7 @@ local function CreateOptionsPanel()
 
         -- Item display mode (consumable only, grouped with icon options)
         if category == "consumable" then
+            local updateDisplayModePreview -- forward declaration for preview update
             local displayModeHolder = Components.Dropdown(catContent, {
                 label = "Item display",
                 get = function()
@@ -1128,9 +1129,149 @@ local function CreateOptionsPanel()
                 },
                 onChange = function(val)
                     BR.Config.Set("defaults.consumableDisplayMode", val)
+                    if updateDisplayModePreview then
+                        updateDisplayModePreview(val)
+                    end
                 end,
             })
             catLayout:Add(displayModeHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
+
+            -- Display mode preview (anchored to the right of the dropdown)
+            local P_ICON = 24
+            local P_SUB = 12
+            local P_BORDER = 2
+            local P_GAP = 3
+            local P_STEP = P_ICON + P_GAP + P_BORDER * 2
+            local P_SUB_STEP = P_SUB + P_BORDER * 2 -- sub-icons touch borders
+            -- Distinct textures for flask/food/oil and their variants
+            local TEX_FLASK = { 134877, 134863, 134852 } -- main + 2 other variants
+            local TEX_FOOD = { 134062, 133984 } -- main + 1 other variant
+            local TEX_OIL = 609892
+
+            local previewHolder = CreateFrame("Frame", nil, catContent)
+            previewHolder:SetSize(260, 50)
+            previewHolder:SetPoint("TOPLEFT", displayModeHolder, "TOPRIGHT", 12, 2)
+
+            local previewDesc = previewHolder:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+            previewDesc:SetPoint("TOPLEFT", 0, 0)
+            previewDesc:SetJustifyH("LEFT")
+
+            local previewContainer = CreateFrame("Frame", nil, previewHolder)
+            previewContainer:SetPoint("TOPLEFT", previewDesc, "BOTTOMLEFT", 0, -3)
+            previewContainer:SetSize(260, 36)
+            previewContainer:SetAlpha(0.7)
+
+            local function CreatePreviewIcon(parent, texture, size)
+                local f = CreateFrame("Frame", nil, parent)
+                f:SetSize(size, size)
+                f.icon = f:CreateTexture(nil, "ARTWORK")
+                f.icon:SetAllPoints()
+                f.icon:SetTexture(texture)
+                local z = TEXCOORD_INSET
+                f.icon:SetTexCoord(z, 1 - z, z, 1 - z)
+                f.border = f:CreateTexture(nil, "BACKGROUND")
+                f.border:SetColorTexture(0, 0, 0, 1)
+                f.border:SetPoint("TOPLEFT", -P_BORDER, P_BORDER)
+                f.border:SetPoint("BOTTOMRIGHT", P_BORDER, -P_BORDER)
+                return f
+            end
+
+            local allPreviewFrames = {}
+
+            -- Icon-only: [Flask] [Food] [Oil]
+            local iconOnlyFrames = {}
+            local iconOnlyTextures = { TEX_FLASK[1], TEX_FOOD[1], TEX_OIL }
+            for i = 1, 3 do
+                local f = CreatePreviewIcon(previewContainer, iconOnlyTextures[i], P_ICON)
+                f:SetPoint("TOPLEFT", previewContainer, "TOPLEFT", (i - 1) * P_STEP, 0)
+                f:Hide()
+                iconOnlyFrames[i] = f
+                allPreviewFrames[#allPreviewFrames + 1] = f
+            end
+
+            -- Sub-icons: [Flask] [Food] [Oil] with variant sub-icons below
+            local subIconsFrames = { mains = {}, subs = {} }
+            local subVariants = { TEX_FLASK, TEX_FOOD, {} } -- oil has no variants
+            for i, variants in ipairs(subVariants) do
+                local mainTex = (#variants > 0) and variants[1] or TEX_OIL
+                local main = CreatePreviewIcon(previewContainer, mainTex, P_ICON)
+                main:SetPoint("TOPLEFT", previewContainer, "TOPLEFT", (i - 1) * P_STEP, 0)
+                main:Hide()
+                subIconsFrames.mains[i] = main
+                allPreviewFrames[#allPreviewFrames + 1] = main
+                if #variants > 1 then
+                    local subCount = #variants - 1
+                    local subRowWidth = (subCount - 1) * P_SUB_STEP + P_SUB
+                    local subOffsetX = (P_ICON - subRowWidth) / 2
+                    for j = 2, #variants do
+                        local sub = CreatePreviewIcon(previewContainer, variants[j], P_SUB)
+                        sub:SetPoint("TOPLEFT", main, "BOTTOMLEFT", subOffsetX + (j - 2) * P_SUB_STEP, -P_GAP)
+                        sub:Hide()
+                        subIconsFrames.subs[#subIconsFrames.subs + 1] = sub
+                        allPreviewFrames[#allPreviewFrames + 1] = sub
+                    end
+                end
+            end
+
+            -- Expanded: [F1][F2][F3][Fd1][Fd2][Oil] — each variant at full size
+            local expandedFrames = {}
+            local expandedTextures = {
+                TEX_FLASK[1],
+                TEX_FLASK[2],
+                TEX_FLASK[3],
+                TEX_FOOD[1],
+                TEX_FOOD[2],
+                TEX_OIL,
+            }
+            for i = 1, 6 do
+                local f = CreatePreviewIcon(previewContainer, expandedTextures[i], P_ICON)
+                f:SetPoint("TOPLEFT", previewContainer, "TOPLEFT", (i - 1) * P_STEP, 0)
+                f:Hide()
+                expandedFrames[i] = f
+                allPreviewFrames[#allPreviewFrames + 1] = f
+            end
+
+            -- Combine sub-icons mains + subs into one flat list
+            local subIconsAll = {}
+            for _, f in ipairs(subIconsFrames.mains) do
+                subIconsAll[#subIconsAll + 1] = f
+            end
+            for _, f in ipairs(subIconsFrames.subs) do
+                subIconsAll[#subIconsAll + 1] = f
+            end
+
+            local MODE_FRAMES = {
+                icon_only = iconOnlyFrames,
+                sub_icons = subIconsAll,
+                expanded = expandedFrames,
+            }
+            local MODE_DESC = {
+                icon_only = "Shows the item with the highest count",
+                sub_icons = "Small clickable item variants below each icon",
+                expanded = "Each item variant as a full-sized icon",
+            }
+
+            updateDisplayModePreview = function(mode)
+                for _, f in ipairs(allPreviewFrames) do
+                    f:Hide()
+                end
+                local shown = MODE_FRAMES[mode]
+                if shown then
+                    for _, f in ipairs(shown) do
+                        f:Show()
+                    end
+                end
+                previewDesc:SetText(MODE_DESC[mode] or "")
+            end
+
+            -- Initial state
+            updateDisplayModePreview(BR.Config.Get("defaults.consumableDisplayMode", "sub_icons"))
+
+            -- Register for refresh so reopening the panel re-reads the value
+            function previewHolder:Refresh()
+                updateDisplayModePreview(BR.Config.Get("defaults.consumableDisplayMode", "sub_icons"))
+            end
+            table.insert(BR.RefreshableComponents, previewHolder)
 
             -- Sub-header for behavior options
             catLayout:Space(SECTION_GAP)
