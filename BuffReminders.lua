@@ -829,17 +829,6 @@ local function CreateClickOverlay(frame)
             self:Hide()
         end
     end)
-    -- Tooltip support for consumable items
-    overlay:SetScript("OnEnter", function(self)
-        if self.itemID then
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetItemByID(self.itemID)
-            GameTooltip:Show()
-        end
-    end)
-    overlay:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
     -- Refresh display shortly after click so the consumed buff disappears quickly
     overlay:SetScript("PostClick", function()
         C_Timer.After(0.3, function()
@@ -917,17 +906,6 @@ local function CreateActionButton()
     btn.qualityOverlay = btn:CreateTexture(nil, "OVERLAY")
     btn.qualityOverlay:SetPoint("TOPLEFT", 1, -1)
     btn.qualityOverlay:Hide()
-
-    btn:SetScript("OnEnter", function(self)
-        if self.itemID then
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetItemByID(self.itemID)
-            GameTooltip:Show()
-        end
-    end)
-    btn:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
 
     return btn
 end
