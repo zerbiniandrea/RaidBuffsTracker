@@ -147,6 +147,9 @@
 ---@field expirationThreshold number
 ---@field glowStyle number
 ---@field fontFace? string
+---@field consumableRebuffWarning? boolean
+---@field consumableRebuffThreshold? number
+---@field consumableRebuffColor? number[]
 
 ---@class CategorySetting
 ---@field position CategoryPosition
@@ -213,11 +216,13 @@
 ---@field sortOrder number                   -- Position within category for display ordering
 ---@field visible boolean                    -- Should show?
 ---@field displayType "count"|"missing"|"expiring"
----@field countText string?                  -- "17/20" for raid buffs
+---@field countText string?                  -- "17/20" for raid buffs, "5m" for expiring consumables
 ---@field missingText string?                -- "NO\nAURA" for non-raid
 ---@field expiringTime number?               -- Seconds remaining if expiring
 ---@field shouldGlow boolean                 -- Expiration glow?
 ---@field iconByRole table<RoleType,number>? -- Role-based icon override
+---@field rebuffWarning boolean?             -- Consumable rebuff pulsing border?
+---@field isEating boolean?                 -- Food entry: player is currently eating
 
 ---@class BuffRemindersDB
 ---@field dbVersion? integer

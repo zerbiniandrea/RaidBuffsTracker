@@ -108,6 +108,10 @@ local DefaultSettingKeys = {
     showExpirationGlow = "VisualsRefresh",
     expirationThreshold = "VisualsRefresh",
     glowStyle = "VisualsRefresh",
+    -- Consumable rebuff warning
+    consumableRebuffWarning = "DisplayRefresh",
+    consumableRebuffThreshold = "DisplayRefresh",
+    consumableRebuffColor = "VisualsRefresh",
     -- Font (global-only, lives under defaults)
     fontFace = "VisualsRefresh",
 }

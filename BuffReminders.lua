@@ -150,6 +150,10 @@ local defaults = {
         showExpirationGlow = true,
         expirationThreshold = 15, -- minutes
         glowStyle = 1, -- 1=Orange, 2=Gold, 3=Yellow, 4=White, 5=Red
+        -- Consumable rebuff warning
+        consumableRebuffWarning = true,
+        consumableRebuffThreshold = 10, -- minutes
+        consumableRebuffColor = { 1, 0.5, 0 },
     },
 
     ---@type CategoryVisibility
@@ -677,13 +681,17 @@ local function SetExpirationGlow(frame, show)
     end
 end
 
--- Hide a buff frame and clear its glow.
+-- Forward declaration for SetRebuffBorder (defined after glow styles)
+local SetRebuffBorder
+
+-- Hide a buff frame and clear its glow and rebuff border.
 -- Overlays and action buttons are managed solely by SyncSecureButtons() based on
 -- frame:IsShown(), so we don't touch them here — avoids hide/show flicker when
 -- UpdateDisplay() hides all frames then re-shows visible ones each tick.
 local function HideFrame(frame)
     frame:Hide()
     SetExpirationGlow(frame, false)
+    SetRebuffBorder(frame, false)
 end
 
 ---Show a frame with missing text styling
@@ -1686,20 +1694,132 @@ UpdateFallbackDisplay = function()
     end
 end
 
+-- Eating icon texture ID (from State.lua, matches the eating channel aura icon)
+local EATING_ICON = BR.EATING_AURA_ICON
+
+-- Show/hide rebuff warning pulsing border on a buff frame (4-edge border, does not obscure icon)
+SetRebuffBorder = function(frame, show)
+    if show then
+        local color = (BuffRemindersDB and BuffRemindersDB.defaults and BuffRemindersDB.defaults.consumableRebuffColor)
+            or { 1, 0.5, 0 }
+        local cr, cg, cb = color[1], color[2], color[3]
+        if not frame.rebuffBorderFrame then
+            local thickness = 2
+            local holder = CreateFrame("Frame", nil, frame)
+            holder:SetPoint("TOPLEFT", -thickness, thickness)
+            holder:SetPoint("BOTTOMRIGHT", thickness, -thickness)
+            holder:SetFrameLevel(frame:GetFrameLevel() + 5)
+            -- Top
+            local t = holder:CreateTexture(nil, "OVERLAY")
+            t:SetPoint("TOPLEFT")
+            t:SetPoint("TOPRIGHT")
+            t:SetHeight(thickness)
+            t:SetColorTexture(cr, cg, cb, 1)
+            -- Bottom
+            local b = holder:CreateTexture(nil, "OVERLAY")
+            b:SetPoint("BOTTOMLEFT")
+            b:SetPoint("BOTTOMRIGHT")
+            b:SetHeight(thickness)
+            b:SetColorTexture(cr, cg, cb, 1)
+            -- Left
+            local l = holder:CreateTexture(nil, "OVERLAY")
+            l:SetPoint("TOPLEFT")
+            l:SetPoint("BOTTOMLEFT")
+            l:SetWidth(thickness)
+            l:SetColorTexture(cr, cg, cb, 1)
+            -- Right
+            local r = holder:CreateTexture(nil, "OVERLAY")
+            r:SetPoint("TOPRIGHT")
+            r:SetPoint("BOTTOMRIGHT")
+            r:SetWidth(thickness)
+            r:SetColorTexture(cr, cg, cb, 1)
+
+            local ag = holder:CreateAnimationGroup()
+            ag:SetLooping("BOUNCE")
+            local fade = ag:CreateAnimation("Alpha")
+            fade:SetFromAlpha(1)
+            fade:SetToAlpha(0.3)
+            fade:SetDuration(0.6)
+            fade:SetSmoothing("IN_OUT")
+            frame.rebuffBorderFrame = holder
+            frame.rebuffBorderAnim = ag
+            frame.rebuffBorderEdges = { t, b, l, r }
+            frame.rebuffBorderColor = { cr, cg, cb }
+        elseif
+            frame.rebuffBorderColor[1] ~= cr
+            or frame.rebuffBorderColor[2] ~= cg
+            or frame.rebuffBorderColor[3] ~= cb
+        then
+            for _, edge in ipairs(frame.rebuffBorderEdges) do
+                edge:SetColorTexture(cr, cg, cb, 1)
+            end
+            frame.rebuffBorderColor = { cr, cg, cb }
+        end
+        frame.rebuffBorderFrame:Show()
+        if not frame.rebuffBorderAnim:IsPlaying() then
+            frame.rebuffBorderAnim:Play()
+        end
+    else
+        if frame.rebuffBorderFrame then
+            frame.rebuffBorderAnim:Stop()
+            frame.rebuffBorderFrame:Hide()
+        end
+    end
+end
+
+-- Resolve the correct icon for a consumable frame.
+-- Uses the top item from the consumable cache (actual item in bags), falling back
+-- to the buff definition's iconOverride or buffIconID.
+local function ResolveConsumableIcon(frame)
+    local items = GetConsumableActionItems(frame.buffDef)
+    if items and items[1] and items[1].icon then
+        frame.icon:SetTexture(items[1].icon)
+    else
+        local def = frame.buffDef
+        local fallback = def and (def.iconOverride or def.buffIconID)
+        if fallback then
+            frame.icon:SetTexture(fallback)
+        end
+    end
+end
+
 -- Render a single visible entry into its frame using the appropriate display type
 local function RenderVisibleEntry(frame, entry)
+    -- Eating override: state provides isEating as a snapshot, so the display
+    -- never reads a live flag that can change mid-cycle.
+    if entry.isEating then
+        frame.icon:SetTexture(EATING_ICON)
+        frame._br_eating_icon = true
+        frame.count:Hide()
+        frame:Show()
+        SetExpirationGlow(frame, false)
+        SetRebuffBorder(frame, false)
+        return
+    elseif frame._br_eating_icon then
+        -- Transition from eating → not eating: restore the correct consumable icon
+        frame._br_eating_icon = nil
+        ResolveConsumableIcon(frame)
+    end
+
     if entry.displayType == "count" then
         frame.count:SetFont(fontPath, GetFrameFontSize(frame), "OUTLINE")
         frame.count:SetText(entry.countText or "")
         frame.count:Show()
         frame:Show()
         SetExpirationGlow(frame, entry.shouldGlow)
+        SetRebuffBorder(frame, false)
     elseif entry.displayType == "expiring" then
         frame.count:SetFont(fontPath, GetFrameFontSize(frame), "OUTLINE")
         frame.count:SetText(entry.countText or "")
         frame.count:Show()
         frame:Show()
-        SetExpirationGlow(frame, true)
+        if entry.rebuffWarning then
+            SetRebuffBorder(frame, true)
+            SetExpirationGlow(frame, false)
+        else
+            SetRebuffBorder(frame, false)
+            SetExpirationGlow(frame, true)
+        end
     else -- "missing"
         if entry.iconByRole then
             local texture = GetBuffTexture(frame.spellIDs, entry.iconByRole)
@@ -1708,6 +1828,7 @@ local function RenderVisibleEntry(frame, entry)
             end
         end
         ShowMissingFrame(frame, entry.missingText)
+        SetRebuffBorder(frame, false)
     end
 
     -- Per-category text visibility (uses buff's actual category, not effective/main)
@@ -2484,7 +2605,9 @@ local function UpdateActionButtons(category)
                         end
                         btn:EnableMouse(true)
                         -- Show the top item's icon on the main buff frame
-                        if item.icon then
+                        -- Skip if player is eating (RenderVisibleEntry controls the icon during eating)
+                        local eatingEntry = BR.BuffState.GetEntry(frame.key)
+                        if item.icon and not (eatingEntry and eatingEntry.isEating) then
                             if not frame._br_original_icon then
                                 frame._br_original_icon = frame.icon:GetTexture()
                             end
@@ -2842,7 +2965,7 @@ eventFrame:RegisterEvent("PLAYER_DIFFICULTY_CHANGED")
 eventFrame:RegisterEvent("PLAYER_UPDATE_RESTING")
 eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
 
-eventFrame:SetScript("OnEvent", function(_, event, arg1)
+eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
     if event == "ADDON_LOADED" and arg1 == addonName then
         _, playerClass = UnitClass("player")
         BR.BuffState.SetPlayerClass(playerClass)
@@ -3257,6 +3380,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         -- Sync flags with current state (in case of reload)
         inCombat = InCombatLockdown()
         isResting = IsResting()
+        BR.StateHelpers.ScanEatingState()
         ResolveFontPath()
         InvalidateConsumableCache()
         if not mainFrame then
@@ -3292,6 +3416,10 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     elseif event == "PLAYER_UNGHOST" then
         UpdateDisplay()
     elseif event == "UNIT_AURA" then
+        -- Track eating state from payload (cheap boolean flip, always runs)
+        if arg1 == "player" then
+            BR.StateHelpers.UpdateEatingState(arg2)
+        end
         -- Skip in combat (auras change frequently, but we can't check buffs anyway)
         -- Throttle rapid events (e.g., raid-wide buff application)
         if not InCombatLockdown() and mainFrame and mainFrame:IsShown() then

@@ -1057,6 +1057,64 @@ local function CreateOptionsPanel()
             catLayout:Add(clickableHolder, nil, COMPONENT_GAP)
         end
 
+        -- Consumable rebuff warning (consumable category only)
+        if category == "consumable" then
+            local rebuffHolder = Components.Checkbox(catContent, {
+                label = "Show rebuff warning",
+                get = function()
+                    return BR.Config.Get("defaults.consumableRebuffWarning", true) ~= false
+                end,
+                tooltip = {
+                    title = "Consumable rebuff warning",
+                    desc = "Show a pulsing border and countdown timer on consumable icons when the buff is about to expire.",
+                },
+                onChange = function(checked)
+                    BR.Config.Set("defaults.consumableRebuffWarning", checked)
+                    Components.RefreshAll()
+                end,
+            })
+            local rebuffColorHolder = Components.ColorSwatch(catContent, {
+                label = "",
+                labelWidth = 0,
+                get = function()
+                    local c = BR.Config.Get("defaults.consumableRebuffColor", { 1, 0.5, 0 })
+                    return c[1], c[2], c[3]
+                end,
+                enabled = function()
+                    return BR.Config.Get("defaults.consumableRebuffWarning", true) ~= false
+                end,
+                onChange = function(r, g, b)
+                    BR.Config.Set("defaults.consumableRebuffColor", { r, g, b })
+                end,
+            })
+
+            local rebuffThresholdHolder = Components.Slider(catContent, {
+                label = "",
+                labelWidth = 0,
+                min = 5,
+                max = 60,
+                step = 5,
+                suffix = " min",
+                get = function()
+                    return BR.Config.Get("defaults.consumableRebuffThreshold", 10)
+                end,
+                enabled = function()
+                    return BR.Config.Get("defaults.consumableRebuffWarning", true) ~= false
+                end,
+                tooltip = {
+                    title = "Rebuff warning threshold",
+                    desc = "Show the rebuff warning when a consumable buff has less than this many minutes remaining.",
+                },
+                onChange = function(val)
+                    BR.Config.Set("defaults.consumableRebuffThreshold", val)
+                end,
+            })
+
+            catLayout:Add(rebuffHolder, nil, COMPONENT_GAP)
+            rebuffThresholdHolder:SetPoint("LEFT", rebuffHolder, "RIGHT", 8, 0)
+            rebuffColorHolder:SetPoint("LEFT", rebuffThresholdHolder, "RIGHT", 12, 0)
+        end
+
         -- Split frame checkbox
         local splitHolder = Components.Checkbox(catContent, {
             label = "Split into separate frame",

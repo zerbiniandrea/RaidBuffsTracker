@@ -155,6 +155,14 @@ BR.CONSUMABLE_ITEMS = {
         [267000] = true,
         [268679] = true,
         [268680] = true,
+        -- Midnight food
+        [242532] = true,
+        [260264] = true,
+        [260275] = true,
+        [260276] = true,
+        [260277] = true,
+        [260286] = true,
+        [260299] = true,
     },
     flask = {
         [212269] = true,
@@ -209,6 +217,22 @@ BR.CONSUMABLE_ITEMS = {
         [245931] = true,
         [245932] = true,
         [245933] = true,
+        -- Midnight flasks
+        [236774] = true,
+        [236776] = true,
+        [236780] = true,
+        [236950] = true,
+        [240991] = true,
+        [241310] = true,
+        [241311] = true,
+        [241312] = true,
+        [241313] = true,
+        [241314] = true,
+        [241315] = true,
+        [241316] = true,
+        [241317] = true,
+        [241334] = true,
+        [241335] = true,
     },
     rune = {
         [211495] = true,
@@ -216,6 +240,9 @@ BR.CONSUMABLE_ITEMS = {
         [243191] = true,
         [246492] = true,
         [259085] = true,
+        -- Legacy runes
+        [201325] = true,
+        [201326] = true,
     },
     weapon = {
         [220156] = true,
@@ -248,5 +275,11 @@ BR.CONSUMABLE_ITEMS = {
         [257750] = true,
         [257751] = true,
         [257752] = true,
+        -- Midnight weapon enhancements
+        [237372] = true,
+        [237373] = true,
+        [268032] = true,
+        [268033] = true,
+        [268034] = true,
     },
 }
