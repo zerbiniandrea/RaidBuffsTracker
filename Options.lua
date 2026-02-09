@@ -964,50 +964,11 @@ local function CreateOptionsPanel()
         })
         catLayout:Add(visToggles, nil, SECTION_GAP)
 
-        -- Hide while mounted (pet only)
-        if category == "pet" then
-            local hideMountHolder = Components.Checkbox(catContent, {
-                label = "Hide while mounted",
-                get = function()
-                    return BuffRemindersDB.hidePetWhileMounted ~= false
-                end,
-                onChange = function(checked)
-                    BuffRemindersDB.hidePetWhileMounted = checked
-                    UpdateDisplay()
-                end,
-            })
-            catLayout:Add(hideMountHolder, nil, COMPONENT_GAP)
-
-            local passiveCombatHolder = Components.Checkbox(catContent, {
-                label = "Pet passive only in combat",
-                get = function()
-                    return BuffRemindersDB.petPassiveOnlyInCombat == true
-                end,
-                tooltip = {
-                    title = "Pet passive only in combat",
-                    desc = "Only show the passive pet reminder while in combat. When disabled, the reminder is always shown.",
-                },
-                onChange = function(checked)
-                    BuffRemindersDB.petPassiveOnlyInCombat = checked
-                    UpdateDisplay()
-                end,
-            })
-            catLayout:Add(passiveCombatHolder, nil, COMPONENT_GAP)
-        end
-
-        -- "BUFF!" text (raid only)
-        if category == "raid" then
-            local reminderHolder = Components.Checkbox(catContent, {
-                label = 'Show "BUFF!" reminder text',
-                get = function()
-                    local cs = db.categorySettings and db.categorySettings.raid
-                    return not cs or cs.showBuffReminder ~= false
-                end,
-                onChange = function(checked)
-                    BR.Config.Set("categorySettings.raid.showBuffReminder", checked)
-                end,
-            })
-            catLayout:Add(reminderHolder, nil, COMPONENT_GAP)
+        -- Icons sub-header (all categories except custom)
+        if category ~= "custom" then
+            local iconsHeader = catContent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            iconsHeader:SetText("|cffffcc00Icons|r")
+            catLayout:AddText(iconsHeader, 12, COMPONENT_GAP)
         end
 
         -- Show text on icons (not for custom — custom buffs have per-buff missing text)
@@ -1027,6 +988,21 @@ local function CreateOptionsPanel()
                 end,
             })
             catLayout:Add(showTextHolder, nil, COMPONENT_GAP)
+        end
+
+        -- "BUFF!" text (raid only, grouped under Icons)
+        if category == "raid" then
+            local reminderHolder = Components.Checkbox(catContent, {
+                label = 'Show "BUFF!" reminder text',
+                get = function()
+                    local cs = db.categorySettings and db.categorySettings.raid
+                    return not cs or cs.showBuffReminder ~= false
+                end,
+                onChange = function(checked)
+                    BR.Config.Set("categorySettings.raid.showBuffReminder", checked)
+                end,
+            })
+            catLayout:Add(reminderHolder, nil, COMPONENT_GAP)
         end
 
         -- Click to cast checkbox (raid and consumable only)
@@ -1057,8 +1033,85 @@ local function CreateOptionsPanel()
             catLayout:Add(clickableHolder, nil, COMPONENT_GAP)
         end
 
-        -- Consumable rebuff warning (consumable category only)
+        -- Behavior sub-header (pet only)
+        if category == "pet" then
+            catLayout:Space(SECTION_GAP)
+            local behaviorHeader = catContent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            behaviorHeader:SetText("|cffffcc00Behavior|r")
+            catLayout:AddText(behaviorHeader, 12, COMPONENT_GAP)
+
+            local hideMountHolder = Components.Checkbox(catContent, {
+                label = "Hide while mounted",
+                get = function()
+                    return BuffRemindersDB.hidePetWhileMounted ~= false
+                end,
+                onChange = function(checked)
+                    BuffRemindersDB.hidePetWhileMounted = checked
+                    UpdateDisplay()
+                end,
+            })
+            catLayout:Add(hideMountHolder, nil, COMPONENT_GAP)
+
+            local passiveCombatHolder = Components.Checkbox(catContent, {
+                label = "Pet passive only in combat",
+                get = function()
+                    return BuffRemindersDB.petPassiveOnlyInCombat == true
+                end,
+                tooltip = {
+                    title = "Pet passive only in combat",
+                    desc = "Only show the passive pet reminder while in combat. When disabled, the reminder is always shown.",
+                },
+                onChange = function(checked)
+                    BuffRemindersDB.petPassiveOnlyInCombat = checked
+                    UpdateDisplay()
+                end,
+            })
+            catLayout:Add(passiveCombatHolder, nil, COMPONENT_GAP)
+        end
+
+        -- Item display mode (consumable only, grouped with icon options)
         if category == "consumable" then
+            local displayModeHolder = Components.Dropdown(catContent, {
+                label = "Item display",
+                get = function()
+                    return BR.Config.Get("defaults.consumableDisplayMode", "sub_icons")
+                end,
+                options = {
+                    { value = "icon_only", label = "Icon only" },
+                    { value = "sub_icons", label = "Sub-icons" },
+                    { value = "expanded", label = "Expanded" },
+                },
+                tooltip = {
+                    title = "Consumable item display",
+                    desc = "Icon only: show the top item icon only. Sub-icons: show small clickable icons below the main icon. Expanded: show each item variant as a full-sized icon in the row.",
+                },
+                onChange = function(val)
+                    BR.Config.Set("defaults.consumableDisplayMode", val)
+                end,
+            })
+            catLayout:Add(displayModeHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
+
+            -- Sub-header for behavior options
+            catLayout:Space(SECTION_GAP)
+            local behaviorHeader = catContent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            behaviorHeader:SetText("|cffffcc00Behavior|r")
+            catLayout:AddText(behaviorHeader, 12, COMPONENT_GAP)
+
+            local showWithoutItemsHolder = Components.Checkbox(catContent, {
+                label = "Show when not in bags",
+                get = function()
+                    return BR.Config.Get("defaults.showConsumablesWithoutItems", false) == true
+                end,
+                tooltip = {
+                    title = "Show consumables without items",
+                    desc = "When enabled, consumable reminders are shown even if you don't have the item in your bags. When disabled, only consumables you actually carry are shown.",
+                },
+                onChange = function(checked)
+                    BR.Config.Set("defaults.showConsumablesWithoutItems", checked)
+                end,
+            })
+            catLayout:Add(showWithoutItemsHolder, nil, COMPONENT_GAP)
+
             local rebuffHolder = Components.Checkbox(catContent, {
                 label = "Show rebuff warning",
                 get = function()
@@ -1113,42 +1166,13 @@ local function CreateOptionsPanel()
             catLayout:Add(rebuffHolder, nil, COMPONENT_GAP)
             rebuffThresholdHolder:SetPoint("LEFT", rebuffHolder, "RIGHT", 8, 0)
             rebuffColorHolder:SetPoint("LEFT", rebuffThresholdHolder, "RIGHT", 12, 0)
-
-            local showWithoutItemsHolder = Components.Checkbox(catContent, {
-                label = "Show when not in bags",
-                get = function()
-                    return BR.Config.Get("defaults.showConsumablesWithoutItems", false) == true
-                end,
-                tooltip = {
-                    title = "Show consumables without items",
-                    desc = "When enabled, consumable reminders are shown even if you don't have the item in your bags. When disabled, only consumables you actually carry are shown.",
-                },
-                onChange = function(checked)
-                    BR.Config.Set("defaults.showConsumablesWithoutItems", checked)
-                end,
-            })
-            catLayout:Add(showWithoutItemsHolder, nil, COMPONENT_GAP)
-
-            local displayModeHolder = Components.Dropdown(catContent, {
-                label = "Item display",
-                get = function()
-                    return BR.Config.Get("defaults.consumableDisplayMode", "sub_icons")
-                end,
-                options = {
-                    { value = "icon_only", label = "Icon only" },
-                    { value = "sub_icons", label = "Sub-icons" },
-                    { value = "expanded", label = "Expanded" },
-                },
-                tooltip = {
-                    title = "Consumable item display",
-                    desc = "Icon only: show the top item icon only. Sub-icons: show small clickable icons below the main icon. Expanded: show each item variant as a full-sized icon in the row.",
-                },
-                onChange = function(val)
-                    BR.Config.Set("defaults.consumableDisplayMode", val)
-                end,
-            })
-            catLayout:Add(displayModeHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
         end
+
+        -- Layout sub-header
+        catLayout:Space(SECTION_GAP)
+        local layoutHeader = catContent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        layoutHeader:SetText("|cffffcc00Layout|r")
+        catLayout:AddText(layoutHeader, 12, COMPONENT_GAP)
 
         -- Split frame checkbox
         local splitHolder = Components.Checkbox(catContent, {
