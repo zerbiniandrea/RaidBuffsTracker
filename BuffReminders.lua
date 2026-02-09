@@ -3713,6 +3713,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         UpdateDisplay()
     elseif event == "PLAYER_REGEN_ENABLED" then
         inCombat = false
+        BR.StateHelpers.ScanEatingState()
         RefreshOverlaySpells()
         StartUpdates()
     elseif event == "PLAYER_REGEN_DISABLED" then
@@ -3724,13 +3725,12 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
     elseif event == "PLAYER_UNGHOST" then
         UpdateDisplay()
     elseif event == "UNIT_AURA" then
-        -- Track eating state from payload (cheap boolean flip, always runs)
-        if arg1 == "player" then
-            BR.StateHelpers.UpdateEatingState(arg2)
-        end
-        -- Skip in combat (auras change frequently, but we can't check buffs anyway)
+        -- Skip in combat (auras change frequently, and we can't check buffs or eat in combat)
         -- Throttle rapid events (e.g., raid-wide buff application)
         if not InCombatLockdown() and mainFrame and mainFrame:IsShown() then
+            if arg1 == "player" then
+                BR.StateHelpers.UpdateEatingState(arg2)
+            end
             local now = GetTime()
             if now - lastAuraUpdate >= AURA_THROTTLE then
                 lastAuraUpdate = now

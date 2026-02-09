@@ -587,7 +587,10 @@ local function ScanEatingState()
     local i = 1
     local auraData = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
     while auraData do
-        if auraData.icon == EATING_AURA_ICON then
+        local ok, match = pcall(function()
+            return auraData.icon == EATING_AURA_ICON
+        end)
+        if ok and match then
             eatingAuraInstanceID = auraData.auraInstanceID
             return
         end
