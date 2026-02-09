@@ -1042,7 +1042,33 @@ local function CreateOptionsPanel()
                     Components.RefreshAll()
                 end,
             })
-            catLayout:Add(clickableHolder, nil, COMPONENT_GAP)
+            catLayout:Add(clickableHolder, nil, 2)
+
+            catLayout:SetX(20)
+            local highlightHolder = Components.Checkbox(catContent, {
+                label = "Hover highlight",
+                get = function()
+                    local hcs = db.categorySettings and db.categorySettings[category]
+                    return hcs and hcs.clickableHighlight ~= false
+                end,
+                enabled = function()
+                    local hcs = db.categorySettings and db.categorySettings[category]
+                    return hcs and hcs.clickable == true
+                end,
+                tooltip = {
+                    title = "Hover highlight",
+                    desc = "Show a subtle highlight when hovering over clickable buff icons.",
+                },
+                onChange = function(checked)
+                    if not db.categorySettings[category] then
+                        db.categorySettings[category] = {}
+                    end
+                    db.categorySettings[category].clickableHighlight = checked
+                    BR.Display.UpdateActionButtons(category)
+                end,
+            })
+            catLayout:Add(highlightHolder, nil, COMPONENT_GAP)
+            catLayout:SetX(0)
         end
 
         -- Behavior sub-header (pet only)

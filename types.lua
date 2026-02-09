@@ -176,6 +176,7 @@
 ---@field useCustomAppearance? boolean
 ---@field split? boolean
 ---@field clickable? boolean
+---@field clickableHighlight? boolean
 ---@field priority? number
 
 --- All category settings must be defined here. When adding a new category:

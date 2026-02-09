@@ -200,6 +200,7 @@ local defaults = {
             showBuffReminder = true,
             split = false,
             clickable = false,
+            clickableHighlight = true,
             priority = 1,
         },
         presence = {
@@ -207,6 +208,7 @@ local defaults = {
             useCustomAppearance = false,
             split = false,
             clickable = false,
+            clickableHighlight = true,
             priority = 2,
         },
         targeted = {
@@ -214,6 +216,7 @@ local defaults = {
             useCustomAppearance = false,
             split = false,
             clickable = false,
+            clickableHighlight = true,
             priority = 3,
         },
         self = {
@@ -221,6 +224,7 @@ local defaults = {
             useCustomAppearance = false,
             split = false,
             clickable = false,
+            clickableHighlight = true,
             priority = 4,
         },
         pet = {
@@ -228,6 +232,7 @@ local defaults = {
             useCustomAppearance = false,
             split = false,
             clickable = false,
+            clickableHighlight = true,
             priority = 5,
         },
         consumable = {
@@ -235,6 +240,7 @@ local defaults = {
             useCustomAppearance = false,
             split = false,
             clickable = false,
+            clickableHighlight = true,
             priority = 6,
         },
         custom = {
@@ -242,6 +248,7 @@ local defaults = {
             useCustomAppearance = false,
             split = false,
             clickable = false,
+            clickableHighlight = true,
             priority = 7,
         },
     },
@@ -837,6 +844,10 @@ local function CreateClickOverlay(frame)
             end
         end)
     end)
+    overlay.highlight = overlay:CreateTexture(nil, "HIGHLIGHT")
+    overlay.highlight:SetAllPoints()
+    overlay.highlight:SetTexCoord(BR.TEXCOORD_INSET, 1 - BR.TEXCOORD_INSET, BR.TEXCOORD_INSET, 1 - BR.TEXCOORD_INSET)
+    overlay.highlight:SetColorTexture(1, 1, 1, 0.2)
     frame.clickOverlay = overlay
 end
 
@@ -902,6 +913,11 @@ local function CreateActionButton()
 
     btn.count = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
     btn.count:SetPoint("BOTTOMRIGHT", -1, 1)
+
+    btn.highlight = btn:CreateTexture(nil, "HIGHLIGHT")
+    btn.highlight:SetAllPoints()
+    btn.highlight:SetTexCoord(BR.TEXCOORD_INSET, 1 - BR.TEXCOORD_INSET, BR.TEXCOORD_INSET, 1 - BR.TEXCOORD_INSET)
+    btn.highlight:SetColorTexture(1, 1, 1, 0.2)
 
     btn.qualityOverlay = btn:CreateTexture(nil, "OVERLAY")
     btn.qualityOverlay:SetPoint("TOPLEFT", 1, -1)
@@ -2855,6 +2871,7 @@ local function UpdateActionButtons(category)
     local db = BuffRemindersDB
     local cs = db.categorySettings and db.categorySettings[category]
     local enabled = cs and cs.clickable == true
+    local showHighlight = enabled and (cs.clickableHighlight ~= false)
 
     for _, frame in pairs(buffFrames) do
         if frame.buffCategory == category then
@@ -2862,6 +2879,9 @@ local function UpdateActionButtons(category)
                 -- Lazily create overlay on first enable
                 if not frame.clickOverlay then
                     CreateClickOverlay(frame)
+                end
+                if frame.clickOverlay.highlight then
+                    frame.clickOverlay.highlight:SetShown(showHighlight)
                 end
                 if category == "consumable" then
                     local actionItems = GetConsumableActionItems(frame.buffDef)
@@ -2887,6 +2907,9 @@ local function UpdateActionButtons(category)
                     if displayMode == "sub_icons" and frame.actionButtons then
                         for _, btn in ipairs(frame.actionButtons) do
                             btn:EnableMouse(true)
+                            if btn.highlight then
+                                btn.highlight:SetShown(showHighlight)
+                            end
                         end
                     end
                     -- Expanded mode: set up click overlays on extra frames
@@ -2910,6 +2933,9 @@ local function UpdateActionButtons(category)
                                     extra.clickOverlay:SetAttribute("item", "item:" .. eItem.itemID)
                                 end
                                 extra.clickOverlay:EnableMouse(true)
+                                if extra.clickOverlay.highlight then
+                                    extra.clickOverlay.highlight:SetShown(showHighlight)
+                                end
                             elseif extra.clickOverlay then
                                 extra.clickOverlay:EnableMouse(false)
                                 extra.clickOverlay:Hide()
