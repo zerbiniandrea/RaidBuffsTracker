@@ -61,7 +61,6 @@ read_globals = {
 	"time",
 	"UIParent",
 	"IsPlayerSpell",
-	"IsResting",
 	"NUM_PET_ACTION_SLOTS",
 	"UnitAffectingCombat",
 	"UnitCanAssist",

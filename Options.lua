@@ -1060,6 +1060,9 @@ local function CreateOptionsPanel()
                     desc = "Show a subtle highlight when hovering over clickable buff icons.",
                 },
                 onChange = function(checked)
+                    if not db.categorySettings then
+                        db.categorySettings = {}
+                    end
                     if not db.categorySettings[category] then
                         db.categorySettings[category] = {}
                     end

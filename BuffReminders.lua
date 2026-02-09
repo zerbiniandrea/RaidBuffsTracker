@@ -1869,7 +1869,7 @@ SetRebuffBorder = function(frame, show)
     if show then
         local color = (BuffRemindersDB and BuffRemindersDB.defaults and BuffRemindersDB.defaults.consumableRebuffColor)
             or { 1, 0.5, 0 }
-        local cr, cg, cb = color[1], color[2], color[3]
+        local cr, cg, cb = color[1] or 1, color[2] or 0.5, color[3] or 0
         if not frame.rebuffBorderFrame then
             local thickness = 2
             local holder = CreateFrame("Frame", nil, frame)
