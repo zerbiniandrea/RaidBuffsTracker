@@ -541,7 +541,7 @@ end
 
 -- Forward declarations
 local UpdateDisplay, UpdateAnchor, ToggleTestMode, RefreshTestDisplay
-local UpdateFallbackDisplay
+local UpdateFallbackDisplay, RenderPetEntries
 
 -- Glow style definitions
 local GlowStyles = {
@@ -1758,7 +1758,7 @@ local function HideAllDisplayFrames()
 end
 
 -- Update the fallback display (shows tracked buffs via action bar glow during M+/PvP/combat)
--- Shows glow-based frames, then collects ALL visible frames (glow + pet) for unified positioning
+-- Shows glow-based frames + pet frames, then collects ALL visible frames for unified positioning
 UpdateFallbackDisplay = function()
     if not mainFrame then
         return
@@ -1810,6 +1810,10 @@ UpdateFallbackDisplay = function()
             end
         end
     end
+
+    -- Pet frames are non-secure and customCheck works in all contexts
+    BR.BuffState.Refresh()
+    RenderPetEntries()
 
     -- Collect ALL visible frames (glow + pet) for unified positioning
     local shownByCategory = {}
@@ -2018,6 +2022,23 @@ local function RenderVisibleEntry(frame, entry)
     end
 end
 
+-- Render pet category entries (pet frames are non-secure and customCheck works in all contexts)
+RenderPetEntries = function()
+    local petEntries = BR.BuffState.visibleByCategory.pet
+    if not petEntries or #petEntries == 0 then
+        return
+    end
+    table.sort(petEntries, function(a, b)
+        return a.sortOrder < b.sortOrder
+    end)
+    for _, entry in ipairs(petEntries) do
+        local frame = buffFrames[entry.key]
+        if frame then
+            RenderVisibleEntry(frame, entry)
+        end
+    end
+end
+
 -- Update the display
 UpdateDisplay = function()
     if not mainFrame or testMode then
@@ -2039,38 +2060,25 @@ UpdateDisplay = function()
     -- Use both our event-tracked flag AND the API (event fires before API updates)
     local combatCheck = inCombat or InCombatLockdown()
 
-    -- Absolute exit conditions (can never show anything)
-    if isDead or inMythicPlus or inHousing or instanceType == "pvp" or instanceType == "arena" then
+    -- Absolute exit: nothing should show when dead or in housing
+    if isDead or inHousing then
         HideAllDisplayFrames()
-        if not isDead then
-            UpdateFallbackDisplay()
-            ScheduleSecureSync()
-        end
         return
     end
 
-    -- Combat: show pet reminders + glow fallback (positioning handled by UpdateFallbackDisplay)
-    if combatCheck then
-        BR.BuffState.Refresh()
+    -- Restricted contexts: hide secure frames, but glow + pet reminders can still show
+    if inMythicPlus or instanceType == "pvp" or instanceType == "arena" then
+        HideAllDisplayFrames()
+        UpdateFallbackDisplay()
+        ScheduleSecureSync()
+        return
+    end
 
+    -- Combat: glow fallback + pet reminders (both handled by UpdateFallbackDisplay)
+    if combatCheck then
         for _, frame in pairs(buffFrames) do
             HideFrame(frame)
         end
-
-        -- Render pet entries (visible, but positioning deferred to UpdateFallbackDisplay)
-        local petEntries = BR.BuffState.visibleByCategory.pet
-        if petEntries and #petEntries > 0 then
-            table.sort(petEntries, function(a, b)
-                return a.sortOrder < b.sortOrder
-            end)
-            for _, entry in ipairs(petEntries) do
-                local frame = buffFrames[entry.key]
-                if frame then
-                    RenderVisibleEntry(frame, entry)
-                end
-            end
-        end
-
         UpdateFallbackDisplay()
         ScheduleSecureSync()
         return
