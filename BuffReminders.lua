@@ -2158,8 +2158,13 @@ UpdateDisplay = function()
                     if frame then
                         RenderVisibleEntry(frame, entry)
                         frames[#frames + 1] = frame
-                        -- Consumable display modes: sub-icons or expanded
-                        if entry.displayType == "missing" and BUFF_KEY_TO_CATEGORY[frame.key] and frame:IsShown() then
+                        -- Consumable display modes: sub-icons or expanded (skip while eating)
+                        if
+                            entry.displayType == "missing"
+                            and not entry.isEating
+                            and BUFF_KEY_TO_CATEGORY[frame.key]
+                            and frame:IsShown()
+                        then
                             local displayMode = (db.defaults or {}).consumableDisplayMode or "sub_icons"
                             local items = GetConsumableActionItems(frame.buffDef)
                             if displayMode == "sub_icons" then
@@ -2201,8 +2206,13 @@ UpdateDisplay = function()
                     if frame then
                         RenderVisibleEntry(frame, entry)
                         mainFrameBuffs[#mainFrameBuffs + 1] = frame
-                        -- Consumable display modes: sub-icons or expanded
-                        if entry.displayType == "missing" and BUFF_KEY_TO_CATEGORY[frame.key] and frame:IsShown() then
+                        -- Consumable display modes: sub-icons or expanded (skip while eating)
+                        if
+                            entry.displayType == "missing"
+                            and not entry.isEating
+                            and BUFF_KEY_TO_CATEGORY[frame.key]
+                            and frame:IsShown()
+                        then
                             local displayMode = (db.defaults or {}).consumableDisplayMode or "sub_icons"
                             local items = GetConsumableActionItems(frame.buffDef)
                             if displayMode == "sub_icons" then
