@@ -607,7 +607,10 @@ local function UpdateEatingState(updateInfo)
     end
     if updateInfo.addedAuras then
         for _, aura in ipairs(updateInfo.addedAuras) do
-            if aura.icon == EATING_AURA_ICON then
+            local ok, match = pcall(function()
+                return aura.icon == EATING_AURA_ICON
+            end)
+            if ok and match then
                 eatingAuraInstanceID = aura.auraInstanceID
                 break
             end
