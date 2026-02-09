@@ -113,6 +113,8 @@ local DefaultSettingKeys = {
     consumableRebuffWarning = "DisplayRefresh",
     consumableRebuffThreshold = "DisplayRefresh",
     consumableRebuffColor = "VisualsRefresh",
+    -- Consumable display mode
+    consumableDisplayMode = "DisplayRefresh",
     -- Font (global-only, lives under defaults)
     fontFace = "VisualsRefresh",
 }

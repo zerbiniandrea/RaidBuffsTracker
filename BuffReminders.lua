@@ -155,6 +155,7 @@ local defaults = {
         consumableRebuffWarning = true,
         consumableRebuffThreshold = 10, -- minutes
         consumableRebuffColor = { 1, 0.5, 0 },
+        consumableDisplayMode = "sub_icons",
     },
 
     ---@type CategoryVisibility
@@ -868,16 +869,10 @@ local function CreateActionButton()
     btn:Hide()
     -- Start hidden — state driver activated by SyncSecureButtons() after positioning
     RegisterStateDriver(btn, "visibility", "hide")
-    -- When state driver re-shows after combat, hide if buff frame isn't visible or clickable disabled
+    -- When state driver re-shows after combat, hide if buff frame isn't visible
     btn:SetScript("OnShow", function(self)
         local bf = self._br_buff_frame
         if not bf or not bf:IsShown() then
-            self:Hide()
-            return
-        end
-        local cat = bf.buffCategory
-        local cs = cat and BuffRemindersDB.categorySettings and BuffRemindersDB.categorySettings[cat]
-        if not (cs and cs.clickable == true) then
             self:Hide()
         end
     end)
@@ -1004,7 +999,8 @@ end
 ---separately by SyncSecureButtons() (no anchors to avoid taint).
 ---@param frame table The buff frame
 ---@param actionItems table[]? Array of { itemID, count, icon }
-local function UpdateConsumableButtons(frame, actionItems)
+---@param clickable boolean? Whether buttons should accept mouse input
+local function UpdateConsumableButtons(frame, actionItems, clickable)
     if not actionItems or #actionItems <= 1 then
         if frame.actionButtons then
             for _, btn in ipairs(frame.actionButtons) do
@@ -1042,6 +1038,7 @@ local function UpdateConsumableButtons(frame, actionItems)
             btn._br_action_item = item.itemID
         end
 
+        btn:EnableMouse(clickable == true)
         btn._br_visible = true
         btn._br_count = item.count
         btn._br_needs_sync = true
@@ -1178,6 +1175,41 @@ local function SyncSecureButtons()
                 end
             end
         end
+        -- Sync extra frame click overlays (expanded consumable display mode)
+        if frame.extraFrames then
+            for _, extra in ipairs(frame.extraFrames) do
+                local extraOverlay = extra.clickOverlay
+                if extraOverlay then
+                    if extra:IsShown() then
+                        local eLeft, eBottom, eWidth, eHeight = extra:GetRect()
+                        if eLeft then
+                            if
+                                extraOverlay._br_left ~= eLeft
+                                or extraOverlay._br_bottom ~= eBottom
+                                or extraOverlay._br_width ~= eWidth
+                                or extraOverlay._br_height ~= eHeight
+                            then
+                                extraOverlay:ClearAllPoints()
+                                extraOverlay:SetSize(eWidth, eHeight)
+                                extraOverlay:SetFrameStrata(extra:GetFrameStrata())
+                                extraOverlay:SetFrameLevel(extra:GetFrameLevel() + 5)
+                                extraOverlay:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", eLeft, eBottom)
+                                extraOverlay._br_left = eLeft
+                                extraOverlay._br_bottom = eBottom
+                                extraOverlay._br_width = eWidth
+                                extraOverlay._br_height = eHeight
+                            end
+                            if not extraOverlay:IsShown() then
+                                extraOverlay:Show()
+                            end
+                        end
+                    else
+                        extraOverlay:Hide()
+                        extraOverlay._br_left = nil
+                    end
+                end
+            end
+        end
     end
 end
 
@@ -1272,6 +1304,65 @@ local function CreateBuffFrame(buff, category)
 
     frame:Hide()
     return frame
+end
+
+-- Get or create an extra frame for expanded consumable display mode.
+-- Extra frames are stored lazily in frame.extraFrames[index] and share the same
+-- visual structure as the main buff frame (icon, border, stackCount, Masque).
+---@param frame table The main consumable buff frame
+---@param index number 1-based index for the extra frame
+---@return table extra The extra frame (shown/hidden by caller)
+local function GetOrCreateExtraFrame(frame, index)
+    if not frame.extraFrames then
+        frame.extraFrames = {}
+    end
+    local extra = frame.extraFrames[index]
+    if extra then
+        return extra
+    end
+
+    extra = CreateFrame("Frame", nil, frame:GetParent())
+    extra.isExtraFrame = true
+    extra.mainFrame = frame
+    extra.buffCategory = frame.buffCategory
+    extra.key = frame.key .. "_extra_" .. index
+
+    local effectiveCat = GetEffectiveCategory(frame)
+    local catSettings = GetCategorySettings(effectiveCat)
+    local iconSize = catSettings.iconSize or 64
+    extra:SetSize(iconSize, iconSize)
+
+    CreateIconTextures(extra, nil)
+
+    if masqueGroup then
+        masqueGroup:AddButton(extra, {
+            Icon = extra.icon,
+            Normal = false,
+        })
+    end
+
+    UpdateIconStyling(extra, catSettings)
+
+    -- Stack count (bottom-right, same as main frame)
+    extra.stackCount = extra:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
+    extra.stackCount:SetPoint("BOTTOMRIGHT", -5, 4)
+    extra.stackCount:Hide()
+
+    -- Count text (for consistency, though expanded frames mainly use stackCount)
+    local textColor = catSettings.textColor or { 1, 1, 1 }
+    local textAlpha = catSettings.textAlpha or 1
+    extra.count = extra:CreateFontString(nil, "OVERLAY", "NumberFontNormalLarge")
+    extra.count:SetPoint("CENTER", 0, 0)
+    extra.count:SetTextColor(textColor[1], textColor[2], textColor[3], textAlpha)
+    extra.count:SetFont(fontPath, GetFontSize(1, catSettings.textSize, catSettings.iconSize), "OUTLINE")
+    extra.count:Hide()
+
+    extra:SetAlpha(catSettings.iconAlpha or 1)
+    extra:EnableMouse(false)
+    extra:Hide()
+
+    frame.extraFrames[index] = extra
+    return extra
 end
 
 -- Helper to position frames within a container using specified settings
@@ -1629,6 +1720,11 @@ local function HideAllDisplayFrames()
     -- Also hide individual buff frames (so they don't reappear when mainFrame is shown by fallback)
     for _, frame in pairs(buffFrames) do
         frame:Hide()
+        if frame.extraFrames then
+            for _, extra in ipairs(frame.extraFrames) do
+                extra:Hide()
+            end
+        end
     end
 end
 
@@ -1963,6 +2059,11 @@ UpdateDisplay = function()
     -- Hide all frames first
     for _, frame in pairs(buffFrames) do
         HideFrame(frame)
+        if frame.extraFrames then
+            for _, extra in ipairs(frame.extraFrames) do
+                extra:Hide()
+            end
+        end
     end
 
     local visibleByCategory = BR.BuffState.visibleByCategory
@@ -1992,6 +2093,32 @@ UpdateDisplay = function()
                     if frame then
                         RenderVisibleEntry(frame, entry)
                         frames[#frames + 1] = frame
+                        -- Consumable display modes: sub-icons or expanded
+                        if entry.displayType == "missing" and BUFF_KEY_TO_CATEGORY[frame.key] and frame:IsShown() then
+                            local displayMode = (db.defaults or {}).consumableDisplayMode or "sub_icons"
+                            local items = GetConsumableActionItems(frame.buffDef)
+                            if displayMode == "sub_icons" then
+                                local cs = db.categorySettings and db.categorySettings.consumable
+                                local clickable = cs and cs.clickable == true
+                                UpdateConsumableButtons(frame, items, clickable)
+                            else
+                                -- Not sub_icons: hide any leftover sub-icon buttons
+                                UpdateConsumableButtons(frame, nil)
+                                if displayMode == "expanded" and items and #items > 1 then
+                                    for i = 2, #items do
+                                        local extra = GetOrCreateExtraFrame(frame, i - 1)
+                                        extra:SetParent(frame:GetParent())
+                                        extra:SetSize(frame:GetWidth(), frame:GetHeight())
+                                        extra.icon:SetTexture(items[i].icon)
+                                        extra.stackCount:SetText(items[i].count)
+                                        extra.stackCount:Show()
+                                        extra.count:Hide()
+                                        extra:Show()
+                                        frames[#frames + 1] = extra
+                                    end
+                                end
+                            end
+                        end
                     end
                 end
                 PositionSplitCategory(category, frames)
@@ -2002,6 +2129,32 @@ UpdateDisplay = function()
                     if frame then
                         RenderVisibleEntry(frame, entry)
                         mainFrameBuffs[#mainFrameBuffs + 1] = frame
+                        -- Consumable display modes: sub-icons or expanded
+                        if entry.displayType == "missing" and BUFF_KEY_TO_CATEGORY[frame.key] and frame:IsShown() then
+                            local displayMode = (db.defaults or {}).consumableDisplayMode or "sub_icons"
+                            local items = GetConsumableActionItems(frame.buffDef)
+                            if displayMode == "sub_icons" then
+                                local cs = db.categorySettings and db.categorySettings.consumable
+                                local clickable = cs and cs.clickable == true
+                                UpdateConsumableButtons(frame, items, clickable)
+                            else
+                                -- Not sub_icons: hide any leftover sub-icon buttons
+                                UpdateConsumableButtons(frame, nil)
+                                if displayMode == "expanded" and items and #items > 1 then
+                                    for i = 2, #items do
+                                        local extra = GetOrCreateExtraFrame(frame, i - 1)
+                                        extra:SetParent(mainFrame)
+                                        extra:SetSize(frame:GetWidth(), frame:GetHeight())
+                                        extra.icon:SetTexture(items[i].icon)
+                                        extra.stackCount:SetText(items[i].count)
+                                        extra.stackCount:Show()
+                                        extra.count:Hide()
+                                        extra:Show()
+                                        mainFrameBuffs[#mainFrameBuffs + 1] = extra
+                                    end
+                                end
+                            end
+                        end
                     end
                 end
             end
@@ -2440,6 +2593,11 @@ ReparentBuffFrames = function()
             frame:SetParent(mainFrame)
             frame:ClearAllPoints() -- Clear stale anchors after reparenting
         end
+        if frame.extraFrames then
+            for _, extra in ipairs(frame.extraFrames) do
+                extra:SetParent(frame:GetParent())
+            end
+        end
     end
 end
 
@@ -2597,6 +2755,15 @@ local function UpdateVisuals()
         if not ShouldShowText(frame.buffCategory) then
             frame.count:Hide()
         end
+
+        -- Update extra frames (expanded consumable display mode)
+        if frame.extraFrames then
+            for _, extra in ipairs(frame.extraFrames) do
+                extra:SetSize(size, size)
+                UpdateIconStyling(extra, catSettings)
+                extra:SetAlpha(catSettings.iconAlpha or 1)
+            end
+        end
     end
     if IsMasqueActive() then
         masqueGroup:ReSkin()
@@ -2636,24 +2803,66 @@ local function UpdateActionButtons(category)
                 if category == "consumable" then
                     local actionItems = GetConsumableActionItems(frame.buffDef)
                     -- Update main overlay (uses first/best item)
-                    local btn = frame.clickOverlay
+                    local mainBtn = frame.clickOverlay
                     if actionItems and #actionItems > 0 then
                         local item = actionItems[1]
-                        btn.itemID = item.itemID
+                        mainBtn.itemID = item.itemID
                         if frame.key == "weaponBuff" then
-                            btn:SetAttribute("type", "macro")
-                            btn:SetAttribute("macrotext", "/use item:" .. item.itemID .. "\n/use 16")
+                            mainBtn:SetAttribute("type", "macro")
+                            mainBtn:SetAttribute("macrotext", "/use item:" .. item.itemID .. "\n/use 16")
                         else
-                            btn:SetAttribute("type", "item")
-                            btn:SetAttribute("item", "item:" .. item.itemID)
+                            mainBtn:SetAttribute("type", "item")
+                            mainBtn:SetAttribute("item", "item:" .. item.itemID)
                         end
-                        btn:EnableMouse(true)
+                        mainBtn:EnableMouse(true)
                     else
-                        btn.itemID = nil
-                        btn:EnableMouse(false)
+                        mainBtn.itemID = nil
+                        mainBtn:EnableMouse(false)
                     end
-                    -- Update visible item row below icon
-                    UpdateConsumableButtons(frame, actionItems)
+                    -- Update clickability on existing sub-icon buttons
+                    local displayMode = (db.defaults or {}).consumableDisplayMode or "sub_icons"
+                    if displayMode == "sub_icons" and frame.actionButtons then
+                        for _, btn in ipairs(frame.actionButtons) do
+                            btn:EnableMouse(true)
+                        end
+                    end
+                    -- Expanded mode: set up click overlays on extra frames
+                    if displayMode == "expanded" and frame.extraFrames and actionItems then
+                        for idx, extra in ipairs(frame.extraFrames) do
+                            local itemIdx = idx + 1 -- extra[1] = items[2], etc.
+                            if extra:IsShown() and actionItems[itemIdx] then
+                                if not extra.clickOverlay then
+                                    CreateClickOverlay(extra)
+                                end
+                                local eItem = actionItems[itemIdx]
+                                extra.clickOverlay.itemID = eItem.itemID
+                                if frame.key == "weaponBuff" then
+                                    extra.clickOverlay:SetAttribute("type", "macro")
+                                    extra.clickOverlay:SetAttribute(
+                                        "macrotext",
+                                        "/use item:" .. eItem.itemID .. "\n/use 16"
+                                    )
+                                else
+                                    extra.clickOverlay:SetAttribute("type", "item")
+                                    extra.clickOverlay:SetAttribute("item", "item:" .. eItem.itemID)
+                                end
+                                extra.clickOverlay:EnableMouse(true)
+                            elseif extra.clickOverlay then
+                                extra.clickOverlay:EnableMouse(false)
+                                extra.clickOverlay:Hide()
+                                extra.clickOverlay._br_left = nil
+                            end
+                        end
+                    elseif frame.extraFrames then
+                        -- Not expanded: disable extra overlays
+                        for _, extra in ipairs(frame.extraFrames) do
+                            if extra.clickOverlay then
+                                extra.clickOverlay:EnableMouse(false)
+                                extra.clickOverlay:Hide()
+                                extra.clickOverlay._br_left = nil
+                            end
+                        end
+                    end
                 else
                     -- Spells: pre-filter by talent/spec, then check castability
                     local overlay = frame.clickOverlay
@@ -2671,14 +2880,29 @@ local function UpdateActionButtons(category)
                 frame.clickOverlay:EnableMouse(false)
                 frame.clickOverlay:Hide()
                 frame.clickOverlay._br_left = nil
+                -- Sub-icon buttons: disable mouse but keep visible if mode is sub_icons
+                local displayMode = (db.defaults or {}).consumableDisplayMode or "sub_icons"
                 if frame.actionButtons then
                     for _, btn in ipairs(frame.actionButtons) do
-                        if btn._br_driver_active then
-                            RegisterStateDriver(btn, "visibility", "hide")
-                            btn._br_driver_active = false
-                            btn._br_x = nil
-                        else
-                            btn:Hide()
+                        btn:EnableMouse(false)
+                        if displayMode ~= "sub_icons" then
+                            if btn._br_driver_active then
+                                RegisterStateDriver(btn, "visibility", "hide")
+                                btn._br_driver_active = false
+                                btn._br_x = nil
+                            else
+                                btn:Hide()
+                            end
+                        end
+                    end
+                end
+                -- Also disable extra frame overlays
+                if frame.extraFrames then
+                    for _, extra in ipairs(frame.extraFrames) do
+                        if extra.clickOverlay then
+                            extra.clickOverlay:EnableMouse(false)
+                            extra.clickOverlay:Hide()
+                            extra.clickOverlay._br_left = nil
                         end
                     end
                 end
@@ -2742,12 +2966,16 @@ CallbackRegistry:RegisterCallback("LayoutRefresh", function()
     end
 end)
 
--- Display changes (enabled buffs, visibility settings)
+-- Display changes (enabled buffs, visibility settings, consumable display mode)
 CallbackRegistry:RegisterCallback("DisplayRefresh", function()
     if testMode then
         RefreshTestDisplay()
     else
         UpdateDisplay()
+    end
+    -- Refresh consumable action button clickability/visibility after mode changes
+    if not InCombatLockdown() then
+        UpdateActionButtons("consumable")
     end
 end)
 

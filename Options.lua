@@ -1128,6 +1128,26 @@ local function CreateOptionsPanel()
                 end,
             })
             catLayout:Add(showWithoutItemsHolder, nil, COMPONENT_GAP)
+
+            local displayModeHolder = Components.Dropdown(catContent, {
+                label = "Item display",
+                get = function()
+                    return BR.Config.Get("defaults.consumableDisplayMode", "sub_icons")
+                end,
+                options = {
+                    { value = "icon_only", label = "Icon only" },
+                    { value = "sub_icons", label = "Sub-icons" },
+                    { value = "expanded", label = "Expanded" },
+                },
+                tooltip = {
+                    title = "Consumable item display",
+                    desc = "Icon only: show the top item icon only. Sub-icons: show small clickable icons below the main icon. Expanded: show each item variant as a full-sized icon in the row.",
+                },
+                onChange = function(val)
+                    BR.Config.Set("defaults.consumableDisplayMode", val)
+                end,
+            })
+            catLayout:Add(displayModeHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
         end
 
         -- Split frame checkbox

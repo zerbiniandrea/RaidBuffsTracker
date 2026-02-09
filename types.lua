@@ -125,6 +125,9 @@
 ---@field currentGlowStyle? number
 ---@field clickOverlay? Button
 ---@field actionButtons? Button[]
+---@field extraFrames? table[]
+---@field isExtraFrame? boolean
+---@field mainFrame? BuffFrame
 
 ---@alias CategoryName "raid"|"presence"|"targeted"|"self"|"pet"|"consumable"|"custom"
 
@@ -151,6 +154,7 @@
 ---@field consumableRebuffWarning? boolean
 ---@field consumableRebuffThreshold? number
 ---@field consumableRebuffColor? number[]
+---@field consumableDisplayMode? "icon_only"|"sub_icons"|"expanded"
 
 ---@class CategorySetting
 ---@field position CategoryPosition
