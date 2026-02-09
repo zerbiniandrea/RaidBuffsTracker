@@ -109,6 +109,7 @@ local DefaultSettingKeys = {
     expirationThreshold = "VisualsRefresh",
     glowStyle = "VisualsRefresh",
     -- Consumable rebuff warning
+    showConsumablesWithoutItems = "DisplayRefresh",
     consumableRebuffWarning = "DisplayRefresh",
     consumableRebuffThreshold = "DisplayRefresh",
     consumableRebuffColor = "VisualsRefresh",

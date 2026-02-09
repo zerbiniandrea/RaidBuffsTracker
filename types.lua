@@ -147,6 +147,7 @@
 ---@field expirationThreshold number
 ---@field glowStyle number
 ---@field fontFace? string
+---@field showConsumablesWithoutItems? boolean
 ---@field consumableRebuffWarning? boolean
 ---@field consumableRebuffThreshold? number
 ---@field consumableRebuffColor? number[]

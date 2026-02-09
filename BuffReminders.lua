@@ -151,6 +151,7 @@ local defaults = {
         expirationThreshold = 15, -- minutes
         glowStyle = 1, -- 1=Orange, 2=Gold, 3=Yellow, 4=White, 5=Red
         -- Consumable rebuff warning
+        showConsumablesWithoutItems = false,
         consumableRebuffWarning = true,
         consumableRebuffThreshold = 10, -- minutes
         consumableRebuffColor = { 1, 0.5, 0 },
@@ -1236,6 +1237,11 @@ local function CreateBuffFrame(buff, category)
     frame.count:SetTextColor(textColor[1], textColor[2], textColor[3], textAlpha)
     frame.count:SetFont(fontPath, GetFontSize(1, catSettings.textSize, catSettings.iconSize), "OUTLINE")
 
+    -- Stack count (bottom-right, WoW-standard item count style) for consumables
+    frame.stackCount = frame:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
+    frame.stackCount:SetPoint("BOTTOMRIGHT", -5, 4)
+    frame.stackCount:Hide()
+
     -- Frame alpha
     frame:SetAlpha(catSettings.iconAlpha or 1)
 
@@ -1801,6 +1807,9 @@ end
 
 -- Render a single visible entry into its frame using the appropriate display type
 local function RenderVisibleEntry(frame, entry)
+    -- Hide stack count by default; only the consumable-with-items path shows it
+    frame.stackCount:Hide()
+
     -- Eating override: state provides isEating as a snapshot, so the display
     -- never reads a live flag that can change mid-cycle.
     if entry.isEating then
@@ -1837,19 +1846,38 @@ local function RenderVisibleEntry(frame, entry)
             SetExpirationGlow(frame, true)
         end
     else -- "missing"
-        if entry.iconByRole then
-            local texture = GetBuffTexture(frame.spellIDs, entry.iconByRole)
-            if texture then
-                frame.icon:SetTexture(texture)
+        -- Consumables with bag scan support: show actual item from bags
+        if BUFF_KEY_TO_CATEGORY[frame.key] then
+            local items = GetConsumableActionItems(frame.buffDef)
+            if items then
+                frame.icon:SetTexture(items[1].icon)
+                frame.count:Hide()
+                frame.stackCount:SetText(items[1].count)
+                frame.stackCount:Show()
+                frame:Show()
+                SetExpirationGlow(frame, false)
+                SetRebuffBorder(frame, false)
+            elseif (BuffRemindersDB.defaults or {}).showConsumablesWithoutItems then
+                ShowMissingFrame(frame, entry.missingText)
+                SetRebuffBorder(frame, false)
             end
+            -- No items and setting is off: don't show the frame
+        else
+            if entry.iconByRole then
+                local texture = GetBuffTexture(frame.spellIDs, entry.iconByRole)
+                if texture then
+                    frame.icon:SetTexture(texture)
+                end
+            end
+            ShowMissingFrame(frame, entry.missingText)
+            SetRebuffBorder(frame, false)
         end
-        ShowMissingFrame(frame, entry.missingText)
-        SetRebuffBorder(frame, false)
     end
 
     -- Per-category text visibility (uses buff's actual category, not effective/main)
     if not ShouldShowText(frame.buffCategory) then
         frame.count:Hide()
+        frame.stackCount:Hide()
     end
 end
 
@@ -2620,23 +2648,9 @@ local function UpdateActionButtons(category)
                             btn:SetAttribute("item", "item:" .. item.itemID)
                         end
                         btn:EnableMouse(true)
-                        -- Show the top item's icon on the main buff frame
-                        -- Skip if player is eating (RenderVisibleEntry controls the icon during eating)
-                        local eatingEntry = BR.BuffState.GetEntry(frame.key)
-                        if item.icon and not (eatingEntry and eatingEntry.isEating) then
-                            if not frame._br_original_icon then
-                                frame._br_original_icon = frame.icon:GetTexture()
-                            end
-                            frame.icon:SetTexture(item.icon)
-                        end
                     else
                         btn.itemID = nil
                         btn:EnableMouse(false)
-                        -- Restore original buff icon when no items found
-                        if frame._br_original_icon then
-                            frame.icon:SetTexture(frame._br_original_icon)
-                            frame._br_original_icon = nil
-                        end
                     end
                     -- Update visible item row below icon
                     UpdateConsumableButtons(frame, actionItems)
@@ -2657,11 +2671,6 @@ local function UpdateActionButtons(category)
                 frame.clickOverlay:EnableMouse(false)
                 frame.clickOverlay:Hide()
                 frame.clickOverlay._br_left = nil
-                -- Restore original buff icon
-                if frame._br_original_icon then
-                    frame.icon:SetTexture(frame._br_original_icon)
-                    frame._br_original_icon = nil
-                end
                 if frame.actionButtons then
                     for _, btn in ipairs(frame.actionButtons) do
                         if btn._br_driver_active then

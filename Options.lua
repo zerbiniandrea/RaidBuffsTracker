@@ -1113,6 +1113,21 @@ local function CreateOptionsPanel()
             catLayout:Add(rebuffHolder, nil, COMPONENT_GAP)
             rebuffThresholdHolder:SetPoint("LEFT", rebuffHolder, "RIGHT", 8, 0)
             rebuffColorHolder:SetPoint("LEFT", rebuffThresholdHolder, "RIGHT", 12, 0)
+
+            local showWithoutItemsHolder = Components.Checkbox(catContent, {
+                label = "Show when not in bags",
+                get = function()
+                    return BR.Config.Get("defaults.showConsumablesWithoutItems", false) == true
+                end,
+                tooltip = {
+                    title = "Show consumables without items",
+                    desc = "When enabled, consumable reminders are shown even if you don't have the item in your bags. When disabled, only consumables you actually carry are shown.",
+                },
+                onChange = function(checked)
+                    BR.Config.Set("defaults.showConsumablesWithoutItems", checked)
+                end,
+            })
+            catLayout:Add(showWithoutItemsHolder, nil, COMPONENT_GAP)
         end
 
         -- Split frame checkbox
