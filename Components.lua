@@ -725,6 +725,7 @@ end
 ---@field onChange fun(checked: boolean) Callback when checked state changes
 ---@field icons? number[] Optional texture ID(s) to show between checkbox and label
 ---@field infoTooltip? string Optional info icon tooltip (format: "title|description")
+---@field warningTooltip? string Optional warning icon tooltip (format: "title|description")
 ---@field onRightClick? fun() Optional right-click callback (wired on all interactive children)
 
 ---Create a modern flat-style checkbox with label and optional icons/tooltip
@@ -786,20 +787,25 @@ function Components.Checkbox(parent, config)
         cb:HookScript("OnLeave", hideTip)
     end
 
-    -- Info tooltip icon (optional, shown after label)
-    if config.infoTooltip then
+    -- Info / warning tooltip icon (optional, shown after label)
+    local tooltipText = config.infoTooltip or config.warningTooltip
+    if tooltipText then
         local infoIcon = holder:CreateTexture(nil, "ARTWORK")
         infoIcon:SetSize(14, 14)
         infoIcon:SetPoint("LEFT", label, "RIGHT", 4, 0)
-        infoIcon:SetAtlas("QuestNormal")
+        if config.warningTooltip then
+            infoIcon:SetAtlas("services-icon-warning")
+        else
+            infoIcon:SetAtlas("QuestNormal")
+        end
 
         local infoBtn = CreateFrame("Button", nil, holder)
         infoBtn:SetSize(14, 14)
         infoBtn:SetPoint("CENTER", infoIcon, "CENTER", 0, 0)
 
-        local infoTitle, infoDesc = config.infoTooltip:match("^([^|]+)|(.+)$")
+        local infoTitle, infoDesc = tooltipText:match("^([^|]+)|(.+)$")
         if not infoTitle then
-            infoTitle = config.infoTooltip
+            infoTitle = tooltipText
         end
         SetupTooltip(infoBtn, infoTitle, infoDesc)
     end

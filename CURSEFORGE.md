@@ -11,6 +11,7 @@ From the author of [Raid Buffs Tracker](https://wago.io/iWkZ4Eq-i), one of the m
 
 ## Features
 
+- **Click to cast** - Click missing buff icons to cast the spell directly (out of combat, spells your character can cast)
 - **M+ support** - Detects missing buffs via action bar glow even when Blizzard's buff API is restricted
 - Class reminder when your buff is missing
 - Visual buff tracking with count overlay (e.g., "17/20" = 17 buffed out of 20)

@@ -3298,14 +3298,11 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
             )
         end
 
-        -- Notify users about recent rewrite (delayed, can be disabled)
+        -- Notify users about recent changes (delayed, can be disabled)
         if BuffRemindersDB.showLoginMessages ~= false then
             C_Timer.After(3, function()
                 print(
-                    "|cff00ccffBuffReminders:|r Heads up! Recent versions include a near-complete rewrite of the addon."
-                )
-                print(
-                    "|cff00ccffBuffReminders:|r Sorry if something broke! Please report issues on Discord (preferred), GitHub, or CurseForge."
+                    "|cff00ccffBuffReminders:|r Now supporting clickable icons for raid buffs and consumables! Enable it in |cffffcc00/br|r options."
                 )
             end)
         end

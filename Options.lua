@@ -1018,6 +1018,18 @@ local function CreateOptionsPanel()
                     desc = "Make buff icons clickable to cast the corresponding spell (out of combat only). "
                         .. "Only works for spells your character can cast.",
                 },
+                warningTooltip = "Help improve this feature!|This feature interacts with many different spells "
+                    .. "and class configurations that can't all be tested by one person.\n\n"
+                    .. "If you encounter any Lua errors (e.g. when clicking a buff icon, "
+                    .. "when entering combat for a raid encounter, or with only certain "
+                    .. "categories set to clickable), please report them on Discord, "
+                    .. "CurseForge, or GitHub with:\n\n"
+                    .. "- Your class and spec\n"
+                    .. "- Which buff icon you clicked (if applicable)\n"
+                    .. "- Which categories have click to cast enabled\n"
+                    .. "- What you were doing when the error occurred\n"
+                    .. "- The full error message\n\n"
+                    .. "Your reports help make this feature more reliable for everyone!",
                 onChange = function(checked)
                     if not db.categorySettings then
                         db.categorySettings = {}
