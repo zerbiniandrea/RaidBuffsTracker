@@ -15,6 +15,10 @@
 ---@field SetAllPoints fun(self: Texture, target?: any)
 ---@field SetTexCoord fun(self: Texture, left: number, right: number, top: number, bottom: number)
 ---@field SetTexture fun(self: Texture, texture: number|string)
+---@field SetAtlas fun(self: Texture, atlas: string)
+---@field SetSize fun(self: Texture, width: number, height: number)
+---@field Show fun(self: Texture)
+---@field Hide fun(self: Texture)
 
 ---@class FontString
 ---@field SetFont fun(self: FontString, font: string, size: number, flags?: string)

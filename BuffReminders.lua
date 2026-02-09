@@ -859,6 +859,28 @@ local ACTION_ICON_SCALE = 0.45
 local ACTION_ICON_MIN = 18
 local ACTION_ICON_Y_OFFSET = -6
 
+-- Quality pip atlas names for crafted consumables (rank 1/2/3)
+local QUALITY_ATLAS = {
+    [1] = "Professions-Icon-Quality-Tier1-Inv",
+    [2] = "Professions-Icon-Quality-Tier2-Inv",
+    [3] = "Professions-Icon-Quality-Tier3-Inv",
+}
+
+---Set or hide a quality pip overlay texture based on crafted quality.
+---@param overlay Texture The overlay texture to update
+---@param craftedQuality number? The crafted quality tier (1-3) or nil
+---@param size number The parent icon size (pip is 50% of this)
+local function SetQualityOverlay(overlay, craftedQuality, size)
+    local atlas = craftedQuality and QUALITY_ATLAS[craftedQuality]
+    if atlas then
+        overlay:SetAtlas(atlas)
+        overlay:SetSize(size * 0.5, size * 0.5)
+        overlay:Show()
+    else
+        overlay:Hide()
+    end
+end
+
 ---Create a small SecureActionButton for the consumable item row.
 ---Parented to UIParent with NO anchors to buff frames (avoids taint).
 ---Position synced by SyncSecureButtons().
@@ -891,6 +913,10 @@ local function CreateActionButton()
 
     btn.count = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
     btn.count:SetPoint("BOTTOMRIGHT", -1, 1)
+
+    btn.qualityOverlay = btn:CreateTexture(nil, "OVERLAY")
+    btn.qualityOverlay:SetPoint("TOPLEFT", 1, -1)
+    btn.qualityOverlay:Hide()
 
     btn:SetScript("OnEnter", function(self)
         if self.itemID then
@@ -945,7 +971,22 @@ local function RefreshConsumableCache()
                         if count > 0 then
                             local info = C_Container.GetContainerItemInfo(bag, slot)
                             local icon = info and info.iconFileID or nil
-                            buckets[category][itemID] = { itemID = itemID, count = count, icon = icon }
+                            local itemLink = info and info.hyperlink
+                            local cq = nil
+                            if itemLink then
+                                -- Parse crafted quality tier from the embedded atlas in the item link
+                                -- e.g. |A:Professions-ChatIcon-Quality-Tier2:17:15::1|a → tier 2
+                                local tier = tostring(itemLink):match("Professions%-ChatIcon%-Quality%-Tier(%d)")
+                                if tier then
+                                    cq = tonumber(tier)
+                                end
+                            end
+                            buckets[category][itemID] = {
+                                itemID = itemID,
+                                count = count,
+                                icon = icon,
+                                craftedQuality = cq,
+                            }
                         end
                     end
                 end
@@ -1025,6 +1066,7 @@ local function UpdateConsumableButtons(frame, actionItems, clickable)
 
         btn.itemID = item.itemID
         btn.icon:SetTexture(item.icon or 134400)
+        btn._br_craftedQuality = item.craftedQuality
 
         -- Dirty tracking: skip redundant SetAttribute calls
         if btn._br_action_item ~= item.itemID then
@@ -1140,6 +1182,7 @@ local function SyncSecureButtons()
                                         btn._br_count and btn._br_count > 1 and tostring(btn._br_count) or ""
                                     )
                                     btn.count:SetFont(fontPath, math.max(10, math.floor(size * 0.45)), "OUTLINE")
+                                    SetQualityOverlay(btn.qualityOverlay, btn._br_craftedQuality, size)
                                     btn._br_needs_sync = false
                                 end
                                 -- Activate combat state driver on first show (buttons start with "hide" driver)
@@ -1250,6 +1293,10 @@ local function CreateBuffFrame(buff, category)
     local texture = iconOverride or GetBuffTexture(buff.spellID, buff.iconByRole)
     CreateIconTextures(frame, texture)
 
+    frame.qualityOverlay = frame:CreateTexture(nil, "OVERLAY")
+    frame.qualityOverlay:SetPoint("TOPLEFT", 5, -4)
+    frame.qualityOverlay:Hide()
+
     -- Register with Masque (Normal = false: we handle borders, Masque handles TexCoord)
     if masqueGroup then
         masqueGroup:AddButton(frame, {
@@ -1333,6 +1380,10 @@ local function GetOrCreateExtraFrame(frame, index)
     extra:SetSize(iconSize, iconSize)
 
     CreateIconTextures(extra, nil)
+
+    extra.qualityOverlay = extra:CreateTexture(nil, "OVERLAY")
+    extra.qualityOverlay:SetPoint("TOPLEFT", 5, -4)
+    extra.qualityOverlay:Hide()
 
     if masqueGroup then
         masqueGroup:AddButton(extra, {
@@ -1892,19 +1943,28 @@ local function ResolveConsumableIcon(frame)
     local items = GetConsumableActionItems(frame.buffDef)
     if items and items[1] and items[1].icon then
         frame.icon:SetTexture(items[1].icon)
+        if frame.qualityOverlay then
+            SetQualityOverlay(frame.qualityOverlay, items[1].craftedQuality, frame:GetWidth())
+        end
     else
         local def = frame.buffDef
         local fallback = def and (def.iconOverride or def.buffIconID)
         if fallback then
             frame.icon:SetTexture(fallback)
         end
+        if frame.qualityOverlay then
+            frame.qualityOverlay:Hide()
+        end
     end
 end
 
 -- Render a single visible entry into its frame using the appropriate display type
 local function RenderVisibleEntry(frame, entry)
-    -- Hide stack count by default; only the consumable-with-items path shows it
+    -- Hide stack count and quality overlay by default; only the consumable-with-items path shows them
     frame.stackCount:Hide()
+    if frame.qualityOverlay then
+        frame.qualityOverlay:Hide()
+    end
 
     -- Eating override: state provides isEating as a snapshot, so the display
     -- never reads a live flag that can change mid-cycle.
@@ -1947,6 +2007,9 @@ local function RenderVisibleEntry(frame, entry)
             local items = GetConsumableActionItems(frame.buffDef)
             if items then
                 frame.icon:SetTexture(items[1].icon)
+                if frame.qualityOverlay then
+                    SetQualityOverlay(frame.qualityOverlay, items[1].craftedQuality, frame:GetWidth())
+                end
                 frame.count:Hide()
                 frame.stackCount:SetText(items[1].count)
                 frame.stackCount:Show()
@@ -2110,6 +2173,13 @@ UpdateDisplay = function()
                                         extra:SetParent(frame:GetParent())
                                         extra:SetSize(frame:GetWidth(), frame:GetHeight())
                                         extra.icon:SetTexture(items[i].icon)
+                                        if extra.qualityOverlay then
+                                            SetQualityOverlay(
+                                                extra.qualityOverlay,
+                                                items[i].craftedQuality,
+                                                frame:GetWidth()
+                                            )
+                                        end
                                         extra.stackCount:SetText(items[i].count)
                                         extra.stackCount:Show()
                                         extra.count:Hide()
@@ -2146,6 +2216,13 @@ UpdateDisplay = function()
                                         extra:SetParent(mainFrame)
                                         extra:SetSize(frame:GetWidth(), frame:GetHeight())
                                         extra.icon:SetTexture(items[i].icon)
+                                        if extra.qualityOverlay then
+                                            SetQualityOverlay(
+                                                extra.qualityOverlay,
+                                                items[i].craftedQuality,
+                                                frame:GetWidth()
+                                            )
+                                        end
                                         extra.stackCount:SetText(items[i].count)
                                         extra.stackCount:Show()
                                         extra.count:Hide()
