@@ -83,6 +83,7 @@ BR.BUFF_TABLES = {
             class = "WARLOCK",
             levelRequired = 13,
             missingText = "NO\nSTONE",
+            readyCheckOnly = true,
             infoTooltip = "Ready Check Only|This buff is only shown during ready checks.",
             noGlow = true,
         },

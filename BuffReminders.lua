@@ -527,7 +527,7 @@ end
 
 for catName, category in pairs(BUFF_TABLES) do
     for _, buff in ipairs(category) do
-        if not buff.enchantID and not buff.customCheck then
+        if not buff.enchantID and not buff.customCheck and not buff.readyCheckOnly then
             RegisterGlowBuff(buff, catName)
         end
     end
