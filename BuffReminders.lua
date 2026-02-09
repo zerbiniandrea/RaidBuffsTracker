@@ -838,6 +838,14 @@ local function CreateClickOverlay(frame)
     overlay:SetScript("OnLeave", function()
         GameTooltip:Hide()
     end)
+    -- Refresh display shortly after click so the consumed buff disappears quickly
+    overlay:SetScript("PostClick", function()
+        C_Timer.After(0.3, function()
+            if not InCombatLockdown() then
+                UpdateDisplay()
+            end
+        end)
+    end)
     frame.clickOverlay = overlay
 end
 
@@ -871,6 +879,14 @@ local function CreateActionButton()
         if not (cs and cs.clickable == true) then
             self:Hide()
         end
+    end)
+    -- Refresh display shortly after click so the consumed buff disappears quickly
+    btn:SetScript("PostClick", function()
+        C_Timer.After(0.3, function()
+            if not InCombatLockdown() then
+                UpdateDisplay()
+            end
+        end)
     end)
 
     btn.icon = btn:CreateTexture(nil, "ARTWORK")
