@@ -1957,7 +1957,9 @@ local function ResolveConsumableIcon(frame)
     end
 end
 
--- Render a single visible entry into its frame using the appropriate display type
+-- Render a single visible entry into its frame using the appropriate display type.
+-- Returns true if the frame was shown, false if it was skipped (e.g. consumable
+-- with no bag items and showConsumablesWithoutItems off).
 local function RenderVisibleEntry(frame, entry)
     -- Hide stack count and quality overlay by default; only the consumable-with-items path shows them
     frame.stackCount:Hide()
@@ -1974,7 +1976,7 @@ local function RenderVisibleEntry(frame, entry)
         frame:Show()
         SetExpirationGlow(frame, false)
         SetRebuffBorder(frame, false)
-        return
+        return true
     elseif frame._br_eating_icon then
         -- Transition from eating → not eating: restore the correct consumable icon
         frame._br_eating_icon = nil
@@ -2018,8 +2020,10 @@ local function RenderVisibleEntry(frame, entry)
             elseif (BuffRemindersDB.defaults or {}).showConsumablesWithoutItems then
                 ShowMissingFrame(frame, entry.missingText)
                 SetRebuffBorder(frame, false)
+            else
+                -- No items and setting is off: don't show the frame
+                return false
             end
-            -- No items and setting is off: don't show the frame
         else
             if entry.iconByRole then
                 local texture = GetBuffTexture(frame.spellIDs, entry.iconByRole)
@@ -2037,6 +2041,7 @@ local function RenderVisibleEntry(frame, entry)
         frame.count:Hide()
         frame.stackCount:Hide()
     end
+    return true
 end
 
 -- Render pet category entries (pet frames are non-secure and customCheck works in all contexts)
@@ -2157,8 +2162,10 @@ UpdateDisplay = function()
                 for _, entry in ipairs(entries) do
                     local frame = buffFrames[entry.key]
                     if frame then
-                        RenderVisibleEntry(frame, entry)
-                        frames[#frames + 1] = frame
+                        local shown = RenderVisibleEntry(frame, entry)
+                        if shown then
+                            frames[#frames + 1] = frame
+                        end
                         -- Consumable display modes: sub-icons or expanded (skip while eating)
                         if
                             entry.displayType == "missing"
@@ -2205,8 +2212,10 @@ UpdateDisplay = function()
                 for _, entry in ipairs(entries) do
                     local frame = buffFrames[entry.key]
                     if frame then
-                        RenderVisibleEntry(frame, entry)
-                        mainFrameBuffs[#mainFrameBuffs + 1] = frame
+                        local shown = RenderVisibleEntry(frame, entry)
+                        if shown then
+                            mainFrameBuffs[#mainFrameBuffs + 1] = frame
+                        end
                         -- Consumable display modes: sub-icons or expanded (skip while eating)
                         if
                             entry.displayType == "missing"
