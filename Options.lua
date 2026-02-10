@@ -2211,8 +2211,8 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         customBuffModal:Hide()
     end
 
-    local MODAL_WIDTH = 340
-    local BASE_HEIGHT = 409
+    local MODAL_WIDTH = 460
+    local BASE_HEIGHT = 380
     local ROW_HEIGHT = 26
     local CONTENT_LEFT = 20
     local ROWS_START_Y = -60
@@ -2271,7 +2271,8 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     spellRows = {}
 
     local addSpellBtn, sectionsFrame
-    local showWhenActiveToggle, glowModeDropdown
+    local showIconToggle
+    local glowModeDropdown, requireSpellKnownToggle
     local classDropdownHolder
     local specDropdownHolder
 
@@ -2395,92 +2396,53 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
 
     -- Sections frame (always visible, below add-spell button)
     sectionsFrame = CreateFrame("Frame", nil, modal)
-    sectionsFrame:SetSize(MODAL_WIDTH - 40, 240)
+    sectionsFrame:SetSize(MODAL_WIDTH - 40, 280)
 
-    local function CreateSeparator(parent, yOff)
+    local function CreateSeparator(parent, yOff, width)
         local line = parent:CreateTexture(nil, "ARTWORK")
         line:SetHeight(1)
         line:SetPoint("TOPLEFT", 0, yOff)
-        line:SetPoint("RIGHT", 0, 0)
+        if width then
+            line:SetWidth(width)
+        else
+            line:SetPoint("RIGHT", 0, 0)
+        end
         line:SetColorTexture(0.25, 0.25, 0.25, 0.8)
     end
 
-    -- Display section
-    CreateSeparator(sectionsFrame, 0)
-    local displayLabel = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    displayLabel:SetPoint("TOPLEFT", 0, -9)
-    displayLabel:SetText("Display")
+    -- Define column widths
+    local LEFT_COL_WIDTH = 200
+    local RIGHT_COL_X = LEFT_COL_WIDTH + 10
+
+    -- Left column: Display section
+    CreateSeparator(sectionsFrame, 0, LEFT_COL_WIDTH)
+    CreateSectionHeader(sectionsFrame, "DISPLAY", 0, -9)
 
     local nameHolder = Components.TextInput(sectionsFrame, {
-        label = "Display Name:",
+        label = "Name:",
         value = editingBuff and editingBuff.name or "",
-        width = 150,
-        labelWidth = 85,
+        width = 140,
+        labelWidth = 50,
     })
-    nameHolder:SetPoint("TOPLEFT", 0, -25)
+    nameHolder:SetPoint("TOPLEFT", 0, -30)
     nameBox = nameHolder.editBox
 
     local missingHolder = Components.TextInput(sectionsFrame, {
-        label = "Missing Text:",
+        label = "Text:",
         value = editingBuff and editingBuff.missingText and editingBuff.missingText:gsub("\n", "\\n") or "",
-        width = 80,
-        labelWidth = 85,
+        width = 140,
+        labelWidth = 50,
     })
-    missingHolder:SetPoint("TOPLEFT", 0, -49)
+    missingHolder:SetPoint("TOPLEFT", 0, -54)
     missingBox = missingHolder.editBox
 
     local missingHint = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    missingHint:SetPoint("LEFT", missingHolder, "RIGHT", 5, 0)
-    missingHint:SetText("(use \\n for newline)")
+    missingHint:SetPoint("TOPLEFT", 0, -74)
+    missingHint:SetText("(use \\n for line break)")
 
-    -- Behavior section
-    CreateSeparator(sectionsFrame, -73)
-    local behaviorLabel = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    behaviorLabel:SetPoint("TOPLEFT", 0, -82)
-    behaviorLabel:SetText("Behavior")
-
-    showWhenActiveToggle = Components.Toggle(sectionsFrame, {
-        label = editingBuff and editingBuff.showWhenPresent and "Show when active" or "Show when missing",
-        checked = editingBuff and editingBuff.showWhenPresent or false,
-        onChange = function(isChecked)
-            if isChecked then
-                showWhenActiveToggle.label:SetText("Show when active")
-                missingHolder.label:SetText("Active Text:")
-            else
-                showWhenActiveToggle.label:SetText("Show when missing")
-                missingHolder.label:SetText("Missing Text:")
-            end
-        end,
-    })
-    showWhenActiveToggle:SetPoint("TOPLEFT", 0, -98)
-    if editingBuff and editingBuff.showWhenPresent then
-        missingHolder.label:SetText("Active Text:")
-    end
-
-    local glowModeOptions = {
-        { value = "whenGlowing", label = "Detect when glowing" },
-        { value = "whenNotGlowing", label = "Detect when not glowing" },
-        { value = "disabled", label = "Disabled" },
-    }
-    local currentGlowMode = editingBuff and editingBuff.glowMode or "whenGlowing"
-    glowModeDropdown = Components.Dropdown(sectionsFrame, {
-        label = "Action bar glow:",
-        options = glowModeOptions,
-        selected = currentGlowMode,
-        width = 175,
-        tooltip = {
-            title = "Action bar glow fallback",
-            desc = "Controls how this buff is detected via action bar spell glows during M+/PvP/combat (when buff API is restricted). Disable if you only want to track via buff presence.",
-        },
-        onChange = function() end,
-    })
-    glowModeDropdown:SetPoint("TOPLEFT", 0, -120)
-
-    -- Filtering section
-    CreateSeparator(sectionsFrame, -152)
-    local filteringLabel = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    filteringLabel:SetPoint("TOPLEFT", 0, -161)
-    filteringLabel:SetText("Filtering")
+    -- Left column: Restrictions section
+    CreateSeparator(sectionsFrame, -90, LEFT_COL_WIDTH)
+    CreateSectionHeader(sectionsFrame, "RESTRICTIONS", 0, -99)
 
     local classOptions = {
         { value = nil, label = "Any" },
@@ -2512,31 +2474,78 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             return
         end
         specDropdownHolder = Components.Dropdown(sectionsFrame, {
-            label = "Only for spec:",
+            label = "Spec:",
             options = specOptions,
             selected = selectedSpecId,
-            width = 130,
+            width = 140,
             onChange = function() end,
         })
-        specDropdownHolder:SetPoint("TOPLEFT", 0, -205)
+        specDropdownHolder:SetPoint("TOPLEFT", 0, -144)
     end
 
     classDropdownHolder = Components.Dropdown(sectionsFrame, {
-        label = "Only for class:",
+        label = "Class:",
         options = classOptions,
         selected = editingBuff and editingBuff.class or nil,
-        width = 130,
+        width = 140,
         maxItems = 10,
         onChange = function(value)
             CreateSpecDropdown(value, nil)
         end,
     }, "BuffRemindersCustomClassDropdown")
-    classDropdownHolder:SetPoint("TOPLEFT", 0, -177)
+    classDropdownHolder:SetPoint("TOPLEFT", 0, -120)
 
     -- Initialize spec dropdown for editing existing buff
     if editingBuff and editingBuff.class then
         CreateSpecDropdown(editingBuff.class, editingBuff.requireSpecId)
     end
+
+    -- Right column: Visibility section
+    CreateSeparator(sectionsFrame, 0, LEFT_COL_WIDTH)
+    CreateSectionHeader(sectionsFrame, "VISIBILITY", RIGHT_COL_X, -9)
+
+    showIconToggle = Components.Toggle(sectionsFrame, {
+        label = editingBuff and editingBuff.showWhenPresent and "When active" or "When missing",
+        checked = editingBuff and editingBuff.showWhenPresent or false,
+        onChange = function(isChecked)
+            if isChecked then
+                showIconToggle.label:SetText("When active")
+            else
+                showIconToggle.label:SetText("When missing")
+            end
+        end,
+    })
+    showIconToggle:SetPoint("TOPLEFT", RIGHT_COL_X, -30)
+
+    requireSpellKnownToggle = Components.Toggle(sectionsFrame, {
+        label = "Only if spell known",
+        checked = editingBuff and editingBuff.requireSpellKnown or false,
+        onChange = function() end,
+    })
+    requireSpellKnownToggle:SetPoint("TOPLEFT", RIGHT_COL_X, -52)
+
+    -- Advanced section (full width)
+    CreateSeparator(sectionsFrame, -180)
+    CreateSectionHeader(sectionsFrame, "ADVANCED", 0, -189)
+
+    local glowModeOptions = {
+        { value = "whenGlowing", label = "Detect when glowing" },
+        { value = "whenNotGlowing", label = "Detect when not glowing" },
+        { value = "disabled", label = "Disabled" },
+    }
+    local currentGlowMode = editingBuff and editingBuff.glowMode or "whenGlowing"
+    glowModeDropdown = Components.Dropdown(sectionsFrame, {
+        label = "Action bar glow:",
+        options = glowModeOptions,
+        selected = currentGlowMode,
+        width = 175,
+        tooltip = {
+            title = "Action bar glow fallback",
+            desc = "Fallback detection using action bar spell glows during M+/PvP/combat when buff API is restricted. Disable if you only want buff presence tracking.",
+        },
+        onChange = function() end,
+    })
+    glowModeDropdown:SetPoint("TOPLEFT", 0, -210)
 
     local saveError = modal:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     saveError:SetPoint("BOTTOMLEFT", 20, 42)
@@ -2601,7 +2610,8 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             missingText = missingTextValue,
             class = classDropdownHolder:GetValue(),
             requireSpecId = specDropdownHolder and specDropdownHolder:GetValue() or nil,
-            showWhenPresent = showWhenActiveToggle:GetChecked() or nil,
+            showWhenPresent = showIconToggle:GetChecked() or nil,
+            requireSpellKnown = requireSpellKnownToggle:GetChecked() or nil,
             glowMode = glowModeDropdown:GetValue() ~= "whenGlowing" and glowModeDropdown:GetValue() or nil,
         }
 

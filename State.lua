@@ -992,7 +992,24 @@ function BuffState.Refresh()
         local entry = GetOrCreateEntry(buff.key, "custom", i)
         local settingKey = buff.groupId or buff.key
 
-        if IsBuffEnabled(settingKey) and customVisible then
+        local shouldProcess = IsBuffEnabled(settingKey) and customVisible
+
+        -- If requireSpellKnown is true, check if player knows at least one spell
+        if shouldProcess and buff.requireSpellKnown then
+            local spellIDs = type(buff.spellID) == "table" and buff.spellID or { buff.spellID }
+            local knowsAnySpell = false
+            for _, spellID in ipairs(spellIDs) do
+                if IsPlayerSpellCached(spellID) then
+                    knowsAnySpell = true
+                    break
+                end
+            end
+            if not knowsAnySpell then
+                shouldProcess = false
+            end
+        end
+
+        if shouldProcess then
             local shouldShow = ShouldShowSelfBuff(
                 buff.spellID,
                 buff.class,
