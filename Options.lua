@@ -1423,6 +1423,29 @@ local function CreateOptionsPanel()
         layoutHeader:SetText("|cffffcc00Layout|r")
         catLayout:AddText(layoutHeader, 12, COMPONENT_GAP)
 
+        -- Priority slider (only relevant when not split)
+        local priorityHolder = Components.Slider(catContent, {
+            label = "Priority",
+            min = 1,
+            max = 7,
+            step = 1,
+            get = function()
+                local cs = db.categorySettings and db.categorySettings[category]
+                return cs and cs.priority or defaults.categorySettings[category].priority
+            end,
+            enabled = function()
+                return not IsCategorySplit(category)
+            end,
+            tooltip = {
+                title = "Display Priority",
+                desc = "Controls the order of this category in the combined frame. Lower values are displayed first.",
+            },
+            onChange = function(val)
+                BR.Config.Set("categorySettings." .. category .. ".priority", val)
+            end,
+        })
+        catLayout:Add(priorityHolder, nil, COMPONENT_GAP)
+
         -- Split frame checkbox
         local splitHolder = Components.Checkbox(catContent, {
             label = "Split into separate frame",
@@ -1447,29 +1470,24 @@ local function CreateOptionsPanel()
         })
         catLayout:Add(splitHolder, nil, COMPONENT_GAP)
 
-        -- Priority slider (only relevant when not split)
-        local priorityHolder = Components.Slider(catContent, {
-            label = "Priority",
-            min = 1,
-            max = 7,
-            step = 1,
-            get = function()
-                local cs = db.categorySettings and db.categorySettings[category]
-                return cs and cs.priority or defaults.categorySettings[category].priority
-            end,
-            enabled = function()
-                return not IsCategorySplit(category)
-            end,
-            tooltip = {
-                title = "Display Priority",
-                desc = "Controls the order of this category in the combined frame. Lower values are displayed first.",
-            },
-            onChange = function(val)
-                BR.Config.Set("categorySettings." .. category .. ".priority", val)
-            end,
-        })
-        catLayout:SetX(10)
-        catLayout:Add(priorityHolder, nil, COMPONENT_GAP)
+        -- Reset position button (only relevant when split)
+        local resetBtn = CreateButton(catContent, "Reset Position", function()
+            local catDefaults = defaults.categorySettings[category]
+            if catDefaults and catDefaults.position then
+                ResetCategoryFramePosition(category, catDefaults.position.x, catDefaults.position.y)
+            end
+        end)
+        resetBtn:SetPoint("LEFT", splitHolder, "RIGHT", 10, 0)
+        resetBtn:SetEnabled(IsCategorySplit(category))
+
+        local origSplitClick = splitHolder.checkbox:GetScript("OnClick")
+        splitHolder.checkbox:SetScript("OnClick", function(self)
+            if origSplitClick then
+                origSplitClick(self)
+            end
+            resetBtn:SetEnabled(IsCategorySplit(category))
+            Components.RefreshAll()
+        end)
 
         -- Shared enabled predicates for this category
         local function isCategorySplitEnabled()
@@ -1482,41 +1500,6 @@ local function CreateOptionsPanel()
                 and db.categorySettings[category]
                 and db.categorySettings[category].useCustomAppearance == true
         end
-
-        -- Direction and Reset button on same line
-        local dirHolder = Components.DirectionButtons(catContent, {
-            get = function()
-                local catSettings = db.categorySettings and db.categorySettings[category]
-                local val = catSettings and catSettings.growDirection
-                if val ~= nil then
-                    return val
-                end
-                return db.defaults and db.defaults.growDirection or "CENTER"
-            end,
-            enabled = isCategorySplitEnabled,
-            onChange = function(dir)
-                BR.Config.Set("categorySettings." .. category .. ".growDirection", dir)
-            end,
-        })
-        catLayout:Add(dirHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
-
-        local resetBtn = CreateButton(catContent, "Reset Pos", function()
-            local catDefaults = defaults.categorySettings[category]
-            if catDefaults and catDefaults.position then
-                ResetCategoryFramePosition(category, catDefaults.position.x, catDefaults.position.y)
-            end
-        end)
-        resetBtn:SetPoint("LEFT", dirHolder, "RIGHT", 10, 0)
-        resetBtn:SetEnabled(IsCategorySplit(category))
-
-        local origSplitClick = splitHolder.checkbox:GetScript("OnClick")
-        splitHolder.checkbox:SetScript("OnClick", function(self)
-            if origSplitClick then
-                origSplitClick(self)
-            end
-            resetBtn:SetEnabled(IsCategorySplit(category))
-            Components.RefreshAll()
-        end)
 
         -- Use custom appearance checkbox
         catLayout:SetX(0)
@@ -1532,6 +1515,7 @@ local function CreateOptionsPanel()
                 title = "Use custom appearance",
                 desc = "When disabled, this category inherits appearance settings from Global Defaults",
             },
+            infoTooltip = "Custom appearance requires splitting|This category must be split into a separate frame to customize its appearance independently. Check 'Split into separate frame' above to enable this option.",
             onChange = function(checked)
                 if not db.categorySettings then
                     db.categorySettings = {}
@@ -1551,6 +1535,7 @@ local function CreateOptionsPanel()
                         "borderSize",
                         "iconAlpha",
                         "textAlpha",
+                        "growDirection",
                     }
                     if category == "consumable" then
                         appearanceKeys[#appearanceKeys + 1] = "glowType"
@@ -1586,7 +1571,26 @@ local function CreateOptionsPanel()
         })
         catLayout:Add(useCustomAppHolder, nil, COMPONENT_GAP)
 
+        -- Direction buttons (part of custom appearance)
+        catLayout:SetX(10)
+        local dirHolder = Components.DirectionButtons(catContent, {
+            get = function()
+                local catSettings = db.categorySettings and db.categorySettings[category]
+                local val = catSettings and catSettings.growDirection
+                if val ~= nil then
+                    return val
+                end
+                return db.defaults and db.defaults.growDirection or "CENTER"
+            end,
+            enabled = isCustomAppearanceEnabled,
+            onChange = function(dir)
+                BR.Config.Set("categorySettings." .. category .. ".growDirection", dir)
+            end,
+        })
+        catLayout:Add(dirHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
+
         -- Appearance controls (3-row grid with fixed columns)
+        catLayout:SetX(10)
         local appFrame = CreateFrame("Frame", nil, catContent)
         appFrame:SetSize(380, 50)
         catLayout:SetX(10)

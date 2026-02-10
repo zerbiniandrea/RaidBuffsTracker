@@ -374,6 +374,7 @@ local function GetCategorySettings(category)
         result.spacing = (catSettings and catSettings.spacing) or 0.2
         result.iconZoom = (catSettings and catSettings.iconZoom) or 8
         result.borderSize = (catSettings and catSettings.borderSize) or 2
+        result.growDirection = (catSettings and catSettings.growDirection) or "CENTER"
         result.glowType = (catSettings and catSettings.glowType) or 1
         result.glowColor = (catSettings and catSettings.glowColor) or { 0.95, 0.57, 0.07, 1 }
         result.showExpirationGlow = catSettings and catSettings.showExpirationGlow
@@ -387,17 +388,11 @@ local function GetCategorySettings(category)
         result.spacing = globalDefaults.spacing or 0.2
         result.iconZoom = globalDefaults.iconZoom or 8
         result.borderSize = globalDefaults.borderSize or 2
+        result.growDirection = globalDefaults.growDirection or "CENTER"
         result.glowType = globalDefaults.glowType or 1
         result.glowColor = globalDefaults.glowColor or { 0.95, 0.57, 0.07, 1 }
         result.showExpirationGlow = globalDefaults.showExpirationGlow
         result.expirationThreshold = globalDefaults.expirationThreshold
-    end
-
-    -- Direction: inherit from defaults unless split (split frames have their own direction)
-    if result.split then
-        result.growDirection = (catSettings and catSettings.growDirection) or globalDefaults.growDirection or "CENTER"
-    else
-        result.growDirection = globalDefaults.growDirection or "CENTER"
     end
 
     -- BUFF! text: direct per-category for raid only
@@ -3284,7 +3279,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         -- ====================================================================
         -- Versioned migrations — each runs exactly once, tracked by dbVersion
         -- ====================================================================
-        local DB_VERSION = 13
+        local DB_VERSION = 14
 
         local migrations = {
             -- [1] Consolidate all pre-versioning migrations (v2.8 → v3.x)
@@ -3619,6 +3614,43 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
                 defs.consumableRebuffWarning = nil
                 defs.consumableRebuffThreshold = nil
                 defs.consumableRebuffColor = nil
+            end,
+            -- [14] Tie growDirection to useCustomAppearance (was previously tied to split)
+            [14] = function()
+                if not db.categorySettings then
+                    return
+                end
+                local gd = db.defaults or {}
+                for _, catSettings in pairs(db.categorySettings) do
+                    -- Users who had split + custom direction but no custom appearance
+                    -- would lose their direction setting without this migration
+                    if catSettings.split and catSettings.growDirection ~= nil and not catSettings.useCustomAppearance then
+                        catSettings.useCustomAppearance = true
+                        -- Snapshot current global defaults so the category is fully independent
+                        if catSettings.iconSize == nil then
+                            catSettings.iconSize = gd.iconSize or 64
+                        end
+                        if catSettings.spacing == nil then
+                            catSettings.spacing = gd.spacing or 0.2
+                        end
+                        if catSettings.iconZoom == nil then
+                            catSettings.iconZoom = gd.iconZoom or 8
+                        end
+                        if catSettings.borderSize == nil then
+                            catSettings.borderSize = gd.borderSize or 2
+                        end
+                        if catSettings.iconAlpha == nil then
+                            catSettings.iconAlpha = gd.iconAlpha or 1
+                        end
+                        if catSettings.textAlpha == nil then
+                            catSettings.textAlpha = gd.textAlpha or 1
+                        end
+                        if catSettings.textColor == nil and gd.textColor then
+                            local tc = gd.textColor
+                            catSettings.textColor = { tc[1], tc[2], tc[3] }
+                        end
+                    end
+                end
             end,
         }
 
