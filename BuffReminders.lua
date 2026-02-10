@@ -3624,7 +3624,11 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
                 for _, catSettings in pairs(db.categorySettings) do
                     -- Users who had split + custom direction but no custom appearance
                     -- would lose their direction setting without this migration
-                    if catSettings.split and catSettings.growDirection ~= nil and not catSettings.useCustomAppearance then
+                    if
+                        catSettings.split
+                        and catSettings.growDirection ~= nil
+                        and not catSettings.useCustomAppearance
+                    then
                         catSettings.useCustomAppearance = true
                         -- Snapshot current global defaults so the category is fully independent
                         if catSettings.iconSize == nil then

@@ -203,6 +203,7 @@ end
 ---@field enabled? fun(): boolean Getter for enabled state, evaluated on Refresh()
 ---@field onChange fun(dir: string) Callback when direction changes
 ---@field width? number Dropdown width (default 90)
+---@field labelWidth? number Label width (default 70)
 
 ---@class CategoryHeaderConfig : ComponentConfig
 ---@field text string Header text
@@ -1343,6 +1344,7 @@ function Components.DirectionButtons(parent, config)
     local directions = { "LEFT", "CENTER", "RIGHT", "UP", "DOWN" }
     local dirLabels = { LEFT = "Left", CENTER = "Center", RIGHT = "Right", UP = "Up", DOWN = "Down" }
     local width = config.width or 90
+    local labelWidth = config.labelWidth or 70
 
     -- Build options array
     local options = {}
@@ -1352,11 +1354,13 @@ function Components.DirectionButtons(parent, config)
 
     -- Container frame
     local holder = CreateFrame("Frame", nil, parent)
-    holder:SetSize(70 + width + 10, 26)
+    holder:SetSize(labelWidth + width + 10, 26)
 
     -- Label
     local label = holder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     label:SetPoint("LEFT", 0, 0)
+    label:SetWidth(labelWidth)
+    label:SetJustifyH("LEFT")
     label:SetText(config.label or "Direction:")
     holder.label = label
 
@@ -1826,6 +1830,7 @@ end
 ---@field enabled? fun(): boolean Getter for enabled state, evaluated on Refresh()
 ---@field tooltip? string|{title: string, desc?: string} Tooltip on hover
 ---@field width? number Dropdown width (default 100)
+---@field labelWidth? number Label width (default 70)
 ---@field maxItems? number Max visible items before scrolling (nil = no limit)
 ---@field itemInit? fun(item: table, label: FontString, opt: table) Optional per-item setup callback
 ---@field onChange fun(value: any) Callback when selection changes
@@ -1837,14 +1842,17 @@ end
 ---@return table holder Frame containing dropdown with .SetValue(v), .GetValue(), .SetEnabled(bool)
 function Components.Dropdown(parent, config, _)
     local width = config.width or 100
+    local labelWidth = config.labelWidth or 70
 
     -- Container frame
     local holder = CreateFrame("Frame", nil, parent)
-    holder:SetSize(70 + width + 10, 26)
+    holder:SetSize(labelWidth + width + 10, 26)
 
     -- Label
     local label = holder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     label:SetPoint("LEFT", 0, 0)
+    label:SetWidth(labelWidth)
+    label:SetJustifyH("LEFT")
     label:SetText(config.label)
     holder.label = label
 

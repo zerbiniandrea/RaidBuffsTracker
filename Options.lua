@@ -816,6 +816,7 @@ local function CreateOptionsPanel()
 
     local defFontHolder = Components.Dropdown(appearanceContent, {
         label = "Font:",
+        labelWidth = 70,
         options = BuildFontOptions(),
         width = 200,
         maxItems = 15,
@@ -837,6 +838,7 @@ local function CreateOptionsPanel()
     appLayout:Add(defFontHolder, nil, COMPONENT_GAP)
 
     local defDirHolder = Components.DirectionButtons(appearanceContent, {
+        labelWidth = 70,
         get = function()
             return BuffRemindersDB.defaults and BuffRemindersDB.defaults.growDirection or "CENTER"
         end,
