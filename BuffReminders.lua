@@ -3441,6 +3441,7 @@ eventFrame:RegisterEvent("SPELLS_CHANGED")
 eventFrame:RegisterEvent("UNIT_PET")
 eventFrame:RegisterEvent("PET_BAR_UPDATE")
 eventFrame:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
+eventFrame:RegisterEvent("PET_STABLE_UPDATE")
 eventFrame:RegisterEvent("PLAYER_DIFFICULTY_CHANGED")
 eventFrame:RegisterEvent("PLAYER_UPDATE_RESTING")
 eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
@@ -3913,6 +3914,9 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         end
     elseif event == "PET_BAR_UPDATE" then
         UpdateDisplay()
+    elseif event == "PET_STABLE_UPDATE" then
+        BR.PetHelpers.InvalidatePetActions()
+        UpdateDisplay()
     elseif event == "PLAYER_MOUNT_DISPLAY_CHANGED" then
         UpdateDisplay()
     elseif event == "PLAYER_DIFFICULTY_CHANGED" then
@@ -3950,6 +3954,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         -- Invalidate caches when player changes spec
         InvalidatePlayerRoleCache()
         BR.BuffState.InvalidateSpellCache()
+        BR.PetHelpers.InvalidatePetActions()
         RefreshOverlaySpells()
         UpdateDisplay()
         -- Spells can become available shortly after spec swap; refresh once more
@@ -3962,11 +3967,13 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
     elseif event == "TRAIT_CONFIG_UPDATED" then
         -- Invalidate spell cache when talents change (within same spec)
         BR.BuffState.InvalidateSpellCache()
+        BR.PetHelpers.InvalidatePetActions()
         RefreshOverlaySpells()
         UpdateDisplay()
     elseif event == "SPELLS_CHANGED" then
         -- Catch delayed spell availability after spec/talent changes (noisy event, keep cheap)
         BR.BuffState.InvalidateSpellCache()
+        BR.PetHelpers.InvalidatePetActions()
     elseif event == "BAG_UPDATE_DELAYED" then
         InvalidateConsumableCache()
         UpdateDisplay()

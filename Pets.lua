@@ -123,29 +123,43 @@ local function BuildSingleAction(spellID)
     }
 end
 
----Build the list of pet summon actions for the given class.
----Returns nil if mounted, no actions found, or class has no pet logic.
+-- Cached pet actions (rebuilt on spec/talent/stable changes, not every refresh)
+local cachedActions = nil
+local cacheValid = false
+
+---Build and cache the list of pet summon actions for the given class.
+---Returns cached result on subsequent calls until invalidated.
 ---@param class ClassName
----@return PetAction[]?
-local function BuildPetActions(class)
-    if IsMounted() then
-        return nil
+---@return PetActionList?
+local function GetPetActions(class)
+    if cacheValid then
+        return cachedActions
     end
 
     if class == "HUNTER" then
-        return BuildHunterActions()
+        cachedActions = BuildHunterActions()
     elseif class == "WARLOCK" then
-        return BuildWarlockActions()
+        cachedActions = BuildWarlockActions()
     elseif class == "DEATHKNIGHT" then
-        return BuildSingleAction(46584) -- Raise Dead
+        cachedActions = BuildSingleAction(46584) -- Raise Dead
     elseif class == "MAGE" then
-        return BuildSingleAction(31687) -- Summon Water Elemental
+        cachedActions = BuildSingleAction(31687) -- Summon Water Elemental
+    else
+        cachedActions = nil
     end
 
-    return nil
+    cacheValid = true
+    return cachedActions
+end
+
+---Invalidate cached pet actions (call on spec/talent/stable changes).
+local function InvalidatePetActions()
+    cacheValid = false
+    cachedActions = nil
 end
 
 -- Export
 BR.PetHelpers = {
-    BuildPetActions = BuildPetActions,
+    GetPetActions = GetPetActions,
+    InvalidatePetActions = InvalidatePetActions,
 }

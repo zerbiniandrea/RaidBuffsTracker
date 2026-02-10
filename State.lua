@@ -942,7 +942,7 @@ function BuffState.Refresh()
                 entry.iconByRole = buff.iconByRole
                 -- Expanded pet actions (individual summon spell icons)
                 if buff.groupId == "pets" and BR.PetHelpers then
-                    local actions = BR.PetHelpers.BuildPetActions(playerClass)
+                    local actions = BR.PetHelpers.GetPetActions(playerClass)
                     if actions and #actions > 0 then
                         entry.petActions = actions
                     end
