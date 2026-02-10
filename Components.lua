@@ -1873,7 +1873,7 @@ function Components.Dropdown(parent, config, _)
         label:SetTextColor(color, color, color)
     end
 
-    -- Hover tooltip (same pattern as Checkbox)
+    -- Hover tooltip (attached to label only, not the entire holder)
     if config.tooltip then
         local tipTitle, tipDesc
         if type(config.tooltip) == "table" then
@@ -1882,12 +1882,12 @@ function Components.Dropdown(parent, config, _)
         else
             tipTitle = config.tooltip --[[@as string]]
         end
-        holder:EnableMouse(true)
+        label:EnableMouse(true)
         local function showTip()
-            ShowTooltip(holder, tipTitle, tipDesc, "ANCHOR_TOP")
+            ShowTooltip(label, tipTitle, tipDesc, "ANCHOR_TOP")
         end
-        holder:SetScript("OnEnter", showTip)
-        holder:SetScript("OnLeave", HideTooltip)
+        label:SetScript("OnEnter", showTip)
+        label:SetScript("OnLeave", HideTooltip)
     end
 
     -- Refresh method for OnShow pattern
