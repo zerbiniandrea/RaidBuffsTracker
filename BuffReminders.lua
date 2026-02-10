@@ -723,22 +723,28 @@ local ACTION_ICON_SCALE = 0.45
 local ACTION_ICON_MIN = 18
 local ACTION_ICON_Y_OFFSET = -6
 
--- Quality pip atlas names for crafted consumables (rank 1/2/3)
-local QUALITY_ATLAS = {
-    [1] = "Professions-Icon-Quality-Tier1-Inv",
-    [2] = "Professions-Icon-Quality-Tier2-Inv",
-    [3] = "Professions-Icon-Quality-Tier3-Inv",
+-- Quality text and colors for crafted consumables (rank 1/2/3)
+local QUALITY_INFO = {
+    [1] = { text = "R1", r = 0.73, g = 0.46, b = 0.26 }, -- Bronze
+    [2] = { text = "R2", r = 0.75, g = 0.75, b = 0.75 }, -- Silver
+    [3] = { text = "R3", r = 1.00, g = 0.82, b = 0.00 }, -- Gold
 }
 
----Set or hide a quality pip overlay texture based on crafted quality.
----@param overlay Texture The overlay texture to update
+---Set or hide a quality pip overlay text based on crafted quality.
+---@param overlay FontString The overlay text to update
 ---@param craftedQuality number? The crafted quality tier (1-3) or nil
----@param size number The parent icon size (pip is 50% of this)
+---@param size number The parent icon size (used for font sizing)
 local function SetQualityOverlay(overlay, craftedQuality, size)
-    local atlas = craftedQuality and QUALITY_ATLAS[craftedQuality]
-    if atlas then
-        overlay:SetAtlas(atlas)
-        overlay:SetSize(size * 0.5, size * 0.5)
+    local info = craftedQuality and QUALITY_INFO[craftedQuality]
+    if info then
+        -- Scale font with icon size (minimum 8px font)
+        local fontSize = math.max(8, size * 0.25)
+        overlay:SetFont(fontPath, fontSize, "OUTLINE")
+        overlay:SetText(info.text)
+        overlay:SetTextColor(info.r, info.g, info.b, 1)
+        -- Position in top-left corner, kept inside icon boundaries
+        overlay:ClearAllPoints()
+        overlay:SetPoint("TOPLEFT", overlay:GetParent(), "TOPLEFT", 2, -2)
         overlay:Show()
     else
         overlay:Hide()
@@ -783,8 +789,7 @@ local function CreateActionButton()
     btn.highlight:SetTexCoord(BR.TEXCOORD_INSET, 1 - BR.TEXCOORD_INSET, BR.TEXCOORD_INSET, 1 - BR.TEXCOORD_INSET)
     btn.highlight:SetColorTexture(1, 1, 1, 0.2)
 
-    btn.qualityOverlay = btn:CreateTexture(nil, "OVERLAY")
-    btn.qualityOverlay:SetPoint("TOPLEFT", 1, -1)
+    btn.qualityOverlay = btn:CreateFontString(nil, "OVERLAY")
     btn.qualityOverlay:Hide()
 
     return btn
@@ -1210,8 +1215,7 @@ local function CreateBuffFrame(buff, category)
     local texture = iconOverride or GetBuffTexture(buff.spellID, buff.iconByRole)
     CreateIconTextures(frame, texture)
 
-    frame.qualityOverlay = frame:CreateTexture(nil, "OVERLAY")
-    frame.qualityOverlay:SetPoint("TOPLEFT", 5, -4)
+    frame.qualityOverlay = frame:CreateFontString(nil, "OVERLAY")
     frame.qualityOverlay:Hide()
 
     -- Register with Masque (Normal = false: we handle borders, Masque handles TexCoord)
@@ -1298,8 +1302,7 @@ local function GetOrCreateExtraFrame(frame, index)
 
     CreateIconTextures(extra, nil)
 
-    extra.qualityOverlay = extra:CreateTexture(nil, "OVERLAY")
-    extra.qualityOverlay:SetPoint("TOPLEFT", 5, -4)
+    extra.qualityOverlay = extra:CreateFontString(nil, "OVERLAY")
     extra.qualityOverlay:Hide()
 
     if masqueGroup then
