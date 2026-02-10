@@ -526,7 +526,8 @@ end
 
 for catName, category in pairs(BUFF_TABLES) do
     for _, buff in ipairs(category) do
-        if not buff.enchantID and not buff.customCheck and not buff.readyCheckOnly then
+        -- Skip if: has enchantID, customCheck, readyCheckOnly, or glowMode disabled (custom buffs only)
+        if not buff.enchantID and not buff.customCheck and not buff.readyCheckOnly and buff.glowMode ~= "disabled" then
             RegisterGlowBuff(buff, catName)
         end
     end
@@ -1670,14 +1671,15 @@ UpdateFallbackDisplay = function()
         return
     end
 
-    -- Show frames for any glowing spells (skip invertGlow buffs — handled in second pass)
+    -- Show frames for any glowing spells (skip whenNotGlowing buffs — handled in second pass)
     local seenKeys = {}
     local GetPlayerSpecId = BR.StateHelpers.GetPlayerSpecId
     for spellID, _ in pairs(glowingSpells) do
         local entry = glowSpellToBuff[spellID]
         if entry then
             local buff = entry.buff
-            if not buff.invertGlow and (not buff.class or buff.class == playerClass) and not seenKeys[buff.key] then
+            local mode = buff.glowMode or "whenGlowing"
+            if mode == "whenGlowing" and (not buff.class or buff.class == playerClass) and not seenKeys[buff.key] then
                 -- Skip targeted buffs when solo (they require a group target)
                 local skipSolo = entry.category == "targeted" and GetNumGroupMembers() == 0
                 -- Skip buffs requiring a specific spec
@@ -1693,17 +1695,17 @@ UpdateFallbackDisplay = function()
         end
     end
 
-    -- Second pass: show invertGlow buffs where NONE of their spells are glowing
+    -- Second pass: show whenNotGlowing buffs where NONE of their spells are glowing
     local invertedHasGlow = {}
     for spellID, _ in pairs(glowingSpells) do
         local entry = glowSpellToBuff[spellID]
-        if entry and entry.buff.invertGlow then
+        if entry and (entry.buff.glowMode == "whenNotGlowing") then
             invertedHasGlow[entry.buff.key] = true
         end
     end
     for _, entry in pairs(glowSpellToBuff) do
         local buff = entry.buff
-        if buff.invertGlow and not seenKeys[buff.key] and not invertedHasGlow[buff.key] then
+        if buff.glowMode == "whenNotGlowing" and not seenKeys[buff.key] and not invertedHasGlow[buff.key] then
             seenKeys[buff.key] = true
             if not buff.class or buff.class == playerClass then
                 local skipSpec = buff.requireSpecId and GetPlayerSpecId() ~= buff.requireSpecId
@@ -2546,7 +2548,10 @@ local function CreateCustomBuffFrameRuntime(customBuff)
     local frame = CreateBuffFrame(customBuff, "custom")
     buffFrames[customBuff.key] = frame
     table.insert(CustomBuffs, customBuff)
-    RegisterGlowBuff(customBuff, "custom")
+    -- Only register for glow tracking if glowMode is not disabled
+    if customBuff.glowMode ~= "disabled" then
+        RegisterGlowBuff(customBuff, "custom")
+    end
 end
 
 -- Reparent all buff frames to appropriate parent based on split status
@@ -2611,7 +2616,7 @@ BR.CustomBuffs = {
     UpdateFrame = function(key, spellIDValue, displayName)
         local frame = buffFrames[key]
         if frame then
-            -- Re-register glow lookup with new spellID
+            -- Re-register glow lookup with new spellID (unregister old, then conditionally re-register)
             UnregisterGlowSpell(frame.spellIDs)
             local texture = GetBuffTexture(spellIDValue)
             if texture then
@@ -2622,7 +2627,7 @@ BR.CustomBuffs = {
             -- Rebuild array (modal creates a new object for db.customBuffs[key], staling the old ref)
             BuildCustomBuffArray()
             local customBuff = BuffRemindersDB and BuffRemindersDB.customBuffs and BuffRemindersDB.customBuffs[key]
-            if customBuff then
+            if customBuff and customBuff.glowMode ~= "disabled" then
                 RegisterGlowBuff(customBuff, "custom")
             end
         end
@@ -3279,7 +3284,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         -- ====================================================================
         -- Versioned migrations — each runs exactly once, tracked by dbVersion
         -- ====================================================================
-        local DB_VERSION = 14
+        local DB_VERSION = 15
 
         local migrations = {
             -- [1] Consolidate all pre-versioning migrations (v2.8 → v3.x)
@@ -3656,6 +3661,18 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
                     end
                 end
             end,
+            -- [15] Migrate invertGlow boolean to glowMode enum
+            [15] = function()
+                if not db.customBuffs then
+                    return
+                end
+                for _, buff in pairs(db.customBuffs) do
+                    if buff.invertGlow then
+                        buff.glowMode = "whenNotGlowing"
+                    end
+                    buff.invertGlow = nil
+                end
+            end,
         }
 
         -- Run pending migrations
@@ -3685,7 +3702,9 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
 
         -- Register custom buffs in glow fallback lookup (so they work in M+/combat)
         for _, customBuff in ipairs(CustomBuffs) do
-            RegisterGlowBuff(customBuff, "custom")
+            if customBuff.glowMode ~= "disabled" then
+                RegisterGlowBuff(customBuff, "custom")
+            end
         end
 
         -- Set up metatable so db.defaults inherits from code defaults

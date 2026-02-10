@@ -2271,7 +2271,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     spellRows = {}
 
     local addSpellBtn, sectionsFrame
-    local showWhenActiveToggle, invertGlowToggle
+    local showWhenActiveToggle, glowModeDropdown
     local classDropdownHolder
     local specDropdownHolder
 
@@ -2457,23 +2457,29 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         missingHolder.label:SetText("Active Text:")
     end
 
-    invertGlowToggle = Components.Toggle(sectionsFrame, {
-        label = editingBuff and editingBuff.invertGlow and "Detect when not glowing" or "Detect when glowing",
-        checked = not (editingBuff and editingBuff.invertGlow or false),
-        onChange = function(isChecked)
-            if isChecked then
-                invertGlowToggle.label:SetText("Detect when glowing")
-            else
-                invertGlowToggle.label:SetText("Detect when not glowing")
-            end
-        end,
+    local glowModeOptions = {
+        { value = "whenGlowing", label = "Detect when glowing" },
+        { value = "whenNotGlowing", label = "Detect when not glowing" },
+        { value = "disabled", label = "Disabled" },
+    }
+    local currentGlowMode = editingBuff and editingBuff.glowMode or "whenGlowing"
+    glowModeDropdown = Components.Dropdown(sectionsFrame, {
+        label = "Action bar glow:",
+        options = glowModeOptions,
+        selected = currentGlowMode,
+        width = 175,
+        tooltip = {
+            title = "Action bar glow fallback",
+            desc = "Controls how this buff is detected via action bar spell glows during M+/PvP/combat (when buff API is restricted). Disable if you only want to track via buff presence.",
+        },
+        onChange = function() end,
     })
-    invertGlowToggle:SetPoint("TOPLEFT", 0, -120)
+    glowModeDropdown:SetPoint("TOPLEFT", 0, -120)
 
     -- Filtering section
-    CreateSeparator(sectionsFrame, -144)
+    CreateSeparator(sectionsFrame, -152)
     local filteringLabel = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    filteringLabel:SetPoint("TOPLEFT", 0, -153)
+    filteringLabel:SetPoint("TOPLEFT", 0, -161)
     filteringLabel:SetText("Filtering")
 
     local classOptions = {
@@ -2512,7 +2518,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             width = 130,
             onChange = function() end,
         })
-        specDropdownHolder:SetPoint("TOPLEFT", 0, -197)
+        specDropdownHolder:SetPoint("TOPLEFT", 0, -205)
     end
 
     classDropdownHolder = Components.Dropdown(sectionsFrame, {
@@ -2525,7 +2531,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             CreateSpecDropdown(value, nil)
         end,
     }, "BuffRemindersCustomClassDropdown")
-    classDropdownHolder:SetPoint("TOPLEFT", 0, -169)
+    classDropdownHolder:SetPoint("TOPLEFT", 0, -177)
 
     -- Initialize spec dropdown for editing existing buff
     if editingBuff and editingBuff.class then
@@ -2596,7 +2602,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             class = classDropdownHolder:GetValue(),
             requireSpecId = specDropdownHolder and specDropdownHolder:GetValue() or nil,
             showWhenPresent = showWhenActiveToggle:GetChecked() or nil,
-            invertGlow = (not invertGlowToggle:GetChecked()) or nil,
+            glowMode = glowModeDropdown:GetValue() ~= "whenGlowing" and glowModeDropdown:GetValue() or nil,
         }
 
         BuffRemindersDB.customBuffs[key] = customBuff
