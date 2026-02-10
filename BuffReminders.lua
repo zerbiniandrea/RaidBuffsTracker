@@ -124,8 +124,7 @@ local defaults = {
         burningRush = false,
     },
     showOnlyInGroup = false,
-    showOnlyPlayerClassBuff = false,
-    showOnlyPlayerMissing = false,
+    buffTrackingMode = "all",
     showOnlyOnReadyCheck = false,
     hidePetWhileMounted = true,
     petPassiveOnlyInCombat = false,
@@ -3499,7 +3498,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         -- ====================================================================
         -- Versioned migrations — each runs exactly once, tracked by dbVersion
         -- ====================================================================
-        local DB_VERSION = 10
+        local DB_VERSION = 11
 
         local migrations = {
             -- [1] Consolidate all pre-versioning migrations (v2.8 → v3.x)
@@ -3761,6 +3760,22 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
             -- [10] Clean up consumableItems (no longer user-configured; bag scanning replaces manual config)
             [10] = function()
                 db.consumableItems = nil
+            end,
+
+            -- [11] Migrate showOnlyPlayerClassBuff/showOnlyPlayerMissing to buffTrackingMode
+            [11] = function()
+                local classBuff = db.showOnlyPlayerClassBuff
+                local playerMissing = db.showOnlyPlayerMissing
+                if classBuff then
+                    db.buffTrackingMode = "my_buffs"
+                elseif playerMissing then
+                    db.buffTrackingMode = "personal"
+                else
+                    db.buffTrackingMode = "all"
+                end
+                -- Clean up old keys
+                db.showOnlyPlayerClassBuff = nil
+                db.showOnlyPlayerMissing = nil
             end,
         }
 

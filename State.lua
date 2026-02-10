@@ -713,7 +713,8 @@ local function PassesPreChecks(buff, presentClasses, db)
 
     -- Class filtering
     if buff.class then
-        if db.showOnlyPlayerClassBuff and buff.class ~= playerClass then
+        local trackingMode = db.buffTrackingMode
+        if trackingMode == "my_buffs" and buff.class ~= playerClass then
             return false
         end
         if presentClasses and not presentClasses[buff.class] then
@@ -802,7 +803,7 @@ function BuffState.Refresh()
     currentWeaponEnchants.hasOffHand = hasOff or false
     currentWeaponEnchants.offHandID = offID
 
-    local playerOnly = db.showOnlyPlayerMissing
+    local trackingMode = db.buffTrackingMode
     -- TODO: make glow truly global — currently only raid/presence buffs track time remaining,
     -- so targeted/self/consumable/custom buffs never glow. Add expiration tracking to all categories.
     local glowDefaults = db.defaults or {}
@@ -814,17 +815,18 @@ function BuffState.Refresh()
     for i, buff in ipairs(RaidBuffs) do
         local entry = GetOrCreateEntry(buff.key, "raid", i)
         local hasCaster = HasCasterForBuff(buff.class, buff.levelRequired)
-        local showBuff = raidVisible and (not db.showOnlyPlayerClassBuff or buff.class == playerClass) and hasCaster
+        local showBuff = raidVisible and (trackingMode ~= "my_buffs" or buff.class == playerClass) and hasCaster
 
         if IsBuffEnabled(buff.key) and showBuff then
-            local missing, total, minRemaining = CountMissingBuff(buff.spellID, buff.key, playerOnly)
+            local buffPlayerOnly = trackingMode == "personal" or (trackingMode == "smart" and buff.class ~= playerClass)
+            local missing, total, minRemaining = CountMissingBuff(buff.spellID, buff.key, buffPlayerOnly)
             local expiringSoon = showExpirationGlow and minRemaining and minRemaining < expirationThreshold
 
             if missing > 0 then
                 entry.visible = true
                 entry.displayType = "count"
                 local buffed = total - missing
-                entry.countText = playerOnly and "" or (buffed .. "/" .. total)
+                entry.countText = buffPlayerOnly and "" or (buffed .. "/" .. total)
                 entry.shouldGlow = expiringSoon or false
                 if expiringSoon and minRemaining then
                     entry.expiringTime = minRemaining
@@ -847,11 +849,12 @@ function BuffState.Refresh()
         local hasCaster = HasCasterForBuff(buff.class, buff.levelRequired)
         local showBuff = presenceVisible
             and (not readyCheckOnly or inReadyCheck)
-            and (not db.showOnlyPlayerClassBuff or buff.class == playerClass)
+            and (trackingMode ~= "my_buffs" or buff.class == playerClass)
             and hasCaster
 
         if IsBuffEnabled(buff.key) and showBuff then
-            local count, minRemaining = CountPresenceBuff(buff.spellID, playerOnly)
+            local buffPlayerOnly = trackingMode == "personal" or (trackingMode == "smart" and buff.class ~= playerClass)
+            local count, minRemaining = CountPresenceBuff(buff.spellID, buffPlayerOnly)
             local expiringSoon = showExpirationGlow
                 and not buff.noGlow
                 and minRemaining

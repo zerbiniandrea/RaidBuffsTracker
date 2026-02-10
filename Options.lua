@@ -1845,31 +1845,44 @@ local function CreateOptionsPanel()
     setLayout:Add(readyDurationHolder, nil, COMPONENT_GAP)
     setLayout:SetX(setX)
 
-    local playerClassHolder = Components.Checkbox(settingsContent, {
-        label = "Show only my class buffs",
+    local trackingModeHolder = Components.Dropdown(settingsContent, {
+        label = "Buff tracking",
+        width = 200,
+        options = {
+            {
+                value = "all",
+                label = "All buffs, all players",
+                desc = "Show all raid and presence buffs for every class, tracking full group coverage.",
+            },
+            {
+                value = "my_buffs",
+                label = "Only my buffs, all players",
+                desc = "Only show buffs your class can provide. Still tracks full group coverage.",
+            },
+            {
+                value = "personal",
+                label = "Only buffs I need",
+                desc = "Show all buff types, but only check whether you personally have them. No group counts.",
+            },
+            {
+                value = "smart",
+                label = "Smart",
+                desc = "Buffs your class provides track full group coverage. Other class buffs only check you personally.",
+            },
+        },
         get = function()
-            return BuffRemindersDB.showOnlyPlayerClassBuff == true
+            return BuffRemindersDB.buffTrackingMode
         end,
-        tooltip = { title = "Show only my class buffs", desc = "Only show buffs that your class can provide" },
-        onChange = function(checked)
-            BuffRemindersDB.showOnlyPlayerClassBuff = checked
+        tooltip = {
+            title = "Buff tracking mode",
+            desc = "Controls which raid and presence buffs are shown, and whether they track the full group or only you.",
+        },
+        onChange = function(val)
+            BuffRemindersDB.buffTrackingMode = val
             UpdateDisplay()
         end,
     })
-    setLayout:Add(playerClassHolder, nil, COMPONENT_GAP)
-
-    local playerMissingHolder = Components.Checkbox(settingsContent, {
-        label = "Show only buffs I'm missing",
-        get = function()
-            return BuffRemindersDB.showOnlyPlayerMissing == true
-        end,
-        tooltip = { title = "Show only buffs I'm missing", desc = "Only show buffs you personally are missing" },
-        onChange = function(checked)
-            BuffRemindersDB.showOnlyPlayerMissing = checked
-            UpdateDisplay()
-        end,
-    })
-    setLayout:Add(playerMissingHolder, nil, COMPONENT_GAP)
+    setLayout:Add(trackingModeHolder, nil, COMPONENT_GAP)
 
     local loginMsgHolder = Components.Checkbox(settingsContent, {
         label = "Show login messages",

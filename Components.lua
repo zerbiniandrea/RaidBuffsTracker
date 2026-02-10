@@ -1231,9 +1231,15 @@ local function CreateDropdownCore(parent, width, options, initialValue, onChange
 
         item:SetScript("OnEnter", function()
             UpdateItemVisual(true)
+            if opt.desc then
+                ShowTooltip(item, opt.label, opt.desc, "ANCHOR_RIGHT")
+            end
         end)
         item:SetScript("OnLeave", function()
             UpdateItemVisual(false)
+            if opt.desc then
+                HideTooltip()
+            end
         end)
         item:SetScript("OnClick", function()
             currentValue = opt.value
@@ -1808,6 +1814,7 @@ end
 ---@class DropdownOption
 ---@field label string Display text
 ---@field value any Value to pass to callback
+---@field desc? string Optional description shown as tooltip on hover
 
 ---@class DropdownConfig : ComponentConfig
 ---@field label string Label text
@@ -1815,6 +1822,7 @@ end
 ---@field selected? any Initial selected value (deprecated: prefer get)
 ---@field get? fun(): any Getter for initial value and refresh (preferred over selected)
 ---@field enabled? fun(): boolean Getter for enabled state, evaluated on Refresh()
+---@field tooltip? string|{title: string, desc?: string} Tooltip on hover
 ---@field width? number Dropdown width (default 100)
 ---@field maxItems? number Max visible items before scrolling (nil = no limit)
 ---@field itemInit? fun(item: table, label: FontString, opt: table) Optional per-item setup callback
@@ -1861,6 +1869,23 @@ function Components.Dropdown(parent, config, _)
         dropdown:SetEnabled(enabled)
         local color = enabled and 1 or 0.5
         label:SetTextColor(color, color, color)
+    end
+
+    -- Hover tooltip (same pattern as Checkbox)
+    if config.tooltip then
+        local tipTitle, tipDesc
+        if type(config.tooltip) == "table" then
+            tipTitle = config.tooltip.title
+            tipDesc = config.tooltip.desc
+        else
+            tipTitle = config.tooltip --[[@as string]]
+        end
+        holder:EnableMouse(true)
+        local function showTip()
+            ShowTooltip(holder, tipTitle, tipDesc, "ANCHOR_TOP")
+        end
+        holder:SetScript("OnEnter", showTip)
+        holder:SetScript("OnLeave", HideTooltip)
     end
 
     -- Refresh method for OnShow pattern
