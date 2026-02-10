@@ -788,7 +788,7 @@ function BuffState.Refresh()
         entry.countText = nil
         entry.missingText = nil
         entry.expiringTime = nil
-        entry.rebuffWarning = nil
+        entry.rebuffWarning = nil -- legacy field, still cleared for safety
         entry.isEating = nil
         entry.petActions = nil
     end
@@ -956,8 +956,8 @@ function BuffState.Refresh()
 
     -- Process consumable buffs
     local consumableVisible = IsCategoryVisibleForContent("consumable")
-    local rebuffWarning = (db.defaults and db.defaults.consumableRebuffWarning) ~= false
-    local rebuffThreshold = ((db.defaults and db.defaults.consumableRebuffThreshold) or 10) * 60
+    local consumableGlowEnabled = BR.Config.GetCategorySetting("consumable", "showExpirationGlow") ~= false
+    local consumableGlowThreshold = (BR.Config.GetCategorySetting("consumable", "expirationThreshold") or 15) * 60
     for i, buff in ipairs(Consumables) do
         local entry = GetOrCreateEntry(buff.key, "consumable", i)
         local settingKey = buff.groupId or buff.key
@@ -970,13 +970,13 @@ function BuffState.Refresh()
                 entry.visible = true
                 entry.displayType = "missing"
                 entry.missingText = buff.missingText
-            elseif rebuffWarning and remainingTime and remainingTime < rebuffThreshold then
+            elseif consumableGlowEnabled and remainingTime and remainingTime < consumableGlowThreshold then
                 -- Consumable is present but expiring soon
                 entry.visible = true
                 entry.displayType = "expiring"
                 entry.expiringTime = remainingTime
                 entry.countText = FormatRemainingTime(remainingTime)
-                entry.rebuffWarning = true
+                entry.shouldGlow = true
             end
             -- Eating state for food entries (display uses this for icon override)
             if entry.visible and buff.key == "food" then

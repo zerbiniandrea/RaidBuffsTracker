@@ -80,6 +80,10 @@ local CategorySettingKeys = {
     iconAlpha = "VisualsRefresh",
     textAlpha = "VisualsRefresh",
     textColor = "VisualsRefresh",
+    glowType = "VisualsRefresh",
+    glowColor = "VisualsRefresh",
+    showExpirationGlow = "VisualsRefresh",
+    expirationThreshold = "VisualsRefresh",
     spacing = "LayoutRefresh",
     growDirection = "LayoutRefresh",
     -- Layout
@@ -111,11 +115,7 @@ local DefaultSettingKeys = {
     expirationThreshold = "VisualsRefresh",
     glowType = "VisualsRefresh",
     glowColor = "VisualsRefresh",
-    -- Consumable rebuff warning
     showConsumablesWithoutItems = "DisplayRefresh",
-    consumableRebuffWarning = "DisplayRefresh",
-    consumableRebuffThreshold = "DisplayRefresh",
-    consumableRebuffColor = "VisualsRefresh",
     -- Consumable display mode
     consumableDisplayMode = "DisplayRefresh",
     -- Pet display mode
@@ -215,6 +215,10 @@ local function ValidatePath(segments)
                 "iconAlpha",
                 "textAlpha",
                 "textColor",
+                "glowType",
+                "glowColor",
+                "showExpirationGlow",
+                "expirationThreshold",
                 "spacing",
                 "growDirection",
                 "showBuffReminder",
@@ -437,6 +441,10 @@ local AppearanceKeys = {
     spacing = true,
     iconZoom = true,
     borderSize = true,
+    glowType = true,
+    glowColor = true,
+    showExpirationGlow = true,
+    expirationThreshold = true,
 }
 
 ---Get a category setting with inheritance from defaults

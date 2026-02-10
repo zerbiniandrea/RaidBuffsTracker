@@ -141,7 +141,6 @@ end
 -- ============================================================================
 
 local EXPIRATION_KEY = "BR_expiration"
-local REBUFF_KEY = "BR_rebuff"
 
 -- Per-frame glow state key (avoids polluting frame namespace with multiple keys)
 local GLOW_STATE_KEY = "_brGlowState"
@@ -149,13 +148,20 @@ local GLOW_STATE_KEY = "_brGlowState"
 ---Show/hide expiration glow on a buff frame (reads type + color from DB)
 ---@param frame table
 ---@param show boolean
-function BR.Glow.SetExpiration(frame, show)
+---@param category? string Category name for per-category glow settings (nil = use global defaults)
+function BR.Glow.SetExpiration(frame, show, category)
     local state = frame[GLOW_STATE_KEY]
 
     if show then
-        local db = BuffRemindersDB
-        local typeIndex = (db.defaults and db.defaults.glowType) or 1
-        local color = (db.defaults and db.defaults.glowColor) or BR.Glow.DEFAULT_COLOR
+        local typeIndex, color
+        if category then
+            typeIndex = BR.Config.GetCategorySetting(category, "glowType") or 1
+            color = BR.Config.GetCategorySetting(category, "glowColor") or BR.Glow.DEFAULT_COLOR
+        else
+            local db = BuffRemindersDB
+            typeIndex = (db.defaults and db.defaults.glowType) or 1
+            color = (db.defaults and db.defaults.glowColor) or BR.Glow.DEFAULT_COLOR
+        end
 
         -- Stop previous glow if type changed, otherwise it's already the right one
         if state then
@@ -171,18 +177,5 @@ function BR.Glow.SetExpiration(frame, show)
             BR.Glow.Stop(frame, state.typeIndex, EXPIRATION_KEY)
             state.showing = false
         end
-    end
-end
-
----Show/hide rebuff warning pulsing border on a buff frame (reads color from DB)
----@param frame table
----@param show boolean
-function BR.Glow.SetRebuffBorder(frame, show)
-    if show then
-        local color = (BuffRemindersDB and BuffRemindersDB.defaults and BuffRemindersDB.defaults.consumableRebuffColor)
-            or { 1, 0.5, 0 }
-        BR.Glow.PulsingBorderStart(frame, REBUFF_KEY, { color[1], color[2], color[3], 1 })
-    else
-        BR.Glow.PulsingBorderStop(frame, REBUFF_KEY)
     end
 end

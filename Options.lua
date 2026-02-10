@@ -780,8 +780,6 @@ local function CreateOptionsPanel()
     })
 
     local defTextColorHolder = Components.ColorSwatch(appearanceContent, {
-        label = "",
-        labelWidth = 0,
         hasOpacity = true,
         get = function()
             local tc = BuffRemindersDB.defaults and BuffRemindersDB.defaults.textColor or { 1, 1, 1 }
@@ -851,8 +849,13 @@ local function CreateOptionsPanel()
     -- Expiration Glow section
     LayoutSectionHeader(appLayout, appearanceContent, "Expiration Glow")
 
+    local previewBtn = CreateButton(appearanceContent, "Preview", function()
+        ShowGlowDemo()
+    end)
+    appLayout:Add(previewBtn, nil, COMPONENT_GAP)
+
     local defGlowHolder = Components.Checkbox(appearanceContent, {
-        label = "Show expiration glow",
+        label = "Glow",
         get = function()
             return BuffRemindersDB.defaults and BuffRemindersDB.defaults.showExpirationGlow ~= false
         end,
@@ -861,14 +864,12 @@ local function CreateOptionsPanel()
             Components.RefreshAll()
         end,
     })
-    appLayout:Add(defGlowHolder, nil, COMPONENT_GAP)
 
     local function isExpirationGlowEnabled()
         return BuffRemindersDB.defaults and BuffRemindersDB.defaults.showExpirationGlow ~= false
     end
 
     local defThresholdHolder = Components.Slider(appearanceContent, {
-        label = "Threshold",
         min = 1,
         max = 15,
         get = function()
@@ -880,10 +881,8 @@ local function CreateOptionsPanel()
             BR.Config.Set("defaults.expirationThreshold", val)
         end,
     })
-    appLayout:SetX(appX + 20)
-    appLayout:Add(defThresholdHolder, nil, COMPONENT_GAP)
+    defThresholdHolder:SetPoint("LEFT", defGlowHolder.checkbox, "RIGHT", 40, 0)
 
-    -- Type dropdown
     local typeOptions = {}
     for i, gt in ipairs(GlowTypes) do
         typeOptions[i] = { label = gt.name, value = i }
@@ -891,22 +890,20 @@ local function CreateOptionsPanel()
 
     local defTypeHolder = Components.Dropdown(appearanceContent, {
         label = "Type:",
+        labelWidth = 34,
         options = typeOptions,
         get = function()
             return BuffRemindersDB.defaults and BuffRemindersDB.defaults.glowType or 1
         end,
         enabled = isExpirationGlowEnabled,
-        width = 100,
+        width = 95,
         onChange = function(val)
             BR.Config.Set("defaults.glowType", val)
         end,
     }, "BuffRemindersDefGlowTypeDropdown")
-    appLayout:Add(defTypeHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
+    defTypeHolder:SetPoint("LEFT", defThresholdHolder, "RIGHT", 8, 0)
 
-    -- Color picker (inline with type dropdown)
     local defGlowColorHolder = Components.ColorSwatch(appearanceContent, {
-        label = "Color:",
-        labelWidth = 40,
         hasOpacity = true,
         get = function()
             local c = BR.Config.Get("defaults.glowColor", Glow.DEFAULT_COLOR)
@@ -917,13 +914,9 @@ local function CreateOptionsPanel()
             BR.Config.Set("defaults.glowColor", { r, g, b, a or 1 })
         end,
     })
-    defGlowColorHolder:SetPoint("LEFT", defTypeHolder, "RIGHT", 10, 0)
+    defGlowColorHolder:SetPoint("LEFT", defTypeHolder, "RIGHT", 6, 0)
 
-    local previewBtn = CreateButton(appearanceContent, "Preview", function()
-        ShowGlowDemo()
-    end)
-    previewBtn:SetPoint("LEFT", defGlowColorHolder, "RIGHT", 10, 0)
-    appLayout:SetX(appX)
+    appLayout:Add(defGlowHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
 
     -- Per-Category Customization section
     LayoutSectionHeader(appLayout, appearanceContent, "Per-Category Customization")
@@ -1420,61 +1413,6 @@ local function CreateOptionsPanel()
                 end,
             })
             catLayout:Add(showWithoutItemsHolder, nil, COMPONENT_GAP)
-
-            local rebuffHolder = Components.Checkbox(catContent, {
-                label = "Show rebuff warning",
-                get = function()
-                    return BR.Config.Get("defaults.consumableRebuffWarning", true) ~= false
-                end,
-                tooltip = {
-                    title = "Consumable rebuff warning",
-                    desc = "Show a pulsing border and countdown timer on consumable icons when the buff is about to expire.",
-                },
-                onChange = function(checked)
-                    BR.Config.Set("defaults.consumableRebuffWarning", checked)
-                    Components.RefreshAll()
-                end,
-            })
-            local rebuffColorHolder = Components.ColorSwatch(catContent, {
-                label = "",
-                labelWidth = 0,
-                get = function()
-                    local c = BR.Config.Get("defaults.consumableRebuffColor", { 1, 0.5, 0 })
-                    return c[1], c[2], c[3]
-                end,
-                enabled = function()
-                    return BR.Config.Get("defaults.consumableRebuffWarning", true) ~= false
-                end,
-                onChange = function(r, g, b)
-                    BR.Config.Set("defaults.consumableRebuffColor", { r, g, b })
-                end,
-            })
-
-            local rebuffThresholdHolder = Components.Slider(catContent, {
-                label = "",
-                labelWidth = 0,
-                min = 5,
-                max = 60,
-                step = 5,
-                suffix = " min",
-                get = function()
-                    return BR.Config.Get("defaults.consumableRebuffThreshold", 10)
-                end,
-                enabled = function()
-                    return BR.Config.Get("defaults.consumableRebuffWarning", true) ~= false
-                end,
-                tooltip = {
-                    title = "Rebuff warning threshold",
-                    desc = "Show the rebuff warning when a consumable buff has less than this many minutes remaining.",
-                },
-                onChange = function(val)
-                    BR.Config.Set("defaults.consumableRebuffThreshold", val)
-                end,
-            })
-
-            catLayout:Add(rebuffHolder, nil, COMPONENT_GAP)
-            rebuffThresholdHolder:SetPoint("LEFT", rebuffHolder, "RIGHT", 8, 0)
-            rebuffColorHolder:SetPoint("LEFT", rebuffThresholdHolder, "RIGHT", 12, 0)
         end
 
         -- Layout sub-header
@@ -1612,6 +1550,11 @@ local function CreateOptionsPanel()
                         "iconAlpha",
                         "textAlpha",
                     }
+                    if category == "consumable" then
+                        appearanceKeys[#appearanceKeys + 1] = "glowType"
+                        appearanceKeys[#appearanceKeys + 1] = "showExpirationGlow"
+                        appearanceKeys[#appearanceKeys + 1] = "expirationThreshold"
+                    end
                     for _, key in ipairs(appearanceKeys) do
                         if cs[key] == nil and effective[key] ~= nil then
                             cs[key] = effective[key]
@@ -1625,6 +1568,13 @@ local function CreateOptionsPanel()
                     if cs.textColor == nil and effective.textColor then
                         local tc = effective.textColor
                         cs.textColor = { tc[1], tc[2], tc[3] }
+                    end
+                    -- glowColor: deep copy (table value, consumable only)
+                    if category == "consumable" then
+                        if cs.glowColor == nil and effective.glowColor then
+                            local gc = effective.glowColor
+                            cs.glowColor = { gc[1], gc[2], gc[3], gc[4] or 1 }
+                        end
                     end
                 end
                 db.categorySettings[category].useCustomAppearance = checked
@@ -1760,8 +1710,6 @@ local function CreateOptionsPanel()
         catTextSizeHolder:SetPoint("TOPLEFT", CAT_COL2, -48)
 
         local catTextColorHolder = Components.ColorSwatch(appFrame, {
-            label = "",
-            labelWidth = 0,
             hasOpacity = true,
             get = function()
                 local tc = getCatOwnValue("textColor", { 1, 1, 1 })
@@ -1778,8 +1726,79 @@ local function CreateOptionsPanel()
         })
         catTextColorHolder:SetPoint("LEFT", catTextSizeHolder, "RIGHT", 12, 0) -- aligns alpha % with slider values
 
-        -- Advance past the 3-row appFrame grid (72px) and finalize section height
-        catLayout:Space(72)
+        local gridHeight = 72 -- 3 rows default
+        if category == "consumable" then
+            -- Row 4: Glow enable + threshold + type + color (consumable only)
+            local function isGlowEnabled()
+                return isCustomAppearanceEnabled() and getCatOwnValue("showExpirationGlow", true) ~= false
+            end
+
+            local catGlowCheckHolder = Components.Checkbox(appFrame, {
+                label = "Glow",
+                get = function()
+                    return getCatOwnValue("showExpirationGlow", true) ~= false
+                end,
+                enabled = isCustomAppearanceEnabled,
+                onChange = function(checked)
+                    BR.Config.Set("categorySettings." .. category .. ".showExpirationGlow", checked)
+                    Components.RefreshAll()
+                end,
+            })
+            catGlowCheckHolder:SetPoint("TOPLEFT", 0, -72)
+
+            local catGlowThresholdHolder = Components.Slider(appFrame, {
+                min = 1,
+                max = 60,
+                step = 1,
+                suffix = " min",
+                get = function()
+                    return getCatOwnValue("expirationThreshold", 15)
+                end,
+                enabled = isGlowEnabled,
+                onChange = function(val)
+                    BR.Config.Set("categorySettings." .. category .. ".expirationThreshold", val)
+                end,
+            })
+            catGlowThresholdHolder:SetPoint("LEFT", catGlowCheckHolder.checkbox, "RIGHT", 40, 0)
+
+            local catGlowTypeOptions = {}
+            for gi, gt in ipairs(GlowTypes) do
+                catGlowTypeOptions[gi] = { label = gt.name, value = gi }
+            end
+
+            local catGlowTypeHolder = Components.Dropdown(appFrame, {
+                label = "Type:",
+                labelWidth = 34,
+                options = catGlowTypeOptions,
+                get = function()
+                    return getCatOwnValue("glowType", 1)
+                end,
+                enabled = isGlowEnabled,
+                width = 95,
+                onChange = function(val)
+                    BR.Config.Set("categorySettings." .. category .. ".glowType", val)
+                end,
+            }, "BuffReminders_" .. category .. "_GlowTypeDropdown")
+            catGlowTypeHolder:SetPoint("TOPLEFT", CAT_COL2, -72)
+
+            local catGlowColorHolder = Components.ColorSwatch(appFrame, {
+                hasOpacity = true,
+                get = function()
+                    local c = getCatOwnValue("glowColor", Glow.DEFAULT_COLOR)
+                    return c[1], c[2], c[3], c[4] or 1
+                end,
+                enabled = isGlowEnabled,
+                onChange = function(r, g, b, a)
+                    BR.Config.Set("categorySettings." .. category .. ".glowColor", { r, g, b, a or 1 })
+                end,
+            })
+            catGlowColorHolder:SetPoint("TOPLEFT", catTextColorHolder, "TOPLEFT", 0, -24)
+
+            gridHeight = 96 -- 4 rows with glow
+        end
+
+        -- Advance past the appFrame grid and finalize section height
+        catLayout:Space(gridHeight)
         catLayout:SetX(0)
 
         section:SetContentHeight(math.abs(catLayout:GetY()) + 10)

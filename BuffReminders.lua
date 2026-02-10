@@ -150,11 +150,7 @@ local defaults = {
         expirationThreshold = 15, -- minutes
         glowType = 1, -- 1=Pixel, 2=AutoCast, 3=Proc
         glowColor = { 0.95, 0.57, 0.07, 1 }, -- orange RGBA
-        -- Consumable rebuff warning
         showConsumablesWithoutItems = false,
-        consumableRebuffWarning = true,
-        consumableRebuffThreshold = 10, -- minutes
-        consumableRebuffColor = { 1, 0.5, 0 },
         consumableDisplayMode = "sub_icons",
         petDisplayMode = "generic", -- "generic" or "expanded"
     },
@@ -371,6 +367,10 @@ local function GetCategorySettings(category)
         result.spacing = (catSettings and catSettings.spacing) or 0.2
         result.iconZoom = (catSettings and catSettings.iconZoom) or 8
         result.borderSize = (catSettings and catSettings.borderSize) or 2
+        result.glowType = (catSettings and catSettings.glowType) or 1
+        result.glowColor = (catSettings and catSettings.glowColor) or { 0.95, 0.57, 0.07, 1 }
+        result.showExpirationGlow = catSettings and catSettings.showExpirationGlow
+        result.expirationThreshold = (catSettings and catSettings.expirationThreshold)
     else
         result.iconSize = globalDefaults.iconSize or 64
         result.textSize = globalDefaults.textSize -- nil = auto
@@ -380,6 +380,10 @@ local function GetCategorySettings(category)
         result.spacing = globalDefaults.spacing or 0.2
         result.iconZoom = globalDefaults.iconZoom or 8
         result.borderSize = globalDefaults.borderSize or 2
+        result.glowType = globalDefaults.glowType or 1
+        result.glowColor = globalDefaults.glowColor or { 0.95, 0.57, 0.07, 1 }
+        result.showExpirationGlow = globalDefaults.showExpirationGlow
+        result.expirationThreshold = globalDefaults.expirationThreshold
     end
 
     -- Direction: inherit from defaults unless split (split frames have their own direction)
@@ -544,18 +548,16 @@ local UpdateDisplay, UpdateAnchor, ToggleTestMode, RefreshTestDisplay
 local UpdateFallbackDisplay, RenderPetEntries
 local UpdateActionButtons
 
--- Local aliases for glow module
+-- Local alias for glow module
 local SetExpirationGlow = BR.Glow.SetExpiration
-local SetRebuffBorder = BR.Glow.SetRebuffBorder
 
--- Hide a buff frame and clear its glow and rebuff border.
+-- Hide a buff frame and clear its glow.
 -- Overlays and action buttons are managed solely by SyncSecureButtons() based on
 -- frame:IsShown(), so we don't touch them here — avoids hide/show flicker when
 -- UpdateDisplay() hides all frames then re-shows visible ones each tick.
 local function HideFrame(frame)
     frame:Hide()
     SetExpirationGlow(frame, false)
-    SetRebuffBorder(frame, false)
 end
 
 ---Show a frame with missing text styling
@@ -1460,7 +1462,7 @@ RefreshTestDisplay = function()
             frame.count:SetFont(fontPath, GetFrameFontSize(frame), "OUTLINE")
             if (db.defaults and db.defaults.showExpirationGlow ~= false) and not glowShown then
                 frame.count:SetText(FormatRemainingTime(testModeData.fakeRemaining))
-                SetExpirationGlow(frame, true)
+                SetExpirationGlow(frame, true, "raid")
                 glowShown = true
             else
                 local fakeBuffed = testModeData.fakeTotal - testModeData.fakeMissing[i]
@@ -1795,7 +1797,6 @@ local function RenderVisibleEntry(frame, entry)
         frame.count:Hide()
         frame:Show()
         SetExpirationGlow(frame, false)
-        SetRebuffBorder(frame, false)
         return true
     elseif frame._br_eating_icon then
         -- Transition from eating → not eating: restore the correct consumable icon
@@ -1808,20 +1809,13 @@ local function RenderVisibleEntry(frame, entry)
         frame.count:SetText(entry.countText or "")
         frame.count:Show()
         frame:Show()
-        SetExpirationGlow(frame, entry.shouldGlow)
-        SetRebuffBorder(frame, false)
+        SetExpirationGlow(frame, entry.shouldGlow, entry.category)
     elseif entry.displayType == "expiring" then
         frame.count:SetFont(fontPath, GetFrameFontSize(frame), "OUTLINE")
         frame.count:SetText(entry.countText or "")
         frame.count:Show()
         frame:Show()
-        if entry.rebuffWarning then
-            SetRebuffBorder(frame, true)
-            SetExpirationGlow(frame, false)
-        else
-            SetRebuffBorder(frame, false)
-            SetExpirationGlow(frame, true)
-        end
+        SetExpirationGlow(frame, true, entry.category)
     else -- "missing"
         -- Consumables with bag scan support: show actual item from bags
         if BUFF_KEY_TO_CATEGORY[frame.key] then
@@ -1836,10 +1830,8 @@ local function RenderVisibleEntry(frame, entry)
                 frame.stackCount:Show()
                 frame:Show()
                 SetExpirationGlow(frame, false)
-                SetRebuffBorder(frame, false)
             elseif (BuffRemindersDB.defaults or {}).showConsumablesWithoutItems then
                 ShowMissingFrame(frame, entry.missingText)
-                SetRebuffBorder(frame, false)
             else
                 -- No items and setting is off: don't show the frame
                 return false
@@ -1852,7 +1844,6 @@ local function RenderVisibleEntry(frame, entry)
                 end
             end
             ShowMissingFrame(frame, entry.missingText)
-            SetRebuffBorder(frame, false)
         end
     end
 
@@ -3282,7 +3273,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         -- ====================================================================
         -- Versioned migrations — each runs exactly once, tracked by dbVersion
         -- ====================================================================
-        local DB_VERSION = 12
+        local DB_VERSION = 13
 
         local migrations = {
             -- [1] Consolidate all pre-versioning migrations (v2.8 → v3.x)
@@ -3580,6 +3571,43 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
                     db.defaults.glowColor = colorMap[oldStyle] or { 0.95, 0.57, 0.07, 1 }
                     db.defaults.glowStyle = nil
                 end
+            end,
+            -- [13] Unify consumable rebuff warning into per-category expiration glow
+            [13] = function()
+                if not db.defaults then
+                    return
+                end
+                local defs = db.defaults
+                local globalThreshold = defs.expirationThreshold or 15
+
+                -- Migrate consumableRebuffWarning = false → per-category override
+                if defs.consumableRebuffWarning == false then
+                    if not db.categorySettings then
+                        db.categorySettings = {}
+                    end
+                    if not db.categorySettings.consumable then
+                        db.categorySettings.consumable = {}
+                    end
+                    db.categorySettings.consumable.useCustomAppearance = true
+                    db.categorySettings.consumable.showExpirationGlow = false
+                end
+
+                -- Migrate consumableRebuffThreshold if different from global
+                if defs.consumableRebuffThreshold ~= nil and defs.consumableRebuffThreshold ~= globalThreshold then
+                    if not db.categorySettings then
+                        db.categorySettings = {}
+                    end
+                    if not db.categorySettings.consumable then
+                        db.categorySettings.consumable = {}
+                    end
+                    db.categorySettings.consumable.useCustomAppearance = true
+                    db.categorySettings.consumable.expirationThreshold = defs.consumableRebuffThreshold
+                end
+
+                -- Clean up old keys
+                defs.consumableRebuffWarning = nil
+                defs.consumableRebuffThreshold = nil
+                defs.consumableRebuffColor = nil
             end,
         }
 

@@ -279,7 +279,7 @@ BR.StyleEditBox = StyleEditBox
 ---@return table holder Frame containing slider with .slider, .valueText, .SetValue(v), .GetValue()
 function Components.Slider(parent, config)
     local colors = SliderColors
-    local labelWidth = config.labelWidth or 70
+    local labelWidth = config.labelWidth or (config.label and 70 or 0)
     local sliderWidth = config.sliderWidth or 100
     local step = config.step or 1
     local suffix = config.suffix or ""
@@ -296,7 +296,9 @@ function Components.Slider(parent, config)
     label:SetPoint("LEFT", 0, 0)
     label:SetWidth(labelWidth)
     label:SetJustifyH("LEFT")
-    label:SetText(config.label)
+    if config.label then
+        label:SetText(config.label)
+    end
     holder.label = label
 
     -- Slider track container
@@ -2354,7 +2356,7 @@ end
 ---@param config ColorSwatchConfig Configuration table
 ---@return table holder Frame containing color swatch with .SetColor(r,g,b,a?), .GetColor(), .SetEnabled(bool)
 function Components.ColorSwatch(parent, config)
-    local labelWidth = config.labelWidth or 70
+    local labelWidth = config.labelWidth or (config.label and 70 or 0)
     local SWATCH_SIZE = 16
 
     -- Container frame
@@ -2366,7 +2368,9 @@ function Components.ColorSwatch(parent, config)
     label:SetPoint("LEFT", 0, 0)
     label:SetWidth(labelWidth)
     label:SetJustifyH("LEFT")
-    label:SetText(config.label)
+    if config.label then
+        label:SetText(config.label)
+    end
     holder.label = label
 
     -- Swatch button
