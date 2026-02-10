@@ -872,7 +872,8 @@ local function CreateOptionsPanel()
 
     local defThresholdHolder = Components.Slider(appearanceContent, {
         min = 1,
-        max = 15,
+        max = 45,
+        step = 5,
         get = function()
             return BuffRemindersDB.defaults and BuffRemindersDB.defaults.expirationThreshold or 15
         end,
@@ -1749,8 +1750,8 @@ local function CreateOptionsPanel()
 
             local catGlowThresholdHolder = Components.Slider(appFrame, {
                 min = 1,
-                max = 60,
-                step = 1,
+                max = 45,
+                step = 5,
                 suffix = " min",
                 get = function()
                     return getCatOwnValue("expirationThreshold", 15)

@@ -25,6 +25,10 @@
 ---@class FontString
 ---@field SetFont fun(self: FontString, font: string, size: number, flags?: string)
 ---@field SetText fun(self: FontString, text: string)
+---@field SetTextColor fun(self: FontString, r: number, g: number, b: number, a?: number)
+---@field ClearAllPoints fun(self: FontString)
+---@field SetPoint fun(self: FontString, point: string, relativeTo?: any, relativePoint?: string, x?: number, y?: number)
+---@field GetParent fun(self: FontString): Frame?
 ---@field Show fun(self: FontString)
 ---@field Hide fun(self: FontString)
 
