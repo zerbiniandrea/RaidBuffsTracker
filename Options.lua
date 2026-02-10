@@ -115,7 +115,7 @@ end
 -- ============================================================================
 
 local function CreateOptionsPanel()
-    local panel = CreatePanel("BuffRemindersOptions", PANEL_WIDTH, 597, { escClose = true })
+    local panel = CreatePanel("BuffRemindersOptions", PANEL_WIDTH, 620, { escClose = true })
     panel:Hide()
 
     -- Forward declarations for banner system
