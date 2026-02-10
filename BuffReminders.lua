@@ -1099,7 +1099,8 @@ local function SyncSecureButtons()
         -- Sync click overlay
         local overlay = frame.clickOverlay
         if overlay then
-            local cs = frame.buffCategory and BuffRemindersDB.categorySettings
+            local cs = frame.buffCategory
+                and BuffRemindersDB.categorySettings
                 and BuffRemindersDB.categorySettings[frame.buffCategory]
             local clickable = cs and cs.clickable == true
             if frame:IsShown() then
@@ -1230,7 +1231,8 @@ local function SyncSecureButtons()
                 local extraOverlay = extra.clickOverlay
                 if extraOverlay then
                     if extra:IsShown() then
-                        local extraCs = frame.buffCategory and BuffRemindersDB.categorySettings
+                        local extraCs = frame.buffCategory
+                            and BuffRemindersDB.categorySettings
                             and BuffRemindersDB.categorySettings[frame.buffCategory]
                         local extraClickable = extraCs and extraCs.clickable == true
                         if not extraClickable then
@@ -3009,6 +3011,7 @@ UpdateActionButtons = function(category)
                     if castableID then
                         overlay:SetAttribute("type", "spell")
                         overlay:SetAttribute("spell", castableID)
+                        overlay:SetAttribute("unit", category == "raid" and "player" or nil)
                         overlay:EnableMouse(true)
                     else
                         overlay:EnableMouse(false)
@@ -3070,6 +3073,7 @@ local function RefreshOverlaySpells()
                 if castableID then
                     overlay:SetAttribute("type", "spell")
                     overlay:SetAttribute("spell", castableID)
+                    overlay:SetAttribute("unit", category == "raid" and "player" or nil)
                     overlay:EnableMouse(true)
                 else
                     overlay:EnableMouse(false)
