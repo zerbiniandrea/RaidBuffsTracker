@@ -838,21 +838,14 @@ local function CreateOptionsPanel()
     })
     appLayout:Add(defDirHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
 
-    local resetMainPosBtn = CreateButton(appearanceContent, "Reset Main Frame Position", function()
-        local mainDefaults = defaults.categorySettings.main
-        if mainDefaults and mainDefaults.position then
-            BR.Display.ResetMainFramePosition(mainDefaults.position.x, mainDefaults.position.y)
-        end
-    end, { title = "Reset Position", desc = "Reset the main buff frame to center of screen." })
-    appLayout:Add(resetMainPosBtn, 22, SECTION_GAP)
-
     -- Expiration Glow section
     LayoutSectionHeader(appLayout, appearanceContent, "Expiration Glow")
+    appLayout:Space(COMPONENT_GAP)
 
     local previewBtn = CreateButton(appearanceContent, "Preview", function()
         ShowGlowDemo()
     end)
-    appLayout:Add(previewBtn, nil, COMPONENT_GAP)
+    appLayout:Add(previewBtn, nil, SECTION_GAP)
 
     local defGlowHolder = Components.Checkbox(appearanceContent, {
         label = "Glow",

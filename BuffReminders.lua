@@ -3052,9 +3052,6 @@ BR.Display = {
     IsTestMode = function()
         return testMode
     end,
-    ResetMainFramePosition = function(x, y)
-        SavePosition("main", x or 0, y or 0)
-    end,
     ResetCategoryFramePosition = function(category, x, y)
         SavePosition(category, x or 0, y or 0)
     end,
