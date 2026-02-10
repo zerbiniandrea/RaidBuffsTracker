@@ -2138,7 +2138,7 @@ local function ExpandPetActions(frame, entry, frameList)
     local first = entry.petActions[1]
     frame.icon:SetTexture(first.icon)
     frame.count:Hide()
-    frame._br_pet_spell = first.spellID
+    frame._br_pet_spell = first.spellName
 
     -- Extra frames for remaining actions
     for i = 2, #entry.petActions do
@@ -2149,7 +2149,7 @@ local function ExpandPetActions(frame, entry, frameList)
         extra.icon:SetTexture(action.icon)
         extra.count:Hide()
         extra.stackCount:Hide()
-        extra._br_pet_spell = action.spellID
+        extra._br_pet_spell = action.spellName
         extra:Show()
         if frameList then
             frameList[#frameList + 1] = extra
@@ -2175,7 +2175,7 @@ local function ApplyPetDisplayMode(frame, entry, frameList)
             frame.icon:SetTexture(texture)
         end
         local gi = entry.petActions.genericIndex or 1
-        frame._br_pet_spell = entry.petActions[gi] and entry.petActions[gi].spellID
+        frame._br_pet_spell = entry.petActions[gi] and entry.petActions[gi].spellName
         if frame.extraFrames then
             for _, extra in ipairs(frame.extraFrames) do
                 extra:Hide()
@@ -3065,9 +3065,8 @@ UpdateActionButtons = function(category)
                     overlay.itemID = nil
                     -- Pet actions: use per-frame spell from expanded pet icons
                     if frame._br_pet_spell then
-                        local spellName = C_Spell.GetSpellName(frame._br_pet_spell)
                         overlay:SetAttribute("type", "spell")
-                        overlay:SetAttribute("spell", spellName or frame._br_pet_spell)
+                        overlay:SetAttribute("spell", frame._br_pet_spell)
                         overlay:EnableMouse(true)
                     else
                         local castableID = GetActionSpellID(frame.buffDef)
@@ -3087,9 +3086,8 @@ UpdateActionButtons = function(category)
                                 if not extra.clickOverlay then
                                     CreateClickOverlay(extra)
                                 end
-                                local extraSpellName = C_Spell.GetSpellName(extra._br_pet_spell)
                                 extra.clickOverlay:SetAttribute("type", "spell")
-                                extra.clickOverlay:SetAttribute("spell", extraSpellName or extra._br_pet_spell)
+                                extra.clickOverlay:SetAttribute("spell", extra._br_pet_spell)
                                 extra.clickOverlay:EnableMouse(true)
                                 if extra.clickOverlay.highlight then
                                     extra.clickOverlay.highlight:SetShown(showHighlight)

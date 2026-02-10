@@ -135,7 +135,7 @@
 ---@field extraFrames? table[]
 ---@field isExtraFrame? boolean
 ---@field mainFrame? BuffFrame
----@field _br_pet_spell? number
+---@field _br_pet_spell? string             -- Localized spell name for pet click-to-cast
 
 ---@alias CategoryName "raid"|"presence"|"targeted"|"self"|"pet"|"consumable"|"custom"
 
@@ -228,6 +228,7 @@
 ---@class PetAction
 ---@field key string
 ---@field spellID number
+---@field spellName string             -- Localized spell name for SecureActionButton casting
 ---@field icon number
 ---@field label string
 ---@field sortOrder number

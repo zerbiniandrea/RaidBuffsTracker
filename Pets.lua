@@ -35,6 +35,7 @@ local function BuildHunterActions()
                 actions[#actions + 1] = {
                     key = "pet_action_" .. spellID,
                     spellID = spellID,
+                    spellName = C_Spell.GetSpellName(spellID),
                     icon = info.icon,
                     label = info.name,
                     sortOrder = order,
@@ -51,6 +52,7 @@ local function BuildHunterActions()
             actions[#actions + 1] = {
                 key = "pet_action_" .. REVIVE_PET,
                 spellID = REVIVE_PET,
+                spellName = C_Spell.GetSpellName(REVIVE_PET),
                 icon = icon,
                 label = "Revive Pet",
                 sortOrder = order,
@@ -81,6 +83,7 @@ local function BuildWarlockActions()
                 actions[#actions + 1] = {
                     key = "pet_action_" .. spellID,
                     spellID = spellID,
+                    spellName = info.name,
                     icon = info.iconID,
                     label = info.name,
                     sortOrder = order,
@@ -116,6 +119,7 @@ local function BuildSingleAction(spellID)
         {
             key = "pet_action_" .. spellID,
             spellID = spellID,
+            spellName = info.name,
             icon = info.iconID,
             label = info.name,
             sortOrder = 1,
