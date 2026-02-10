@@ -3792,6 +3792,18 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         C_Timer.After(0.5, function()
             UpdateDisplay()
         end)
+        -- Refresh custom buff icons after spell data is fully loaded (talent-modified icons)
+        C_Timer.After(1.5, function()
+            for key, def in pairs(BuffRemindersDB.customBuffs or {}) do
+                local frame = buffFrames[key]
+                if frame and def.spellID then
+                    local texture = GetBuffTexture(def.spellID)
+                    if texture then
+                        frame.icon:SetTexture(texture)
+                    end
+                end
+            end
+        end)
     elseif event == "GROUP_ROSTER_UPDATE" then
         UpdateDisplay()
     elseif event == "PLAYER_REGEN_ENABLED" then
