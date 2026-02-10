@@ -1097,11 +1097,11 @@ local function CreateDropdownCore(parent, width, options, initialValue, onChange
     arrow:SetRotation(math.rad(-90)) -- points down
 
     -- ==================== MENU ====================
-    -- Parent to UIParent for proper strata handling
+    -- Parent to dropdown parent so it scrolls with container
     local useScroll = maxItems and #options > maxItems
     local visibleCount = useScroll and maxItems or #options
     local menuHeight = visibleCount * ITEM_HEIGHT + MENU_PADDING_V * 2
-    local menu = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+    local menu = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     menu:SetSize(width, menuHeight)
     menu:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
