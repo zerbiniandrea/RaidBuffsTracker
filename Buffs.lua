@@ -385,12 +385,13 @@ BR.BUFF_TABLES = {
         -- Augment Rune (The War Within + Midnight)
         {
             spellID = {
-                453250, -- Crystallized Augment Rune (TWW)
-                1234969, -- Ethereal Augment Rune (TWW permanent)
-                1242347, -- Soulgorged Augment Rune (TWW raid drop)
+                1234969, -- Ethereal Augment Rune (TWW permanent) - highest priority
+                1242347, -- Soulgorged Augment Rune (TWW raid drop) - persists through death
+                453250, -- Crystallized Augment Rune (TWW) - single use
+                393438, -- Draconic Augment Rune (Dragonflight) - legacy
                 1264426, -- Void-Touched Augment Rune (Midnight)
             },
-            displaySpellIDs = { 453250, 1234969, 1242347 }, -- Show TWW rune icons in UI
+            displaySpellIDs = { 1234969, 1242347, 453250, 393438 }, -- Show rune icons in priority order
             key = "rune",
             name = "Rune",
             missingText = "NO\nRUNE",
