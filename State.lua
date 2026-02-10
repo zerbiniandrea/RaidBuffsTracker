@@ -789,6 +789,7 @@ function BuffState.Refresh()
         entry.expiringTime = nil
         entry.rebuffWarning = nil
         entry.isEating = nil
+        entry.petActions = nil
     end
 
     -- Build valid unit cache once per refresh cycle
@@ -939,6 +940,13 @@ function BuffState.Refresh()
                 entry.displayType = "missing"
                 entry.missingText = buff.missingText
                 entry.iconByRole = buff.iconByRole
+                -- Expanded pet actions (individual summon spell icons)
+                if buff.groupId == "pets" and BR.PetHelpers then
+                    local actions = BR.PetHelpers.BuildPetActions(playerClass)
+                    if actions and #actions > 0 then
+                        entry.petActions = actions
+                    end
+                end
             end
         end
     end

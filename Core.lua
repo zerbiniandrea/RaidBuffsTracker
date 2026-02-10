@@ -116,6 +116,8 @@ local DefaultSettingKeys = {
     consumableRebuffColor = "VisualsRefresh",
     -- Consumable display mode
     consumableDisplayMode = "DisplayRefresh",
+    -- Pet display mode
+    petDisplayMode = "DisplayRefresh",
     -- Font (global-only, lives under defaults)
     fontFace = "VisualsRefresh",
 }

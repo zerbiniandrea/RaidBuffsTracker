@@ -16,6 +16,7 @@ Libs\LibSharedMedia-3.0\lib.xml
 Core.lua
 Buffs.lua
 ConsumableItems.lua
+Pets.lua
 State.lua
 Components.lua
 BuffReminders.lua

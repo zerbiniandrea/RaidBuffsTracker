@@ -6,6 +6,8 @@
 ---@class Frame
 ---@field Show fun(self: Frame)
 ---@field Hide fun(self: Frame)
+---@field IsShown fun(self: Frame): boolean
+---@field GetParent fun(self: Frame): Frame?
 ---@field GetWidth fun(self: Frame): number
 ---@field GetHeight fun(self: Frame): number
 
@@ -133,6 +135,7 @@
 ---@field extraFrames? table[]
 ---@field isExtraFrame? boolean
 ---@field mainFrame? BuffFrame
+---@field _br_pet_spell? number
 
 ---@alias CategoryName "raid"|"presence"|"targeted"|"self"|"pet"|"consumable"|"custom"
 
@@ -160,6 +163,7 @@
 ---@field consumableRebuffThreshold? number
 ---@field consumableRebuffColor? number[]
 ---@field consumableDisplayMode? "icon_only"|"sub_icons"|"expanded"
+---@field petDisplayMode? "generic"|"expanded"
 
 ---@class CategorySetting
 ---@field position CategoryPosition
@@ -221,6 +225,16 @@
 
 ---@alias CategoryVisibility table<CategoryName, ContentVisibility>
 
+---@class PetAction
+---@field key string
+---@field spellID number
+---@field icon number
+---@field label string
+---@field sortOrder number
+
+---@class PetActionList : PetAction[]
+---@field genericIndex? number  -- Preferred index for generic (collapsed) display mode
+
 ---@class BuffStateEntry
 ---@field key string                         -- "intellect", "devotionAura", etc.
 ---@field category CategoryName              -- "raid", "presence", "targeted", "self", "pet", "consumable", "custom"
@@ -234,6 +248,7 @@
 ---@field iconByRole table<RoleType,number>? -- Role-based icon override
 ---@field rebuffWarning boolean?             -- Consumable rebuff pulsing border?
 ---@field isEating boolean?                 -- Food entry: player is currently eating
+---@field petActions PetActionList?           -- Expanded pet summon actions
 
 ---@class BuffRemindersDB
 ---@field dbVersion? integer

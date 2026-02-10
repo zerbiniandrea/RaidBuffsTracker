@@ -1006,7 +1006,7 @@ local function CreateOptionsPanel()
         end
 
         -- Click to cast checkbox (raid and consumable only)
-        if category == "raid" or category == "consumable" then
+        if category == "raid" or category == "consumable" or category == "pet" then
             local clickableHolder = Components.Checkbox(catContent, {
                 label = "Click to cast",
                 get = function()
@@ -1108,6 +1108,26 @@ local function CreateOptionsPanel()
                 end,
             })
             catLayout:Add(passiveCombatHolder, nil, COMPONENT_GAP)
+
+            local petDisplayModeHolder = Components.Dropdown(catContent, {
+                label = "Pet display",
+                width = 120,
+                get = function()
+                    return BR.Config.Get("defaults.petDisplayMode", "expanded")
+                end,
+                options = {
+                    { value = "generic", label = "Generic icon" },
+                    { value = "expanded", label = "Summon spells" },
+                },
+                tooltip = {
+                    title = "Pet display mode",
+                    desc = "Generic icon: show a single 'NO PET' icon. Summon spells: show individual pet summon spell icons (e.g., each stable pet for hunters).",
+                },
+                onChange = function(val)
+                    BR.Config.Set("defaults.petDisplayMode", val)
+                end,
+            })
+            catLayout:Add(petDisplayModeHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
         end
 
         -- Item display mode (consumable only, grouped with icon options)

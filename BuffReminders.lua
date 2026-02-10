@@ -156,6 +156,7 @@ local defaults = {
         consumableRebuffThreshold = 10, -- minutes
         consumableRebuffColor = { 1, 0.5, 0 },
         consumableDisplayMode = "sub_icons",
+        petDisplayMode = "expanded", -- "generic" or "expanded"
     },
 
     ---@type CategoryVisibility
@@ -1856,7 +1857,7 @@ UpdateFallbackDisplay = function()
     BR.BuffState.Refresh()
     RenderPetEntries()
 
-    -- Collect ALL visible frames (glow + pet) for unified positioning
+    -- Collect ALL visible frames (glow + pet + pet extra frames) for unified positioning
     local shownByCategory = {}
     local mainFrameBuffs = {}
     for _, frame in pairs(buffFrames) do
@@ -1869,6 +1870,18 @@ UpdateFallbackDisplay = function()
                 shownByCategory[category][#shownByCategory[category] + 1] = frame
             else
                 mainFrameBuffs[#mainFrameBuffs + 1] = frame
+            end
+            -- Include expanded pet extra frames in the same list
+            if frame.extraFrames then
+                for _, extra in ipairs(frame.extraFrames) do
+                    if extra:IsShown() then
+                        if IsCategorySplit(category) then
+                            shownByCategory[category][#shownByCategory[category] + 1] = extra
+                        else
+                            mainFrameBuffs[#mainFrameBuffs + 1] = extra
+                        end
+                    end
+                end
             end
         end
     end
@@ -2068,6 +2081,68 @@ local function RenderVisibleEntry(frame, entry)
     return true
 end
 
+-- Expand a pet entry's actions into the main frame + extra frames.
+-- The first action overrides the main frame's icon; subsequent actions create extra frames.
+-- Returns the extra frames appended to frameList (if provided).
+---@param frame BuffFrame
+---@param entry BuffStateEntry
+---@param frameList? table[] List to append extra frames to (for positioning)
+local function ExpandPetActions(frame, entry, frameList)
+    if not entry.petActions or #entry.petActions == 0 or not frame:IsShown() then
+        frame._br_pet_spell = nil
+        return
+    end
+
+    -- Override main frame with first action
+    local first = entry.petActions[1]
+    frame.icon:SetTexture(first.icon)
+    frame.count:Hide()
+    frame._br_pet_spell = first.spellID
+
+    -- Extra frames for remaining actions
+    for i = 2, #entry.petActions do
+        local action = entry.petActions[i]
+        local extra = GetOrCreateExtraFrame(frame, i - 1)
+        extra:SetParent(frame:GetParent())
+        extra:SetSize(frame:GetWidth(), frame:GetHeight())
+        extra.icon:SetTexture(action.icon)
+        extra.count:Hide()
+        extra.stackCount:Hide()
+        extra._br_pet_spell = action.spellID
+        extra:Show()
+        if frameList then
+            frameList[#frameList + 1] = extra
+        end
+    end
+end
+
+---Apply pet display mode to a frame: expand into extra frames or restore generic icon.
+---@param frame BuffFrame
+---@param entry BuffStateEntry
+---@param frameList? table[] List to append extra frames to (for positioning)
+local function ApplyPetDisplayMode(frame, entry, frameList)
+    if not entry.petActions then
+        return
+    end
+    local petMode = (BuffRemindersDB.defaults or {}).petDisplayMode or "expanded"
+    if petMode == "expanded" then
+        ExpandPetActions(frame, entry, frameList)
+    else
+        -- Generic mode: restore original icon, use preferred action for click-to-cast
+        local texture = GetBuffTexture(frame.spellIDs)
+        if texture then
+            frame.icon:SetTexture(texture)
+        end
+        local gi = entry.petActions.genericIndex or 1
+        frame._br_pet_spell = entry.petActions[gi] and entry.petActions[gi].spellID
+        if frame.extraFrames then
+            for _, extra in ipairs(frame.extraFrames) do
+                extra:Hide()
+            end
+        end
+    end
+end
+
 -- Render pet category entries (pet frames are non-secure and customCheck works in all contexts)
 RenderPetEntries = function()
     local petEntries = BR.BuffState.visibleByCategory.pet
@@ -2081,6 +2156,7 @@ RenderPetEntries = function()
         local frame = buffFrames[entry.key]
         if frame then
             RenderVisibleEntry(frame, entry)
+            ApplyPetDisplayMode(frame, entry)
         end
     end
 end
@@ -2228,6 +2304,8 @@ UpdateDisplay = function()
                                 end
                             end
                         end
+                        -- Pet expansion: individual summon spell icons
+                        ApplyPetDisplayMode(frame, entry, frames)
                     end
                 end
                 PositionSplitCategory(category, frames)
@@ -2278,6 +2356,8 @@ UpdateDisplay = function()
                                 end
                             end
                         end
+                        -- Pet expansion: individual summon spell icons
+                        ApplyPetDisplayMode(frame, entry, mainFrameBuffs)
                     end
                 end
             end
@@ -2298,9 +2378,12 @@ UpdateDisplay = function()
 
     -- Sync click overlays on expanded extra frames (they are created above but
     -- UpdateActionButtons is the only place that wires up their click overlays).
-    local displayMode = (BuffRemindersDB.defaults or {}).consumableDisplayMode
-    if displayMode == "expanded" and not InCombatLockdown() then
-        UpdateActionButtons("consumable")
+    if not InCombatLockdown() then
+        local displayMode = (BuffRemindersDB.defaults or {}).consumableDisplayMode
+        if displayMode == "expanded" then
+            UpdateActionButtons("consumable")
+        end
+        UpdateActionButtons("pet")
     end
 end
 
@@ -3007,14 +3090,41 @@ UpdateActionButtons = function(category)
                     -- Spells: pre-filter by talent/spec, then check castability
                     local overlay = frame.clickOverlay
                     overlay.itemID = nil
-                    local castableID = GetActionSpellID(frame.buffDef)
-                    if castableID then
+                    -- Pet actions: use per-frame spell from expanded pet icons
+                    if frame._br_pet_spell then
                         overlay:SetAttribute("type", "spell")
-                        overlay:SetAttribute("spell", castableID)
-                        overlay:SetAttribute("unit", category == "raid" and "player" or nil)
+                        overlay:SetAttribute("spell", frame._br_pet_spell)
                         overlay:EnableMouse(true)
                     else
-                        overlay:EnableMouse(false)
+                        local castableID = GetActionSpellID(frame.buffDef)
+                        if castableID then
+                            overlay:SetAttribute("type", "spell")
+                            overlay:SetAttribute("spell", castableID)
+                            overlay:SetAttribute("unit", category == "raid" and "player" or nil)
+                            overlay:EnableMouse(true)
+                        else
+                            overlay:EnableMouse(false)
+                        end
+                    end
+                    -- Pet extra frames: each has its own summon spell
+                    if frame.extraFrames then
+                        for _, extra in ipairs(frame.extraFrames) do
+                            if extra:IsShown() and extra._br_pet_spell then
+                                if not extra.clickOverlay then
+                                    CreateClickOverlay(extra)
+                                end
+                                extra.clickOverlay:SetAttribute("type", "spell")
+                                extra.clickOverlay:SetAttribute("spell", extra._br_pet_spell)
+                                extra.clickOverlay:EnableMouse(true)
+                                if extra.clickOverlay.highlight then
+                                    extra.clickOverlay.highlight:SetShown(showHighlight)
+                                end
+                            elseif extra.clickOverlay then
+                                extra.clickOverlay:EnableMouse(false)
+                                extra.clickOverlay:Hide()
+                                extra.clickOverlay._br_left = nil
+                            end
+                        end
                     end
                 end
             elseif frame.clickOverlay then
@@ -3081,8 +3191,9 @@ local function RefreshOverlaySpells()
             end
         end
     end
-    -- Also refresh consumable action buttons
+    -- Also refresh consumable and pet action buttons
     UpdateActionButtons("consumable")
+    UpdateActionButtons("pet")
 end
 
 -- ============================================================================
