@@ -122,6 +122,7 @@
 ---@field icon Texture
 ---@field border Texture
 ---@field count FontString
+---@field stackCount FontString
 ---@field buffText? FontString
 ---@field testText FontString
 ---@field isPlayerBuff? boolean

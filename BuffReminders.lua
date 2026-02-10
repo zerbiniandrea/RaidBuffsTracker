@@ -45,7 +45,6 @@ local PresenceBuffs = BUFF_TABLES.presence
 local TargetedBuffs = BUFF_TABLES.targeted
 local SelfBuffs = BUFF_TABLES.self
 local PetBuffs = BUFF_TABLES.pet
-local Consumables = BUFF_TABLES.consumable
 local CustomBuffs = BUFF_TABLES.custom
 
 -- Build icon override lookup table (for spells replaced by talents)
@@ -260,6 +259,14 @@ local buffFrames = {}
 local updateTicker
 local readyCheckTimer = nil
 local testMode = false
+
+---@class TestModeData
+---@field fakeTotal number Total group size for fake counts
+---@field fakeRemaining number Fake time remaining for expiration glow test
+---@field fakeMissing table<number, number> Fake missing counts per raid buff index
+---@field showLabels boolean Whether to show "TEST" labels on icons
+
+---@type TestModeData?
 local testModeData = nil -- Stores seeded fake values for consistent test display
 local playerClass = nil -- Cached player class, set once on init
 local playerRole = nil -- Cached player role, invalidated on spec change
@@ -947,8 +954,43 @@ end
 -- Sync all secure button positions/sizes/visibility with their buff frames.
 -- Uses screen coordinates (no anchors) so secure frames never taint the buff hierarchy.
 -- Safe to call at any time; skips if in combat lockdown.
+local function HideAllSecureFrames()
+    for _, frame in pairs(buffFrames) do
+        if frame.clickOverlay then
+            frame.clickOverlay:EnableMouse(false)
+            frame.clickOverlay:Hide()
+            frame.clickOverlay._br_left = nil
+        end
+        if frame.actionButtons then
+            for _, btn in ipairs(frame.actionButtons) do
+                if btn._br_driver_active then
+                    RegisterStateDriver(btn, "visibility", "hide")
+                    btn._br_driver_active = false
+                    btn._br_x = nil
+                else
+                    btn:Hide()
+                end
+            end
+        end
+        if frame.extraFrames then
+            for _, extra in ipairs(frame.extraFrames) do
+                if extra.clickOverlay then
+                    extra.clickOverlay:EnableMouse(false)
+                    extra.clickOverlay:Hide()
+                    extra.clickOverlay._br_left = nil
+                end
+            end
+        end
+    end
+end
+
 local function SyncSecureButtons()
     if InCombatLockdown() then
+        return
+    end
+    -- Hide all clickable overlays during test mode to prevent desync
+    if testMode then
+        HideAllSecureFrames()
         return
     end
     for _, frame in pairs(buffFrames) do
@@ -1436,14 +1478,75 @@ local function PositionSplitCategories(visibleByCategory)
     end
 end
 
+--- Helper function to render a single buff in test mode
+---@param buff table Buff definition from buff tables
+---@param frame BuffFrame The frame to render into
+---@param category CategoryName The category this buff belongs to
+---@param raidIndex? number For raid buffs, the index in the RaidBuffs array (accounting for enabled buffs)
+---@param glowShown boolean Whether expiration glow has already been shown
+---@return boolean glowShown Updated glow shown state
+local function RenderTestBuff(buff, frame, category, raidIndex, glowShown)
+    local db = BuffRemindersDB
+    assert(testModeData, "RenderTestBuff called with nil testModeData")
+
+    -- Hide stackCount by default (only consumables show it)
+    frame.stackCount:Hide()
+
+    if category == "raid" then
+        -- Raid buffs show count or expiration time with glow
+        frame.count:SetFont(fontPath, GetFrameFontSize(frame), "OUTLINE")
+        if (db.defaults and db.defaults.showExpirationGlow ~= false) and not glowShown then
+            frame.count:SetText(FormatRemainingTime(testModeData.fakeRemaining))
+            SetExpirationGlow(frame, true, "raid")
+            glowShown = true
+        else
+            local fakeBuffed = testModeData.fakeTotal - testModeData.fakeMissing[raidIndex]
+            frame.count:SetText(fakeBuffed .. "/" .. testModeData.fakeTotal)
+        end
+        frame.count:Show()
+    elseif category == "consumable" then
+        -- Consumables show fake stack count (mimics having items in bags)
+        frame.count:Hide()
+        frame.stackCount:SetText(tostring(math.random(10, 25)))
+        frame.stackCount:SetFont(fontPath, GetFrameFontSize(frame), "OUTLINE")
+        frame.stackCount:Show()
+    elseif category == "pet" then
+        -- Pets show missingText (simpler than mocking pet actions)
+        frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
+        frame.count:SetText(buff.missingText)
+        frame.count:Show()
+    elseif category == "custom" then
+        -- Custom buffs may not have missingText
+        if buff.missingText then
+            frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
+            frame.count:SetText(buff.missingText)
+            frame.count:Show()
+        else
+            frame.count:Hide()
+        end
+    else
+        -- All other categories show missingText
+        frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
+        frame.count:SetText(buff.missingText)
+        frame.count:Show()
+    end
+
+    -- Show test labels if enabled
+    if frame.testText and testModeData.showLabels then
+        frame.testText:SetFont(fontPath, GetFrameFontSize(frame, 0.6), "OUTLINE")
+        frame.testText:Show()
+    end
+
+    frame:Show()
+    return glowShown
+end
+
 -- Refresh the test mode display (used when settings change while in test mode)
 -- Uses seeded values from testModeData for consistent display
 RefreshTestDisplay = function()
     if not testModeData then
         return
     end
-
-    local db = BuffRemindersDB
 
     -- Hide all frames, clear glows, and hide test labels first
     for _, frame in pairs(buffFrames) do
@@ -1454,114 +1557,21 @@ RefreshTestDisplay = function()
     end
 
     local glowShown = false
+    local raidIndex = 1
 
-    -- Show ALL raid buffs (ignore enabledBuffs)
-    for i, buff in ipairs(RaidBuffs) do
-        local frame = buffFrames[buff.key]
-        if frame then
-            frame.count:SetFont(fontPath, GetFrameFontSize(frame), "OUTLINE")
-            if (db.defaults and db.defaults.showExpirationGlow ~= false) and not glowShown then
-                frame.count:SetText(FormatRemainingTime(testModeData.fakeRemaining))
-                SetExpirationGlow(frame, true, "raid")
-                glowShown = true
-            else
-                local fakeBuffed = testModeData.fakeTotal - testModeData.fakeMissing[i]
-                frame.count:SetText(fakeBuffed .. "/" .. testModeData.fakeTotal)
+    -- Iterate through all buff categories
+    for _, category in ipairs(CATEGORIES) do
+        local buffTable = BUFF_TABLES[category]
+        for _, buff in ipairs(buffTable) do
+            if IsBuffEnabled(buff.key) then
+                local frame = buffFrames[buff.key]
+                if frame then
+                    glowShown = RenderTestBuff(buff, frame, category, raidIndex, glowShown)
+                    if category == "raid" then
+                        raidIndex = raidIndex + 1
+                    end
+                end
             end
-            if frame.testText and testModeData.showLabels then
-                frame.testText:SetFont(fontPath, GetFrameFontSize(frame, 0.6), "OUTLINE")
-                frame.testText:Show()
-            end
-            frame:Show()
-        end
-    end
-
-    -- Show ALL presence buffs
-    for _, buff in ipairs(PresenceBuffs) do
-        local frame = buffFrames[buff.key]
-        if frame then
-            frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
-            frame.count:SetText(buff.missingText)
-            if frame.testText and testModeData.showLabels then
-                frame.testText:SetFont(fontPath, GetFrameFontSize(frame, 0.6), "OUTLINE")
-                frame.testText:Show()
-            end
-            frame:Show()
-        end
-    end
-
-    -- Show ALL targeted buffs
-    for _, buff in ipairs(TargetedBuffs) do
-        local frame = buffFrames[buff.key]
-        if frame then
-            frame.count:SetText(buff.missingText)
-            frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
-            if frame.testText and testModeData.showLabels then
-                frame.testText:SetFont(fontPath, GetFrameFontSize(frame, 0.6), "OUTLINE")
-                frame.testText:Show()
-            end
-            frame:Show()
-        end
-    end
-
-    -- Show ALL self buffs
-    for _, buff in ipairs(SelfBuffs) do
-        local frame = buffFrames[buff.key]
-        if frame then
-            frame.count:SetText(buff.missingText)
-            frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
-            if frame.testText and testModeData.showLabels then
-                frame.testText:SetFont(fontPath, GetFrameFontSize(frame, 0.6), "OUTLINE")
-                frame.testText:Show()
-            end
-            frame:Show()
-        end
-    end
-
-    -- Show ALL pet buffs
-    for _, buff in ipairs(PetBuffs) do
-        local frame = buffFrames[buff.key]
-        if frame then
-            frame.count:SetText(buff.missingText)
-            frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
-            if frame.testText and testModeData.showLabels then
-                frame.testText:SetFont(fontPath, GetFrameFontSize(frame, 0.6), "OUTLINE")
-                frame.testText:Show()
-            end
-            frame:Show()
-        end
-    end
-
-    -- Show ALL consumable buffs
-    for _, buff in ipairs(Consumables) do
-        local frame = buffFrames[buff.key]
-        if frame then
-            frame.count:SetText(buff.missingText)
-            frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
-            if frame.testText and testModeData.showLabels then
-                frame.testText:SetFont(fontPath, GetFrameFontSize(frame, 0.6), "OUTLINE")
-                frame.testText:Show()
-            end
-            frame:Show()
-        end
-    end
-
-    -- Show ALL custom buffs
-    for _, buff in ipairs(CustomBuffs) do
-        local frame = buffFrames[buff.key]
-        if frame then
-            if buff.missingText then
-                frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
-                frame.count:SetText(buff.missingText)
-                frame.count:Show()
-            else
-                frame.count:Hide()
-            end
-            if frame.testText and testModeData.showLabels then
-                frame.testText:SetFont(fontPath, GetFrameFontSize(frame, 0.6), "OUTLINE")
-                frame.testText:Show()
-            end
-            frame:Show()
         end
     end
 
@@ -1630,6 +1640,7 @@ ToggleTestMode = function(showLabels)
         for i = 1, #RaidBuffs do
             testModeData.fakeMissing[i] = math.random(1, 5)
         end
+        HideAllSecureFrames()
         RefreshTestDisplay()
         return true
     end
@@ -2745,7 +2756,7 @@ end
 -- Must NOT be called during combat lockdown (secure frame operations are forbidden).
 ---@param category string
 UpdateActionButtons = function(category)
-    if InCombatLockdown() then
+    if InCombatLockdown() or testMode then
         return
     end
 
@@ -2914,7 +2925,7 @@ end
 -- Re-checks talent/spec pre-filters and IsPlayerSpell, updates EnableMouse + spell attribute.
 -- Also refreshes consumable action buttons.
 local function RefreshOverlaySpells()
-    if InCombatLockdown() then
+    if InCombatLockdown() or testMode then
         return
     end
 
