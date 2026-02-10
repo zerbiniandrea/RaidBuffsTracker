@@ -188,35 +188,49 @@ BR.BUFF_TABLES = {
                 local lethalPoisons = { 315584, 8679, 2823, 381664 } -- Instant, Wound, Deadly, Amplifying
                 local nonLethalPoisons = { 5761, 381637, 3408 } -- Numbing, Atrophic, Crippling
 
-                local lethalCount = 0
-                local nonLethalCount = 0
+                -- Count known and active poisons in each category
+                local knownLethal, knownNonLethal = 0, 0
+                local activeLethal, activeNonLethal = 0, 0
 
                 for _, id in ipairs(lethalPoisons) do
+                    if IsPlayerSpell(id) then
+                        knownLethal = knownLethal + 1
+                    end
                     local auraData
                     pcall(function()
                         auraData = C_UnitAuras.GetUnitAuraBySpellID("player", id)
                     end)
                     if auraData then
-                        lethalCount = lethalCount + 1
+                        activeLethal = activeLethal + 1
                     end
                 end
 
                 for _, id in ipairs(nonLethalPoisons) do
+                    if IsPlayerSpell(id) then
+                        knownNonLethal = knownNonLethal + 1
+                    end
                     local auraData
                     pcall(function()
                         auraData = C_UnitAuras.GetUnitAuraBySpellID("player", id)
                     end)
                     if auraData then
-                        nonLethalCount = nonLethalCount + 1
+                        activeNonLethal = activeNonLethal + 1
                     end
+                end
+
+                -- Don't show if the player hasn't learned any poisons yet (e.g. low-level rogue)
+                if knownLethal == 0 and knownNonLethal == 0 then
+                    return nil
                 end
 
                 -- Dragon-Tempered Blades (381801): can have 2 of each
                 local hasDragonTemperedBlades = IsPlayerSpell(381801)
-                local requiredLethal = hasDragonTemperedBlades and 2 or 1
-                local requiredNonLethal = hasDragonTemperedBlades and 2 or 1
 
-                return lethalCount < requiredLethal or nonLethalCount < requiredNonLethal
+                -- Only require as many as the player actually knows
+                local requiredLethal = math.min(knownLethal, hasDragonTemperedBlades and 2 or 1)
+                local requiredNonLethal = math.min(knownNonLethal, hasDragonTemperedBlades and 2 or 1)
+
+                return activeLethal < requiredLethal or activeNonLethal < requiredNonLethal
             end,
         },
         -- Shadowform will drop during Void Form, but that only happens in combat. We're happy enough just checking Shadowform before going into combat.
