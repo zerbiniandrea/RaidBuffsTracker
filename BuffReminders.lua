@@ -3349,6 +3349,7 @@ eventFrame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW")
 eventFrame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE")
 eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 eventFrame:RegisterEvent("TRAIT_CONFIG_UPDATED")
+eventFrame:RegisterEvent("SPELLS_CHANGED")
 eventFrame:RegisterEvent("UNIT_PET")
 eventFrame:RegisterEvent("PET_BAR_UPDATE")
 eventFrame:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
@@ -3855,15 +3856,29 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         glowingSpells[spellID] = nil
         UpdateDisplay()
     elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
+        if arg1 ~= "player" then
+            return
+        end
         -- Invalidate caches when player changes spec
         InvalidatePlayerRoleCache()
         BR.BuffState.InvalidateSpellCache()
         RefreshOverlaySpells()
         UpdateDisplay()
+        -- Spells can become available shortly after spec swap; refresh once more
+        C_Timer.After(0.5, function()
+            if not InCombatLockdown() then
+                RefreshOverlaySpells()
+            end
+            UpdateDisplay()
+        end)
     elseif event == "TRAIT_CONFIG_UPDATED" then
         -- Invalidate spell cache when talents change (within same spec)
         BR.BuffState.InvalidateSpellCache()
+        RefreshOverlaySpells()
         UpdateDisplay()
+    elseif event == "SPELLS_CHANGED" then
+        -- Catch delayed spell availability after spec/talent changes (noisy event, keep cheap)
+        BR.BuffState.InvalidateSpellCache()
     elseif event == "BAG_UPDATE_DELAYED" then
         InvalidateConsumableCache()
         UpdateDisplay()
