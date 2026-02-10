@@ -424,7 +424,11 @@ local function CreateOptionsPanel()
             end,
             onChange = function(checked)
                 BuffRemindersDB.enabledBuffs[key] = checked
-                UpdateDisplay()
+                if BR.Display.IsTestMode() then
+                    RefreshTestDisplay()
+                else
+                    UpdateDisplay()
+                end
             end,
         })
         holder:SetPoint("TOPLEFT", x, y)
@@ -642,7 +646,11 @@ local function CreateOptionsPanel()
                 end,
                 onChange = function(checked)
                     BuffRemindersDB.enabledBuffs[key] = checked
-                    UpdateDisplay()
+                    if BR.Display.IsTestMode() then
+                        RefreshTestDisplay()
+                    else
+                        UpdateDisplay()
+                    end
                 end,
                 onRightClick = function()
                     ShowCustomBuffModal(key, RenderCustomBuffRows)
