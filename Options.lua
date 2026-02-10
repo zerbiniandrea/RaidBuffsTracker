@@ -1539,11 +1539,6 @@ local function CreateOptionsPanel()
                         "textAlpha",
                         "growDirection",
                     }
-                    if category == "consumable" then
-                        appearanceKeys[#appearanceKeys + 1] = "glowType"
-                        appearanceKeys[#appearanceKeys + 1] = "showExpirationGlow"
-                        appearanceKeys[#appearanceKeys + 1] = "expirationThreshold"
-                    end
                     for _, key in ipairs(appearanceKeys) do
                         if cs[key] == nil and effective[key] ~= nil then
                             cs[key] = effective[key]
@@ -1557,13 +1552,6 @@ local function CreateOptionsPanel()
                     if cs.textColor == nil and effective.textColor then
                         local tc = effective.textColor
                         cs.textColor = { tc[1], tc[2], tc[3] }
-                    end
-                    -- glowColor: deep copy (table value, consumable only)
-                    if category == "consumable" then
-                        if cs.glowColor == nil and effective.glowColor then
-                            local gc = effective.glowColor
-                            cs.glowColor = { gc[1], gc[2], gc[3], gc[4] or 1 }
-                        end
                     end
                 end
                 db.categorySettings[category].useCustomAppearance = checked

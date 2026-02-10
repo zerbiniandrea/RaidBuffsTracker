@@ -441,10 +441,6 @@ local AppearanceKeys = {
     spacing = true,
     iconZoom = true,
     borderSize = true,
-    glowType = true,
-    glowColor = true,
-    showExpirationGlow = true,
-    expirationThreshold = true,
 }
 
 ---Get a category setting with inheritance from defaults
