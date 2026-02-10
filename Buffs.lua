@@ -43,6 +43,7 @@ BR.BUFF_TABLES = {
                 381757,
                 381758,
             },
+            castSpellID = 364342,
             key = "bronze",
             name = "Blessing of the Bronze",
             class = "EVOKER",

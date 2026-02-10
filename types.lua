@@ -34,6 +34,7 @@
 
 ---@class RaidBuff
 ---@field spellID SpellID
+---@field castSpellID? number Spell ID used for click-to-cast when different from the buff aura IDs
 ---@field key string
 ---@field name string
 ---@field class ClassName

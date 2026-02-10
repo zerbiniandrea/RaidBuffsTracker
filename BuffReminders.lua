@@ -816,7 +816,7 @@ local function GetActionSpellID(buff)
             end
         end
     end
-    return GetCastableSpellID(buff.spellID)
+    return GetCastableSpellID(buff.castSpellID or buff.spellID)
 end
 
 -- Create a SecureActionButton overlay for click-to-cast on a buff frame.
