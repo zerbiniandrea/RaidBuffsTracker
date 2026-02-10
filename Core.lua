@@ -67,6 +67,7 @@ local RootSettings = {
     hideInCombat = nil,
     showOnlyInGroup = nil,
     position = nil, -- Table with x, y
+    buffTrackingMode = nil, -- No auto-refresh, manually calls UpdateDisplay
 }
 
 -- Per-category settings (path = categorySettings.{category}.{key})
@@ -158,6 +159,7 @@ local function ValidatePath(segments)
         or root == "hideInCombat"
         or root == "showOnlyInGroup"
         or root == "position"
+        or root == "buffTrackingMode"
     if isRootSetting then
         if #segments == 1 then
             return true, RootSettings[root]

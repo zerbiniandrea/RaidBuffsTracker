@@ -155,7 +155,7 @@ local defaults = {
         consumableRebuffThreshold = 10, -- minutes
         consumableRebuffColor = { 1, 0.5, 0 },
         consumableDisplayMode = "sub_icons",
-        petDisplayMode = "expanded", -- "generic" or "expanded"
+        petDisplayMode = "generic", -- "generic" or "expanded"
     },
 
     ---@type CategoryVisibility
@@ -2164,7 +2164,7 @@ local function ApplyPetDisplayMode(frame, entry, frameList)
     if not entry.petActions then
         return
     end
-    local petMode = (BuffRemindersDB.defaults or {}).petDisplayMode or "expanded"
+    local petMode = (BuffRemindersDB.defaults or {}).petDisplayMode or "generic"
     if petMode == "expanded" then
         ExpandPetActions(frame, entry, frameList)
     else

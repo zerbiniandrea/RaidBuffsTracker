@@ -1114,7 +1114,7 @@ local function CreateOptionsPanel()
                 label = "Pet display",
                 width = 120,
                 get = function()
-                    return BR.Config.Get("defaults.petDisplayMode", "expanded")
+                    return BR.Config.Get("defaults.petDisplayMode", "generic")
                 end,
                 options = {
                     { value = "generic", label = "Generic icon" },
@@ -1211,11 +1211,11 @@ local function CreateOptionsPanel()
             end
 
             -- Initial state
-            updatePetDisplayModePreview(BR.Config.Get("defaults.petDisplayMode", "expanded"))
+            updatePetDisplayModePreview(BR.Config.Get("defaults.petDisplayMode", "generic"))
 
             -- Register for refresh so reopening the panel re-reads the value
             function petPreviewHolder:Refresh()
-                updatePetDisplayModePreview(BR.Config.Get("defaults.petDisplayMode", "expanded"))
+                updatePetDisplayModePreview(BR.Config.Get("defaults.petDisplayMode", "generic"))
             end
             table.insert(BR.RefreshableComponents, petPreviewHolder)
         end
@@ -1871,14 +1871,14 @@ local function CreateOptionsPanel()
             },
         },
         get = function()
-            return BuffRemindersDB.buffTrackingMode
+            return BR.Config.Get("buffTrackingMode", "all")
         end,
         tooltip = {
             title = "Buff tracking mode",
             desc = "Controls which raid and presence buffs are shown, and whether they track the full group or only you.",
         },
         onChange = function(val)
-            BuffRemindersDB.buffTrackingMode = val
+            BR.Config.Set("buffTrackingMode", val)
             UpdateDisplay()
         end,
     })
