@@ -3065,8 +3065,9 @@ UpdateActionButtons = function(category)
                     overlay.itemID = nil
                     -- Pet actions: use per-frame spell from expanded pet icons
                     if frame._br_pet_spell then
+                        local spellName = C_Spell.GetSpellName(frame._br_pet_spell)
                         overlay:SetAttribute("type", "spell")
-                        overlay:SetAttribute("spell", frame._br_pet_spell)
+                        overlay:SetAttribute("spell", spellName or frame._br_pet_spell)
                         overlay:EnableMouse(true)
                     else
                         local castableID = GetActionSpellID(frame.buffDef)
@@ -3086,8 +3087,9 @@ UpdateActionButtons = function(category)
                                 if not extra.clickOverlay then
                                     CreateClickOverlay(extra)
                                 end
+                                local extraSpellName = C_Spell.GetSpellName(extra._br_pet_spell)
                                 extra.clickOverlay:SetAttribute("type", "spell")
-                                extra.clickOverlay:SetAttribute("spell", extra._br_pet_spell)
+                                extra.clickOverlay:SetAttribute("spell", extraSpellName or extra._br_pet_spell)
                                 extra.clickOverlay:EnableMouse(true)
                                 if extra.clickOverlay.highlight then
                                     extra.clickOverlay.highlight:SetShown(showHighlight)
