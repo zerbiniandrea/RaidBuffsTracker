@@ -1109,6 +1109,7 @@ local function CreateOptionsPanel()
             })
             catLayout:Add(passiveCombatHolder, nil, COMPONENT_GAP)
 
+            local updatePetDisplayModePreview -- forward declaration for preview update
             local petDisplayModeHolder = Components.Dropdown(catContent, {
                 label = "Pet display",
                 width = 120,
@@ -1125,9 +1126,98 @@ local function CreateOptionsPanel()
                 },
                 onChange = function(val)
                     BR.Config.Set("defaults.petDisplayMode", val)
+                    if updatePetDisplayModePreview then
+                        updatePetDisplayModePreview(val)
+                    end
                 end,
             })
             catLayout:Add(petDisplayModeHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
+
+            -- Pet display mode preview (anchored to the right of the dropdown)
+            local PP_ICON = 24
+            local PP_BORDER = 2
+            local PP_GAP = 3
+            local PP_STEP = PP_ICON + PP_GAP + PP_BORDER * 2
+
+            local TEX_PET_GENERIC = 136082 -- Summon Demon flyout icon
+            local TEX_PETS = { 136218, 136221, 136217 } -- Imp, Voidwalker, Felhunter
+
+            local petPreviewHolder = CreateFrame("Frame", nil, catContent)
+            petPreviewHolder:SetSize(260, PP_ICON + PP_BORDER * 2 + 14)
+            petPreviewHolder:SetPoint("TOPLEFT", petDisplayModeHolder, "TOPRIGHT", 12, 0)
+
+            local petPreviewContainer = CreateFrame("Frame", nil, petPreviewHolder)
+            petPreviewContainer:SetPoint("TOPLEFT", 0, 0)
+            petPreviewContainer:SetSize(260, PP_ICON + PP_BORDER * 2)
+            petPreviewContainer:SetAlpha(0.7)
+
+            local petPreviewDesc = petPreviewHolder:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+            petPreviewDesc:SetPoint("TOPLEFT", petPreviewContainer, "BOTTOMLEFT", 0, -3)
+            petPreviewDesc:SetJustifyH("LEFT")
+
+            local function CreatePetPreviewIcon(parent, texture, size)
+                local f = CreateFrame("Frame", nil, parent)
+                f:SetSize(size, size)
+                f.icon = f:CreateTexture(nil, "ARTWORK")
+                f.icon:SetAllPoints()
+                f.icon:SetTexture(texture)
+                local z = TEXCOORD_INSET
+                f.icon:SetTexCoord(z, 1 - z, z, 1 - z)
+                f.border = f:CreateTexture(nil, "BACKGROUND")
+                f.border:SetColorTexture(0, 0, 0, 1)
+                f.border:SetPoint("TOPLEFT", -PP_BORDER, PP_BORDER)
+                f.border:SetPoint("BOTTOMRIGHT", PP_BORDER, -PP_BORDER)
+                return f
+            end
+
+            local allPetPreviewFrames = {}
+
+            -- Generic: single icon
+            local genericFrame = CreatePetPreviewIcon(petPreviewContainer, TEX_PET_GENERIC, PP_ICON)
+            genericFrame:SetPoint("TOPLEFT", petPreviewContainer, "TOPLEFT", 0, 0)
+            genericFrame:Hide()
+            allPetPreviewFrames[#allPetPreviewFrames + 1] = genericFrame
+
+            -- Expanded: individual summon spell icons
+            local expandedPetFrames = {}
+            for i = 1, 3 do
+                local f = CreatePetPreviewIcon(petPreviewContainer, TEX_PETS[i], PP_ICON)
+                f:SetPoint("TOPLEFT", petPreviewContainer, "TOPLEFT", (i - 1) * PP_STEP, 0)
+                f:Hide()
+                expandedPetFrames[i] = f
+                allPetPreviewFrames[#allPetPreviewFrames + 1] = f
+            end
+
+            local PET_MODE_FRAMES = {
+                generic = { genericFrame },
+                expanded = expandedPetFrames,
+            }
+            local PET_MODE_DESC = {
+                generic = "A single generic 'NO PET' icon",
+                expanded = "Each pet summon spell as its own icon",
+            }
+
+            updatePetDisplayModePreview = function(mode)
+                for _, f in ipairs(allPetPreviewFrames) do
+                    f:Hide()
+                end
+                local shown = PET_MODE_FRAMES[mode]
+                if shown then
+                    for _, f in ipairs(shown) do
+                        f:Show()
+                    end
+                end
+                petPreviewDesc:SetText(PET_MODE_DESC[mode] or "")
+            end
+
+            -- Initial state
+            updatePetDisplayModePreview(BR.Config.Get("defaults.petDisplayMode", "expanded"))
+
+            -- Register for refresh so reopening the panel re-reads the value
+            function petPreviewHolder:Refresh()
+                updatePetDisplayModePreview(BR.Config.Get("defaults.petDisplayMode", "expanded"))
+            end
+            table.insert(BR.RefreshableComponents, petPreviewHolder)
         end
 
         -- Item display mode (consumable only, grouped with icon options)
@@ -1169,17 +1259,17 @@ local function CreateOptionsPanel()
             local TEX_OIL = 609892
 
             local previewHolder = CreateFrame("Frame", nil, catContent)
-            previewHolder:SetSize(260, 50)
-            previewHolder:SetPoint("TOPLEFT", displayModeHolder, "TOPRIGHT", 12, 2)
-
-            local previewDesc = previewHolder:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-            previewDesc:SetPoint("TOPLEFT", 0, 0)
-            previewDesc:SetJustifyH("LEFT")
+            previewHolder:SetSize(260, P_ICON + P_SUB + P_GAP + P_BORDER * 2 + 14)
+            previewHolder:SetPoint("TOPLEFT", displayModeHolder, "TOPRIGHT", 12, 0)
 
             local previewContainer = CreateFrame("Frame", nil, previewHolder)
-            previewContainer:SetPoint("TOPLEFT", previewDesc, "BOTTOMLEFT", 0, -3)
-            previewContainer:SetSize(260, 36)
+            previewContainer:SetPoint("TOPLEFT", 0, 0)
+            previewContainer:SetSize(260, P_ICON + P_SUB + P_GAP + P_BORDER * 2)
             previewContainer:SetAlpha(0.7)
+
+            local previewDesc = previewHolder:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+            previewDesc:SetPoint("TOPLEFT", previewContainer, "BOTTOMLEFT", 0, -3)
+            previewDesc:SetJustifyH("LEFT")
 
             local function CreatePreviewIcon(parent, texture, size)
                 local f = CreateFrame("Frame", nil, parent)
