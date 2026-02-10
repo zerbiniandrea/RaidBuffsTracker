@@ -12,4 +12,5 @@ ignore:
   - README.md
   - CURSEFORGE.md
   - CLAUDE.md
+  - CONTRIBUTING.md
   - types.lua
