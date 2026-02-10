@@ -156,7 +156,8 @@
 ---@field growDirection string
 ---@field showExpirationGlow boolean
 ---@field expirationThreshold number
----@field glowStyle number
+---@field glowType number
+---@field glowColor number[]
 ---@field fontFace? string
 ---@field showConsumablesWithoutItems? boolean
 ---@field consumableRebuffWarning? boolean

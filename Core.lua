@@ -109,7 +109,8 @@ local DefaultSettingKeys = {
     -- Behavior (glow is global-only, lives under defaults)
     showExpirationGlow = "VisualsRefresh",
     expirationThreshold = "VisualsRefresh",
-    glowStyle = "VisualsRefresh",
+    glowType = "VisualsRefresh",
+    glowColor = "VisualsRefresh",
     -- Consumable rebuff warning
     showConsumablesWithoutItems = "DisplayRefresh",
     consumableRebuffWarning = "DisplayRefresh",

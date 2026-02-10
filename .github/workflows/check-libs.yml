@@ -24,13 +24,18 @@ jobs:
           svn export --force https://repos.curseforge.com/wow/callbackhandler/trunk/CallbackHandler-1.0 /tmp/CallbackHandler-1.0
           svn export --force https://repos.curseforge.com/wow/libsharedmedia-3-0/trunk/LibSharedMedia-3.0 /tmp/LibSharedMedia-3.0
 
+          # LibCustomGlow is on GitHub, not CurseForge SVN
+          git clone --depth 1 https://github.com/Stanzilla/LibCustomGlow.git /tmp/LibCustomGlow-1.0-repo
+          mkdir -p /tmp/LibCustomGlow-1.0
+          cp /tmp/LibCustomGlow-1.0-repo/LibCustomGlow-1.0.lua /tmp/LibCustomGlow-1.0/
+
       - name: Check for updates
         id: diff
         run: |
           updated=""
 
           # Only compare the files we actually bundle
-          for lib in LibStub CallbackHandler-1.0 LibSharedMedia-3.0; do
+          for lib in LibStub CallbackHandler-1.0 LibSharedMedia-3.0 LibCustomGlow-1.0; do
             if ! diff -rq "Libs/$lib" "/tmp/$lib" --exclude='.pkgmeta' --exclude='*.toc' --exclude='tests' > /dev/null 2>&1; then
               cp -r "/tmp/$lib/"* "Libs/$lib/"
               # Clean up files we don't bundle

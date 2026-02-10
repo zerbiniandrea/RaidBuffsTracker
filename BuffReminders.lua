@@ -148,7 +148,8 @@ local defaults = {
         -- Behavior (glow is global-only)
         showExpirationGlow = true,
         expirationThreshold = 15, -- minutes
-        glowStyle = 1, -- 1=Orange, 2=Gold, 3=Yellow, 4=White, 5=Red
+        glowType = 1, -- 1=Pixel, 2=AutoCast, 3=Proc
+        glowColor = { 0.95, 0.57, 0.07, 1 }, -- orange RGBA
         -- Consumable rebuff warning
         showConsumablesWithoutItems = false,
         consumableRebuffWarning = true,
@@ -343,9 +344,6 @@ local function GetCategorySettings(category)
             borderSize = globalDefaults.borderSize or 2,
             growDirection = globalDefaults.growDirection or "CENTER",
             showBuffReminder = false, -- main uses per-frame logic based on buff's actual category
-            showExpirationGlow = globalDefaults.showExpirationGlow ~= false,
-            expirationThreshold = globalDefaults.expirationThreshold or 15,
-            glowStyle = globalDefaults.glowStyle or 1,
         }
     end
 
@@ -397,11 +395,6 @@ local function GetCategorySettings(category)
     else
         result.showBuffReminder = false
     end
-
-    -- Glow: always from global defaults
-    result.showExpirationGlow = globalDefaults.showExpirationGlow ~= false
-    result.expirationThreshold = globalDefaults.expirationThreshold or 15
-    result.glowStyle = globalDefaults.glowStyle or 1
 
     return result
 end
@@ -551,148 +544,9 @@ local UpdateDisplay, UpdateAnchor, ToggleTestMode, RefreshTestDisplay
 local UpdateFallbackDisplay, RenderPetEntries
 local UpdateActionButtons
 
--- Glow style definitions
-local GlowStyles = {
-    {
-        name = "Orange",
-        setup = function(frame)
-            local glow = frame:CreateTexture(nil, "OVERLAY")
-            glow:SetPoint("TOPLEFT", -4, 4)
-            glow:SetPoint("BOTTOMRIGHT", 4, -4)
-            glow:SetAtlas("bags-glow-orange")
-            glow:SetAlpha(0.8)
-            frame.glowTexture = glow
-            local ag = glow:CreateAnimationGroup()
-            ag:SetLooping("BOUNCE")
-            local fade = ag:CreateAnimation("Alpha")
-            fade:SetFromAlpha(0.8)
-            fade:SetToAlpha(0.3)
-            fade:SetDuration(0.5)
-            frame.glowAnim = ag
-        end,
-    },
-    {
-        name = "Gold",
-        setup = function(frame)
-            local glow = frame:CreateTexture(nil, "OVERLAY")
-            glow:SetPoint("TOPLEFT", -3, 3)
-            glow:SetPoint("BOTTOMRIGHT", 3, -3)
-            glow:SetAtlas("loottoast-itemborder-gold")
-            frame.glowTexture = glow
-            local ag = glow:CreateAnimationGroup()
-            ag:SetLooping("BOUNCE")
-            local fade = ag:CreateAnimation("Alpha")
-            fade:SetFromAlpha(1)
-            fade:SetToAlpha(0.4)
-            fade:SetDuration(0.6)
-            frame.glowAnim = ag
-        end,
-    },
-    {
-        name = "Yellow",
-        setup = function(frame)
-            local glow = frame:CreateTexture(nil, "OVERLAY")
-            glow:SetPoint("TOPLEFT", -6, 6)
-            glow:SetPoint("BOTTOMRIGHT", 6, -6)
-            glow:SetAtlas("bags-glow-white")
-            glow:SetVertexColor(1, 0.8, 0)
-            frame.glowTexture = glow
-            local ag = glow:CreateAnimationGroup()
-            ag:SetLooping("BOUNCE")
-            local fade = ag:CreateAnimation("Alpha")
-            fade:SetFromAlpha(0.9)
-            fade:SetToAlpha(0.2)
-            fade:SetDuration(0.5)
-            frame.glowAnim = ag
-        end,
-    },
-    {
-        name = "White",
-        setup = function(frame)
-            local glow = frame:CreateTexture(nil, "OVERLAY")
-            glow:SetPoint("TOPLEFT", -6, 6)
-            glow:SetPoint("BOTTOMRIGHT", 6, -6)
-            glow:SetAtlas("bags-glow-white")
-            frame.glowTexture = glow
-            local ag = glow:CreateAnimationGroup()
-            ag:SetLooping("BOUNCE")
-            local fade = ag:CreateAnimation("Alpha")
-            fade:SetFromAlpha(0.9)
-            fade:SetToAlpha(0.2)
-            fade:SetDuration(0.5)
-            frame.glowAnim = ag
-        end,
-    },
-    {
-        name = "Red",
-        setup = function(frame)
-            local glow = frame:CreateTexture(nil, "OVERLAY")
-            glow:SetPoint("TOPLEFT", -5, 5)
-            glow:SetPoint("BOTTOMRIGHT", 5, -5)
-            glow:SetAtlas("bags-glow-white")
-            glow:SetVertexColor(1, 0.2, 0.2)
-            frame.glowTexture = glow
-            local ag = glow:CreateAnimationGroup()
-            ag:SetLooping("BOUNCE")
-            local fade = ag:CreateAnimation("Alpha")
-            fade:SetFromAlpha(1)
-            fade:SetToAlpha(0.1)
-            fade:SetDuration(0.3)
-            frame.glowAnim = ag
-        end,
-    },
-}
-
--- Export for Options.lua (ShowGlowDemo)
-BR.GlowStyles = GlowStyles
-
--- Show/hide expiration glow on a buff frame
-local function SetExpirationGlow(frame, show)
-    local db = BuffRemindersDB
-    local styleIndex = (db.defaults and db.defaults.glowStyle) or 1
-
-    if show then
-        if not frame.glowShowing or frame.currentGlowStyle ~= styleIndex then
-            -- Clean up old glow if style changed
-            if frame.glowAnim then
-                frame.glowAnim:Stop()
-            end
-            if frame.glowTexture then
-                frame.glowTexture:Hide()
-                frame.glowTexture:SetParent(nil)
-                frame.glowTexture = nil
-            end
-            frame.glowAnim = nil
-
-            -- Setup new glow style
-            local style = GlowStyles[styleIndex]
-            if style then
-                style.setup(frame)
-                frame.currentGlowStyle = styleIndex
-                if frame.glowTexture then
-                    frame.glowTexture:Show()
-                end
-                if frame.glowAnim then
-                    frame.glowAnim:Play()
-                end
-            end
-            frame.glowShowing = true
-        end
-    else
-        if frame.glowShowing then
-            if frame.glowAnim then
-                frame.glowAnim:Stop()
-            end
-            if frame.glowTexture then
-                frame.glowTexture:Hide()
-            end
-            frame.glowShowing = false
-        end
-    end
-end
-
--- Forward declaration for SetRebuffBorder (defined after glow styles)
-local SetRebuffBorder
+-- Local aliases for glow module
+local SetExpirationGlow = BR.Glow.SetExpiration
+local SetRebuffBorder = BR.Glow.SetRebuffBorder
 
 -- Hide a buff frame and clear its glow and rebuff border.
 -- Overlays and action buttons are managed solely by SyncSecureButtons() based on
@@ -1900,76 +1754,6 @@ end
 
 -- Eating icon texture ID (from State.lua, matches the eating channel aura icon)
 local EATING_ICON = BR.EATING_AURA_ICON
-
--- Show/hide rebuff warning pulsing border on a buff frame (4-edge border, does not obscure icon)
-SetRebuffBorder = function(frame, show)
-    if show then
-        local color = (BuffRemindersDB and BuffRemindersDB.defaults and BuffRemindersDB.defaults.consumableRebuffColor)
-            or { 1, 0.5, 0 }
-        local cr, cg, cb = color[1] or 1, color[2] or 0.5, color[3] or 0
-        if not frame.rebuffBorderFrame then
-            local thickness = 2
-            local holder = CreateFrame("Frame", nil, frame)
-            holder:SetPoint("TOPLEFT", -thickness, thickness)
-            holder:SetPoint("BOTTOMRIGHT", thickness, -thickness)
-            holder:SetFrameLevel(frame:GetFrameLevel() + 5)
-            -- Top
-            local t = holder:CreateTexture(nil, "OVERLAY")
-            t:SetPoint("TOPLEFT")
-            t:SetPoint("TOPRIGHT")
-            t:SetHeight(thickness)
-            t:SetColorTexture(cr, cg, cb, 1)
-            -- Bottom
-            local b = holder:CreateTexture(nil, "OVERLAY")
-            b:SetPoint("BOTTOMLEFT")
-            b:SetPoint("BOTTOMRIGHT")
-            b:SetHeight(thickness)
-            b:SetColorTexture(cr, cg, cb, 1)
-            -- Left
-            local l = holder:CreateTexture(nil, "OVERLAY")
-            l:SetPoint("TOPLEFT")
-            l:SetPoint("BOTTOMLEFT")
-            l:SetWidth(thickness)
-            l:SetColorTexture(cr, cg, cb, 1)
-            -- Right
-            local r = holder:CreateTexture(nil, "OVERLAY")
-            r:SetPoint("TOPRIGHT")
-            r:SetPoint("BOTTOMRIGHT")
-            r:SetWidth(thickness)
-            r:SetColorTexture(cr, cg, cb, 1)
-
-            local ag = holder:CreateAnimationGroup()
-            ag:SetLooping("BOUNCE")
-            local fade = ag:CreateAnimation("Alpha")
-            fade:SetFromAlpha(1)
-            fade:SetToAlpha(0.3)
-            fade:SetDuration(0.6)
-            fade:SetSmoothing("IN_OUT")
-            frame.rebuffBorderFrame = holder
-            frame.rebuffBorderAnim = ag
-            frame.rebuffBorderEdges = { t, b, l, r }
-            frame.rebuffBorderColor = { cr, cg, cb }
-        elseif
-            frame.rebuffBorderColor[1] ~= cr
-            or frame.rebuffBorderColor[2] ~= cg
-            or frame.rebuffBorderColor[3] ~= cb
-        then
-            for _, edge in ipairs(frame.rebuffBorderEdges) do
-                edge:SetColorTexture(cr, cg, cb, 1)
-            end
-            frame.rebuffBorderColor = { cr, cg, cb }
-        end
-        frame.rebuffBorderFrame:Show()
-        if not frame.rebuffBorderAnim:IsPlaying() then
-            frame.rebuffBorderAnim:Play()
-        end
-    else
-        if frame.rebuffBorderFrame then
-            frame.rebuffBorderAnim:Stop()
-            frame.rebuffBorderFrame:Hide()
-        end
-    end
-end
 
 -- Resolve the correct icon for a consumable frame.
 -- Uses the top item from the consumable cache (actual item in bags), falling back
@@ -3498,7 +3282,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         -- ====================================================================
         -- Versioned migrations — each runs exactly once, tracked by dbVersion
         -- ====================================================================
-        local DB_VERSION = 11
+        local DB_VERSION = 12
 
         local migrations = {
             -- [1] Consolidate all pre-versioning migrations (v2.8 → v3.x)
@@ -3521,7 +3305,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
                     -- Migrate global behavior settings to defaults
                     db.defaults.showExpirationGlow = db.showExpirationGlow ~= false
                     db.defaults.expirationThreshold = db.expirationThreshold or defaults.defaults.expirationThreshold
-                    db.defaults.glowStyle = db.glowStyle or defaults.defaults.glowStyle
+                    db.defaults.glowStyle = db.glowStyle or 1
                     -- Clean up old root-level keys
                     db.iconSize = nil
                     db.spacing = nil
@@ -3776,6 +3560,26 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
                 -- Clean up old keys
                 db.showOnlyPlayerClassBuff = nil
                 db.showOnlyPlayerMissing = nil
+            end,
+            -- [12] Migrate glowStyle (1-5 color variants) to glowType + glowColor (LibCustomGlow)
+            [12] = function()
+                if not db.defaults then
+                    return
+                end
+                local oldStyle = db.defaults.glowStyle
+                if oldStyle ~= nil then
+                    -- All old styles were atlas-based pulsing → map to Pixel glow with the color
+                    local colorMap = {
+                        [1] = { 0.95, 0.57, 0.07, 1 }, -- Orange
+                        [2] = { 1, 0.82, 0, 1 }, -- Gold
+                        [3] = { 1, 0.8, 0, 1 }, -- Yellow
+                        [4] = { 0.9, 0.9, 0.9, 1 }, -- White
+                        [5] = { 1, 0.2, 0.2, 1 }, -- Red
+                    }
+                    db.defaults.glowType = 1 -- Pixel (closest to old atlas pulsing)
+                    db.defaults.glowColor = colorMap[oldStyle] or { 0.95, 0.57, 0.07, 1 }
+                    db.defaults.glowStyle = nil
+                end
             end,
         }
 

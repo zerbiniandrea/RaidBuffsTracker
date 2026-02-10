@@ -31,8 +31,9 @@ local SelfBuffs = BUFF_TABLES.self
 local PetBuffs = BUFF_TABLES.pet
 local Consumables = BUFF_TABLES.consumable
 
--- Glow styles (for ShowGlowDemo)
-local GlowStyles = BR.GlowStyles
+-- Glow module
+local Glow = BR.Glow
+local GlowTypes = Glow.Types
 
 -- Export references from BuffReminders.lua
 local defaults = BR.defaults
@@ -882,31 +883,47 @@ local function CreateOptionsPanel()
     appLayout:SetX(appX + 20)
     appLayout:Add(defThresholdHolder, nil, COMPONENT_GAP)
 
-    -- Style dropdown (on its own line)
-    local styleOptions = {}
-    for i, style in ipairs(GlowStyles) do
-        styleOptions[i] = { label = style.name, value = i }
+    -- Type dropdown
+    local typeOptions = {}
+    for i, gt in ipairs(GlowTypes) do
+        typeOptions[i] = { label = gt.name, value = i }
     end
 
-    local defStyleHolder = Components.Dropdown(appearanceContent, {
-        label = "Style:",
-        options = styleOptions,
+    local defTypeHolder = Components.Dropdown(appearanceContent, {
+        label = "Type:",
+        options = typeOptions,
         get = function()
-            return BuffRemindersDB.defaults and BuffRemindersDB.defaults.glowStyle or 1
+            return BuffRemindersDB.defaults and BuffRemindersDB.defaults.glowType or 1
         end,
         enabled = isExpirationGlowEnabled,
         width = 100,
         onChange = function(val)
-            BR.Config.Set("defaults.glowStyle", val)
+            BR.Config.Set("defaults.glowType", val)
         end,
-    }, "BuffRemindersDefStyleDropdown")
-    appLayout:Add(defStyleHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
-    appLayout:SetX(appX)
+    }, "BuffRemindersDefGlowTypeDropdown")
+    appLayout:Add(defTypeHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
+
+    -- Color picker (inline with type dropdown)
+    local defGlowColorHolder = Components.ColorSwatch(appearanceContent, {
+        label = "Color:",
+        labelWidth = 40,
+        hasOpacity = true,
+        get = function()
+            local c = BR.Config.Get("defaults.glowColor", Glow.DEFAULT_COLOR)
+            return c[1], c[2], c[3], c[4] or 1
+        end,
+        enabled = isExpirationGlowEnabled,
+        onChange = function(r, g, b, a)
+            BR.Config.Set("defaults.glowColor", { r, g, b, a or 1 })
+        end,
+    })
+    defGlowColorHolder:SetPoint("LEFT", defTypeHolder, "RIGHT", 10, 0)
 
     local previewBtn = CreateButton(appearanceContent, "Preview", function()
         ShowGlowDemo()
     end)
-    previewBtn:SetPoint("LEFT", defStyleHolder, "RIGHT", 10, 0)
+    previewBtn:SetPoint("LEFT", defGlowColorHolder, "RIGHT", 10, 0)
+    appLayout:SetX(appX)
 
     -- Per-Category Customization section
     LayoutSectionHeader(appLayout, appearanceContent, "Per-Category Customization")
@@ -2044,23 +2061,23 @@ end
 
 -- Glow demo panel
 ShowGlowDemo = function()
+    -- Clean up old panel (recreate to reflect current color)
     if glowDemoPanel then
-        glowDemoPanel:SetShown(not glowDemoPanel:IsShown())
-        return
+        glowDemoPanel:Hide()
+        glowDemoPanel = nil
     end
 
     local ICON_SIZE = 64
     local SPACING = 20
-    local numStyles = #GlowStyles
+    local numTypes = #GlowTypes
 
-    local demoPanel =
-        CreatePanel("BuffRemindersGlowDemo", numStyles * (ICON_SIZE + SPACING) + SPACING, ICON_SIZE + 70, {
-            strata = "TOOLTIP",
-        })
+    local demoPanel = CreatePanel("BuffRemindersGlowDemo", numTypes * (ICON_SIZE + SPACING) + SPACING, ICON_SIZE + 70, {
+        strata = "TOOLTIP",
+    })
 
     local demoTitle = demoPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     demoTitle:SetPoint("TOP", 0, -8)
-    demoTitle:SetText("|cffffcc00Glow Styles Preview|r")
+    demoTitle:SetText("|cffffcc00Glow Types Preview|r")
 
     local demoCloseBtn = CreateButton(demoPanel, "x", function()
         demoPanel:Hide()
@@ -2068,7 +2085,10 @@ ShowGlowDemo = function()
     demoCloseBtn:SetSize(22, 22)
     demoCloseBtn:SetPoint("TOPRIGHT", -5, -5)
 
-    for i, style in ipairs(GlowStyles) do
+    local color = BR.Config.Get("defaults.glowColor", Glow.DEFAULT_COLOR)
+    local demoFrames = {}
+
+    for i, gt in ipairs(GlowTypes) do
         local iconFrame = CreateFrame("Frame", nil, demoPanel)
         iconFrame:SetSize(ICON_SIZE, ICON_SIZE)
         iconFrame:SetPoint("TOPLEFT", SPACING + (i - 1) * (ICON_SIZE + SPACING), -30)
@@ -2083,16 +2103,23 @@ ShowGlowDemo = function()
         border:SetPoint("BOTTOMRIGHT", DEFAULT_BORDER_SIZE, -DEFAULT_BORDER_SIZE)
         border:SetColorTexture(0, 0, 0, 1)
 
-        style.setup(iconFrame)
-        if iconFrame.glowAnim then
-            iconFrame.glowAnim:Play()
-        end
+        Glow.Start(iconFrame, i, color, "BR_demo_" .. i)
+        demoFrames[i] = iconFrame
 
-        local styleLabel = demoPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        styleLabel:SetPoint("TOP", iconFrame, "BOTTOM", 0, -4)
-        styleLabel:SetText(style.name)
-        styleLabel:SetWidth(ICON_SIZE + 10)
+        local typeLabel = demoPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        typeLabel:SetPoint("TOP", iconFrame, "BOTTOM", 0, -4)
+        typeLabel:SetText(gt.name)
+        typeLabel:SetWidth(ICON_SIZE + 10)
     end
+
+    -- Clean up glows when panel hides
+    demoPanel:SetScript("OnHide", function()
+        for i in ipairs(GlowTypes) do
+            if demoFrames[i] then
+                Glow.StopAll(demoFrames[i], "BR_demo_" .. i)
+            end
+        end
+    end)
 
     glowDemoPanel = demoPanel
 end
