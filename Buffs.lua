@@ -129,6 +129,16 @@ BR.BUFF_TABLES = {
             missingText = "NO\nSOURCE",
         },
         {
+            spellID = 360827,
+            key = "blisteringScales",
+            name = "Blistering Scales",
+            class = "EVOKER",
+            beneficiaryRole = "TANK",
+            missingText = "NO\nSCALES",
+            requireSpecId = 1473, -- Augmentation
+            requiresTalentSpellID = 360827,
+        },
+        {
             spellID = 474750,
             key = "symbioticRelationship",
             name = "Symbiotic Relationship",
