@@ -1099,32 +1099,43 @@ local function SyncSecureButtons()
         -- Sync click overlay
         local overlay = frame.clickOverlay
         if overlay then
+            local cs = frame.buffCategory and BuffRemindersDB.categorySettings
+                and BuffRemindersDB.categorySettings[frame.buffCategory]
+            local clickable = cs and cs.clickable == true
             if frame:IsShown() then
-                local left, bottom, width, height = frame:GetRect()
-                if left then
-                    -- Skip if position unchanged (avoids redundant ClearAllPoints/SetPoint)
-                    if
-                        overlay._br_left ~= left
-                        or overlay._br_bottom ~= bottom
-                        or overlay._br_width ~= width
-                        or overlay._br_height ~= height
-                    then
-                        overlay:ClearAllPoints()
-                        overlay:SetSize(width, height)
-                        overlay:SetFrameStrata(frame:GetFrameStrata())
-                        overlay:SetFrameLevel(frame:GetFrameLevel() + 5)
-                        overlay:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left, bottom)
-                        overlay._br_left = left
-                        overlay._br_bottom = bottom
-                        overlay._br_width = width
-                        overlay._br_height = height
-                    end
-                    if not overlay:IsShown() then
-                        overlay:Show()
+                if not clickable then
+                    overlay:EnableMouse(false)
+                    overlay:Hide()
+                    overlay._br_left = nil
+                else
+                    local left, bottom, width, height = frame:GetRect()
+                    if left then
+                        -- Skip if position unchanged (avoids redundant ClearAllPoints/SetPoint)
+                        if
+                            overlay._br_left ~= left
+                            or overlay._br_bottom ~= bottom
+                            or overlay._br_width ~= width
+                            or overlay._br_height ~= height
+                        then
+                            overlay:ClearAllPoints()
+                            overlay:SetSize(width, height)
+                            overlay:SetFrameStrata(frame:GetFrameStrata())
+                            overlay:SetFrameLevel(frame:GetFrameLevel() + 5)
+                            overlay:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left, bottom)
+                            overlay._br_left = left
+                            overlay._br_bottom = bottom
+                            overlay._br_width = width
+                            overlay._br_height = height
+                        end
+                        overlay:EnableMouse(true)
+                        if not overlay:IsShown() then
+                            overlay:Show()
+                        end
                     end
                 end
             else
                 overlay:Hide()
+                overlay:EnableMouse(false)
                 overlay._br_left = nil
             end
         end
@@ -1219,30 +1230,41 @@ local function SyncSecureButtons()
                 local extraOverlay = extra.clickOverlay
                 if extraOverlay then
                     if extra:IsShown() then
-                        local eLeft, eBottom, eWidth, eHeight = extra:GetRect()
-                        if eLeft then
-                            if
-                                extraOverlay._br_left ~= eLeft
-                                or extraOverlay._br_bottom ~= eBottom
-                                or extraOverlay._br_width ~= eWidth
-                                or extraOverlay._br_height ~= eHeight
-                            then
-                                extraOverlay:ClearAllPoints()
-                                extraOverlay:SetSize(eWidth, eHeight)
-                                extraOverlay:SetFrameStrata(extra:GetFrameStrata())
-                                extraOverlay:SetFrameLevel(extra:GetFrameLevel() + 5)
-                                extraOverlay:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", eLeft, eBottom)
-                                extraOverlay._br_left = eLeft
-                                extraOverlay._br_bottom = eBottom
-                                extraOverlay._br_width = eWidth
-                                extraOverlay._br_height = eHeight
-                            end
-                            if not extraOverlay:IsShown() then
-                                extraOverlay:Show()
+                        local extraCs = frame.buffCategory and BuffRemindersDB.categorySettings
+                            and BuffRemindersDB.categorySettings[frame.buffCategory]
+                        local extraClickable = extraCs and extraCs.clickable == true
+                        if not extraClickable then
+                            extraOverlay:EnableMouse(false)
+                            extraOverlay:Hide()
+                            extraOverlay._br_left = nil
+                        else
+                            local eLeft, eBottom, eWidth, eHeight = extra:GetRect()
+                            if eLeft then
+                                if
+                                    extraOverlay._br_left ~= eLeft
+                                    or extraOverlay._br_bottom ~= eBottom
+                                    or extraOverlay._br_width ~= eWidth
+                                    or extraOverlay._br_height ~= eHeight
+                                then
+                                    extraOverlay:ClearAllPoints()
+                                    extraOverlay:SetSize(eWidth, eHeight)
+                                    extraOverlay:SetFrameStrata(extra:GetFrameStrata())
+                                    extraOverlay:SetFrameLevel(extra:GetFrameLevel() + 5)
+                                    extraOverlay:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", eLeft, eBottom)
+                                    extraOverlay._br_left = eLeft
+                                    extraOverlay._br_bottom = eBottom
+                                    extraOverlay._br_width = eWidth
+                                    extraOverlay._br_height = eHeight
+                                end
+                                extraOverlay:EnableMouse(true)
+                                if not extraOverlay:IsShown() then
+                                    extraOverlay:Show()
+                                end
                             end
                         end
                     else
                         extraOverlay:Hide()
+                        extraOverlay:EnableMouse(false)
                         extraOverlay._br_left = nil
                     end
                 end
