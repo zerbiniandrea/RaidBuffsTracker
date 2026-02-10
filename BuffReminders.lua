@@ -2081,6 +2081,47 @@ local function RenderVisibleEntry(frame, entry)
     return true
 end
 
+---Apply consumable display mode (sub-icons or expanded extra frames) to a consumable frame.
+---@param frame BuffFrame
+---@param entry BuffStateEntry
+---@param frameList table[] List to append extra frames to (for positioning)
+---@param parentFrame Frame Parent for extra frames
+local function ApplyConsumableDisplayMode(frame, entry, frameList, parentFrame)
+    if entry.displayType ~= "missing" or entry.isEating then
+        return
+    end
+    if not BUFF_KEY_TO_CATEGORY[frame.key] or not frame:IsShown() then
+        return
+    end
+
+    local displayMode = (BuffRemindersDB.defaults or {}).consumableDisplayMode or "sub_icons"
+    local items = GetConsumableActionItems(frame.buffDef)
+    if displayMode == "sub_icons" then
+        local cs = BuffRemindersDB.categorySettings and BuffRemindersDB.categorySettings.consumable
+        local clickable = cs and cs.clickable == true
+        UpdateConsumableButtons(frame, items, clickable)
+    else
+        -- Not sub_icons: hide any leftover sub-icon buttons
+        UpdateConsumableButtons(frame, nil)
+        if displayMode == "expanded" and items and #items > 1 then
+            for i = 2, #items do
+                local extra = GetOrCreateExtraFrame(frame, i - 1)
+                extra:SetParent(parentFrame)
+                extra:SetSize(frame:GetWidth(), frame:GetHeight())
+                extra.icon:SetTexture(items[i].icon)
+                if extra.qualityOverlay then
+                    SetQualityOverlay(extra.qualityOverlay, items[i].craftedQuality, frame:GetWidth())
+                end
+                extra.stackCount:SetText(items[i].count)
+                extra.stackCount:Show()
+                extra.count:Hide()
+                extra:Show()
+                frameList[#frameList + 1] = extra
+            end
+        end
+    end
+end
+
 -- Expand a pet entry's actions into the main frame + extra frames.
 -- The first action overrides the main frame's icon; subsequent actions create extra frames.
 -- Returns the extra frames appended to frameList (if provided).
@@ -2266,46 +2307,12 @@ UpdateDisplay = function()
                         if shown then
                             frames[#frames + 1] = frame
                         end
-                        -- Consumable display modes: sub-icons or expanded (skip while eating)
-                        if
-                            entry.displayType == "missing"
-                            and not entry.isEating
-                            and BUFF_KEY_TO_CATEGORY[frame.key]
-                            and frame:IsShown()
-                        then
-                            local displayMode = (db.defaults or {}).consumableDisplayMode or "sub_icons"
-                            local items = GetConsumableActionItems(frame.buffDef)
-                            if displayMode == "sub_icons" then
-                                local cs = db.categorySettings and db.categorySettings.consumable
-                                local clickable = cs and cs.clickable == true
-                                UpdateConsumableButtons(frame, items, clickable)
-                            else
-                                -- Not sub_icons: hide any leftover sub-icon buttons
-                                UpdateConsumableButtons(frame, nil)
-                                if displayMode == "expanded" and items and #items > 1 then
-                                    for i = 2, #items do
-                                        local extra = GetOrCreateExtraFrame(frame, i - 1)
-                                        extra:SetParent(frame:GetParent())
-                                        extra:SetSize(frame:GetWidth(), frame:GetHeight())
-                                        extra.icon:SetTexture(items[i].icon)
-                                        if extra.qualityOverlay then
-                                            SetQualityOverlay(
-                                                extra.qualityOverlay,
-                                                items[i].craftedQuality,
-                                                frame:GetWidth()
-                                            )
-                                        end
-                                        extra.stackCount:SetText(items[i].count)
-                                        extra.stackCount:Show()
-                                        extra.count:Hide()
-                                        extra:Show()
-                                        frames[#frames + 1] = extra
-                                    end
-                                end
-                            end
+                        -- Category-specific post-processing
+                        if category == "consumable" then
+                            ApplyConsumableDisplayMode(frame, entry, frames, frame:GetParent())
+                        elseif category == "pet" then
+                            ApplyPetDisplayMode(frame, entry, frames)
                         end
-                        -- Pet expansion: individual summon spell icons
-                        ApplyPetDisplayMode(frame, entry, frames)
                     end
                 end
                 PositionSplitCategory(category, frames)
@@ -2318,46 +2325,12 @@ UpdateDisplay = function()
                         if shown then
                             mainFrameBuffs[#mainFrameBuffs + 1] = frame
                         end
-                        -- Consumable display modes: sub-icons or expanded (skip while eating)
-                        if
-                            entry.displayType == "missing"
-                            and not entry.isEating
-                            and BUFF_KEY_TO_CATEGORY[frame.key]
-                            and frame:IsShown()
-                        then
-                            local displayMode = (db.defaults or {}).consumableDisplayMode or "sub_icons"
-                            local items = GetConsumableActionItems(frame.buffDef)
-                            if displayMode == "sub_icons" then
-                                local cs = db.categorySettings and db.categorySettings.consumable
-                                local clickable = cs and cs.clickable == true
-                                UpdateConsumableButtons(frame, items, clickable)
-                            else
-                                -- Not sub_icons: hide any leftover sub-icon buttons
-                                UpdateConsumableButtons(frame, nil)
-                                if displayMode == "expanded" and items and #items > 1 then
-                                    for i = 2, #items do
-                                        local extra = GetOrCreateExtraFrame(frame, i - 1)
-                                        extra:SetParent(mainFrame)
-                                        extra:SetSize(frame:GetWidth(), frame:GetHeight())
-                                        extra.icon:SetTexture(items[i].icon)
-                                        if extra.qualityOverlay then
-                                            SetQualityOverlay(
-                                                extra.qualityOverlay,
-                                                items[i].craftedQuality,
-                                                frame:GetWidth()
-                                            )
-                                        end
-                                        extra.stackCount:SetText(items[i].count)
-                                        extra.stackCount:Show()
-                                        extra.count:Hide()
-                                        extra:Show()
-                                        mainFrameBuffs[#mainFrameBuffs + 1] = extra
-                                    end
-                                end
-                            end
+                        -- Category-specific post-processing
+                        if category == "consumable" then
+                            ApplyConsumableDisplayMode(frame, entry, mainFrameBuffs, mainFrame)
+                        elseif category == "pet" then
+                            ApplyPetDisplayMode(frame, entry, mainFrameBuffs)
                         end
-                        -- Pet expansion: individual summon spell icons
-                        ApplyPetDisplayMode(frame, entry, mainFrameBuffs)
                     end
                 end
             end
