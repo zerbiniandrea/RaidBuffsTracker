@@ -85,6 +85,7 @@ BR.BUFF_TABLES = {
             levelRequired = 13,
             missingText = "NO\nSTONE",
             readyCheckOnly = true,
+            castOnOthers = true,
             infoTooltip = "Ready Check Only|This buff is only shown during ready checks.",
             noGlow = true,
         },

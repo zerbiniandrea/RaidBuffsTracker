@@ -361,6 +361,51 @@ local function IsCategoryVisibleForContent(category)
     return true
 end
 
+---Determine visibility and scan scope for a buff based on tracking mode.
+---Raid buffs go on everyone, so "scan group" means showing coverage numbers.
+---Presence buffs live on the caster, so "scan group" means finding if anyone has the aura.
+---@param trackingMode string
+---@param buffClass ClassName
+---@param category "raid"|"presence"
+---@param hasCaster boolean
+---@param castOnOthers? boolean Buff exists on the target, not the caster (e.g., Soulstone)
+---@return { show: boolean, playerOnly: boolean }
+local function GetTrackingScope(trackingMode, buffClass, category, hasCaster, castOnOthers)
+    if not hasCaster then
+        return { show = false, playerOnly = false }
+    end
+    if trackingMode == "my_buffs" and buffClass ~= playerClass then
+        return { show = false, playerOnly = false }
+    end
+
+    if trackingMode == "personal" then
+        -- Presence buffs from other classes exist only on the caster, not on you.
+        -- castOnOthers buffs (Soulstone) are someone else's responsibility in personal mode.
+        if category == "presence" and (buffClass ~= playerClass or castOnOthers) then
+            return { show = false, playerOnly = false }
+        end
+        return { show = true, playerOnly = true }
+    elseif trackingMode == "smart" then
+        local isMyClass = buffClass == playerClass
+        -- Raid: scan group if I'm the caster (show coverage), just check me otherwise
+        -- Presence: just check me if I'm the caster, scan group to find other casters
+        --   castOnOthers: always scan group (the buff is on the target, not on me)
+        if category == "raid" then
+            return { show = true, playerOnly = not isMyClass }
+        else
+            return { show = true, playerOnly = isMyClass and not castOnOthers }
+        end
+    elseif trackingMode == "my_buffs" then
+        -- Raid: scan group to show coverage numbers
+        -- Presence: just check if my own aura is active
+        --   castOnOthers: scan group (the buff is on someone else)
+        return { show = true, playerOnly = category == "presence" and not castOnOthers }
+    else
+        -- "all" mode: always scan the full group
+        return { show = true, playerOnly = false }
+    end
+end
+
 -- ============================================================================
 -- BUFF CHECK FUNCTIONS
 -- ============================================================================
@@ -412,33 +457,31 @@ local function CountMissingBuff(spellIDs, buffKey, playerOnly)
     return missing, total, minRemaining
 end
 
----Count group members with a presence buff
+---Check if anyone in the group has a presence buff active
 ---Uses currentValidUnits cache built at start of refresh cycle
 ---@param spellIDs SpellID
 ---@param playerOnly? boolean Only check the player, not the group
----@return number count
+---@return boolean hasBuff
 ---@return number? minRemaining
-local function CountPresenceBuff(spellIDs, playerOnly)
-    local found = 0
-    local minRemaining = nil
-
+local function HasPresenceBuff(spellIDs, playerOnly)
     if playerOnly or #currentValidUnits <= 1 then
         local hasBuff, remaining = UnitHasBuff("player", spellIDs)
-        if hasBuff then
-            found = 1
-            minRemaining = remaining
-        end
-        return found, minRemaining
+        return hasBuff, remaining
     end
+
+    local minRemaining = nil
+    local found = false
 
     for _, data in ipairs(currentValidUnits) do
         local hasBuff, remaining = UnitHasBuff(data.unit, spellIDs)
         if hasBuff then
-            found = found + 1
+            found = true
             if remaining then
                 if not minRemaining or remaining < minRemaining then
                     minRemaining = remaining
                 end
+            else
+                return true, nil -- no expiration, no need to keep scanning
             end
         end
     end
@@ -706,8 +749,7 @@ local function PassesPreChecks(buff, presentClasses, db)
     end
 
     -- Ready check only
-    local readyCheckOnly = buff.readyCheckOnly or (buff.infoTooltip and buff.infoTooltip:match("^Ready Check Only"))
-    if readyCheckOnly and not inReadyCheck then
+    if buff.readyCheckOnly and not inReadyCheck then
         return false
     end
 
@@ -814,19 +856,18 @@ function BuffState.Refresh()
     local raidVisible = IsCategoryVisibleForContent("raid")
     for i, buff in ipairs(RaidBuffs) do
         local entry = GetOrCreateEntry(buff.key, "raid", i)
-        local hasCaster = HasCasterForBuff(buff.class, buff.levelRequired)
-        local showBuff = raidVisible and (trackingMode ~= "my_buffs" or buff.class == playerClass) and hasCaster
+        local scope =
+            GetTrackingScope(trackingMode, buff.class, "raid", HasCasterForBuff(buff.class, buff.levelRequired))
 
-        if IsBuffEnabled(buff.key) and showBuff then
-            local buffPlayerOnly = trackingMode == "personal" or (trackingMode == "smart" and buff.class ~= playerClass)
-            local missing, total, minRemaining = CountMissingBuff(buff.spellID, buff.key, buffPlayerOnly)
+        if IsBuffEnabled(buff.key) and raidVisible and scope.show then
+            local missing, total, minRemaining = CountMissingBuff(buff.spellID, buff.key, scope.playerOnly)
             local expiringSoon = showExpirationGlow and minRemaining and minRemaining < expirationThreshold
 
             if missing > 0 then
                 entry.visible = true
                 entry.displayType = "count"
                 local buffed = total - missing
-                entry.countText = buffPlayerOnly and "" or (buffed .. "/" .. total)
+                entry.countText = scope.playerOnly and "" or (buffed .. "/" .. total)
                 entry.shouldGlow = expiringSoon or false
                 if expiringSoon and minRemaining then
                     entry.expiringTime = minRemaining
@@ -845,22 +886,23 @@ function BuffState.Refresh()
     local presenceVisible = IsCategoryVisibleForContent("presence")
     for i, buff in ipairs(PresenceBuffs) do
         local entry = GetOrCreateEntry(buff.key, "presence", i)
-        local readyCheckOnly = buff.infoTooltip and buff.infoTooltip:match("^Ready Check Only")
-        local hasCaster = HasCasterForBuff(buff.class, buff.levelRequired)
-        local showBuff = presenceVisible
-            and (not readyCheckOnly or inReadyCheck)
-            and (trackingMode ~= "my_buffs" or buff.class == playerClass)
-            and hasCaster
+        local scope = GetTrackingScope(
+            trackingMode,
+            buff.class,
+            "presence",
+            HasCasterForBuff(buff.class, buff.levelRequired),
+            buff.castOnOthers
+        )
+        local showBuff = presenceVisible and (not buff.readyCheckOnly or inReadyCheck) and scope.show
 
         if IsBuffEnabled(buff.key) and showBuff then
-            local buffPlayerOnly = trackingMode == "personal" or (trackingMode == "smart" and buff.class == playerClass)
-            local count, minRemaining = CountPresenceBuff(buff.spellID, buffPlayerOnly)
+            local hasBuff, minRemaining = HasPresenceBuff(buff.spellID, scope.playerOnly)
             local expiringSoon = showExpirationGlow
                 and not buff.noGlow
                 and minRemaining
                 and minRemaining < expirationThreshold
 
-            if count == 0 then
+            if not hasBuff then
                 entry.visible = true
                 entry.displayType = "missing"
                 entry.missingText = buff.missingText

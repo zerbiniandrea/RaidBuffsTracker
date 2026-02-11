@@ -58,6 +58,8 @@
 ---@field iconOverride? number
 ---@field infoTooltip? string
 ---@field noGlow? boolean
+---@field readyCheckOnly? boolean Only show during ready checks
+---@field castOnOthers? boolean Buff exists on the target, not the caster (e.g., Soulstone)
 
 ---@class TargetedBuff
 ---@field spellID SpellID
