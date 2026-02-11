@@ -2,6 +2,7 @@ local _, BR = ...
 
 -- Lookup tables of known consumable item IDs, keyed by consumable type.
 -- Used by CollectConsumableActionItems() for automatic bag scanning.
+-- Values: `true` for simple membership, or a number for priority sorting (lower = higher priority).
 -- Sources: TWW Season 2, Midnight, and common prior-expansion items.
 BR.CONSUMABLE_ITEMS = {
     food = {
@@ -164,7 +165,9 @@ BR.CONSUMABLE_ITEMS = {
         [260286] = true,
         [260299] = true,
     },
+    -- Flask priority: cauldron flasks (1) are prioritized over regular flasks (true)
     flask = {
+        -- Regular TWW flasks
         [212269] = true,
         [212270] = true,
         [212271] = true,
@@ -183,24 +186,25 @@ BR.CONSUMABLE_ITEMS = {
         [212299] = true,
         [212300] = true,
         [212301] = true,
-        [212725] = true,
-        [212727] = true,
-        [212728] = true,
-        [212729] = true,
-        [212730] = true,
-        [212731] = true,
-        [212732] = true,
-        [212733] = true,
-        [212734] = true,
-        [212735] = true,
-        [212736] = true,
-        [212738] = true,
-        [212739] = true,
-        [212740] = true,
-        [212741] = true,
-        [212745] = true,
-        [212746] = true,
-        [212747] = true,
+        -- Cauldron TWW flasks
+        [212725] = 1,
+        [212727] = 1,
+        [212728] = 1,
+        [212729] = 1,
+        [212730] = 1,
+        [212731] = 1,
+        [212732] = 1,
+        [212733] = 1,
+        [212734] = 1,
+        [212735] = 1,
+        [212736] = 1,
+        [212738] = 1,
+        [212739] = 1,
+        [212740] = 1,
+        [212741] = 1,
+        [212745] = 1,
+        [212746] = 1,
+        [212747] = 1,
         [241320] = true,
         [241321] = true,
         [241322] = true,
@@ -234,15 +238,16 @@ BR.CONSUMABLE_ITEMS = {
         [241334] = true,
         [241335] = true,
     },
+    -- Rune priority: lower number = use first (Ethereal > Soulgorged > Crystallized > Draconic)
     rune = {
-        [211495] = true,
-        [224572] = true,
-        [243191] = true,
-        [246492] = true,
-        [259085] = true,
+        [224572] = 1, -- Ethereal Augment Rune (permanent)
+        [243191] = 2, -- Soulgorged Augment Rune (persists through death)
+        [246492] = 3, -- Void-Touched Augment Rune (Midnight)
+        [259085] = 3, -- Void-Touched Augment Rune (Midnight variant)
+        [211495] = 4, -- Crystallized Augment Rune (single use)
         -- Legacy runes
-        [201325] = true,
-        [201326] = true,
+        [201325] = 5, -- Draconic Augment Rune
+        [201326] = 5, -- Draconic Augment Rune
     },
     weapon = {
         [220156] = true,

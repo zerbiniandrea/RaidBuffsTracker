@@ -865,7 +865,14 @@ local function RefreshConsumableCache()
         for _, item in pairs(entries) do
             items[#items + 1] = item
         end
+        local allowedSet = itemSets[category]
         table.sort(items, function(a, b)
+            -- If items have numeric priority values, sort by priority first (lower = better)
+            local aPri = allowedSet and allowedSet[a.itemID]
+            local bPri = allowedSet and allowedSet[b.itemID]
+            if type(aPri) == "number" and type(bPri) == "number" and aPri ~= bPri then
+                return aPri < bPri
+            end
             if a.count == b.count then
                 return a.itemID < b.itemID
             end
