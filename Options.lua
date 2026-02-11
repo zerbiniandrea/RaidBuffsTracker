@@ -2221,7 +2221,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     end
 
     local MODAL_WIDTH = 460
-    local BASE_HEIGHT = 380
+    local BASE_HEIGHT = 400
     local ROW_HEIGHT = 26
     local CONTENT_LEFT = 20
     local ROWS_START_Y = -60
@@ -2544,7 +2544,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     }
     local currentGlowMode = editingBuff and editingBuff.glowMode or "whenGlowing"
     glowModeDropdown = Components.Dropdown(sectionsFrame, {
-        label = "Action bar glow:",
+        label = "Bar glow:",
         options = glowModeOptions,
         selected = currentGlowMode,
         width = 175,
