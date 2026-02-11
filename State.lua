@@ -853,7 +853,7 @@ function BuffState.Refresh()
             and hasCaster
 
         if IsBuffEnabled(buff.key) and showBuff then
-            local buffPlayerOnly = trackingMode == "personal" or (trackingMode == "smart" and buff.class ~= playerClass)
+            local buffPlayerOnly = trackingMode == "personal" or (trackingMode == "smart" and buff.class == playerClass)
             local count, minRemaining = CountPresenceBuff(buff.spellID, buffPlayerOnly)
             local expiringSoon = showExpirationGlow
                 and not buff.noGlow
