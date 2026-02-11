@@ -238,16 +238,16 @@ BR.CONSUMABLE_ITEMS = {
         [241334] = true,
         [241335] = true,
     },
-    -- Rune priority: lower number = use first (Ethereal > Soulgorged > Crystallized > Draconic)
+    -- Rune priority: lower number = use first (Ethereal > Soulgorged > Crystallized > legacy)
     rune = {
-        [224572] = 1, -- Ethereal Augment Rune (permanent)
-        [243191] = 2, -- Soulgorged Augment Rune (persists through death)
-        [246492] = 3, -- Void-Touched Augment Rune (Midnight)
-        [259085] = 3, -- Void-Touched Augment Rune (Midnight variant)
-        [211495] = 4, -- Crystallized Augment Rune (single use)
+        [243191] = 1, -- Ethereal Augment Rune (TWW permanent)
+        [246492] = 2, -- Soulgorged Augment Rune (TWW, persists through death)
+        [259085] = 3, -- Void-Touched Augment Rune (Midnight)
+        [224572] = 4, -- Crystallized Augment Rune (TWW single use)
         -- Legacy runes
-        [201325] = 5, -- Draconic Augment Rune
-        [201326] = 5, -- Draconic Augment Rune
+        [211495] = 5, -- Dreambound Augment Rune (Dragonflight)
+        [201325] = 6, -- Draconic Augment Rune (Dragonflight)
+        [181468] = 7, -- Veiled Augment Rune (Shadowlands)
     },
     weapon = {
         [220156] = true,

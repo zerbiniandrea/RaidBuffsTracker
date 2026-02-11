@@ -391,6 +391,7 @@ BR.BUFF_TABLES = {
                 453250, -- Crystallized Augment Rune (TWW) - single use
                 393438, -- Draconic Augment Rune (Dragonflight) - legacy
                 1264426, -- Void-Touched Augment Rune (Midnight)
+                347901, -- Veiled Augment Rune (Shadowlands) - legacy
             },
             displaySpellIDs = { 1234969, 1242347, 453250, 393438 }, -- Show rune icons in priority order
             key = "rune",
