@@ -82,6 +82,7 @@
 ---@field missingText string
 ---@field groupId? string
 ---@field enchantID? number
+---@field requiresBuffWithEnchant? boolean -- When true, require both enchant AND buff to be present (for Paladin Rites)
 ---@field buffIdOverride? number
 ---@field requireSpecId? number        -- Only show if player's current spec matches (WoW spec ID)
 ---@field requiresTalentSpellID? number -- TODO: rename to requiresSpellID (also used for baseline spec abilities, not just talents)

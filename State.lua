@@ -546,6 +546,7 @@ local SKIP_SPELL_KNOWN_CATEGORIES = { custom = true }
 ---@param customCheck? fun(): boolean? Custom check function for complex buff logic
 ---@param requireSpecId? number Only show if player's current spec matches (WoW spec ID)
 ---@param skipSpellKnownCheck? boolean Skip the "player knows spell" check (for custom buffs)
+---@param requiresBuffWithEnchant? boolean When true, require both enchant AND buff (for Paladin Rites)
 ---@return boolean? Returns nil if player can't/shouldn't use this buff
 local function ShouldShowSelfBuff(
     spellID,
@@ -556,7 +557,8 @@ local function ShouldShowSelfBuff(
     buffIdOverride,
     customCheck,
     requireSpecId,
-    skipSpellKnownCheck
+    skipSpellKnownCheck,
+    requiresBuffWithEnchant
 )
     if requiredClass and playerClass ~= requiredClass then
         return nil
@@ -602,7 +604,16 @@ local function ShouldShowSelfBuff(
 
     -- Weapon imbue: check if this specific enchant is on either weapon
     if enchantID then
-        return currentWeaponEnchants.mainHandID ~= enchantID and currentWeaponEnchants.offHandID ~= enchantID
+        local hasEnchant = currentWeaponEnchants.mainHandID == enchantID or currentWeaponEnchants.offHandID == enchantID
+
+        -- For Paladin Rites: require BOTH enchant AND buff (Blizzard bug workaround)
+        if requiresBuffWithEnchant then
+            local hasBuff, _ = UnitHasBuff("player", buffIdOverride or spellID)
+            return not (hasEnchant and hasBuff)
+        end
+
+        -- Standard enchant-only check
+        return not hasEnchant
     end
 
     -- Regular buff check - use buffIdOverride if provided, otherwise use spellID
@@ -948,7 +959,9 @@ function BuffState.Refresh()
                 buff.excludeTalentSpellID,
                 buff.buffIdOverride,
                 buff.customCheck,
-                buff.requireSpecId
+                buff.requireSpecId,
+                nil, -- skipSpellKnownCheck
+                buff.requiresBuffWithEnchant
             )
             if shouldShow then
                 entry.visible = true
@@ -978,7 +991,9 @@ function BuffState.Refresh()
                 buff.excludeTalentSpellID,
                 buff.buffIdOverride,
                 buff.customCheck,
-                buff.requireSpecId
+                buff.requireSpecId,
+                nil, -- skipSpellKnownCheck
+                buff.requiresBuffWithEnchant
             )
             if shouldShow then
                 entry.visible = true
@@ -1061,7 +1076,8 @@ function BuffState.Refresh()
                 buff.buffIdOverride,
                 buff.customCheck,
                 buff.requireSpecId,
-                skipSpellKnown
+                skipSpellKnown,
+                buff.requiresBuffWithEnchant
             )
             local wantPresent = buff.showWhenPresent
             local show = (wantPresent and shouldShow == false) or (not wantPresent and shouldShow)

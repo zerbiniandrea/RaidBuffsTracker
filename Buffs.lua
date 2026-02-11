@@ -168,6 +168,8 @@ BR.BUFF_TABLES = {
             missingText = "NO\nGRIM",
         },
         -- Paladin weapon rites (alphabetical: Adjuration, Sanctification)
+        -- NOTE: Due to a Blizzard bug, when changing talents the buff drops but enchant remains.
+        -- The effect doesn't work without the buff, so we check for BOTH enchant AND buff.
         {
             spellID = 433583,
             key = "riteOfAdjuration",
@@ -175,6 +177,8 @@ BR.BUFF_TABLES = {
             class = "PALADIN",
             missingText = "NO\nRITE",
             enchantID = 7144,
+            buffIdOverride = 433584, -- Actual buff ID on player
+            requiresBuffWithEnchant = true,
             groupId = "paladinRites",
         },
         {
@@ -184,6 +188,8 @@ BR.BUFF_TABLES = {
             class = "PALADIN",
             missingText = "NO\nRITE",
             enchantID = 7143,
+            buffIdOverride = 433550, -- Actual buff ID on player
+            requiresBuffWithEnchant = true,
             groupId = "paladinRites",
         },
         -- Rogue poisons: lethal (Instant, Wound, Deadly, Amplifying) and non-lethal (Numbing, Atrophic, Crippling)
