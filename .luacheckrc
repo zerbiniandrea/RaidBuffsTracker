@@ -40,6 +40,8 @@ read_globals = {
 	"GetFlyoutInfo",
 	"GetFlyoutSlotInfo",
 	"GetInstanceInfo",
+	"GetInventoryItemID",
+	"GetItemInfoInstant",
 	"GetPetActionInfo",
 	"GetCursorPosition",
 	"GetNumGroupMembers",

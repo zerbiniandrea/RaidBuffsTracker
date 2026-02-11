@@ -99,6 +99,7 @@
 ---@field missingText string
 ---@field groupId? string
 ---@field checkWeaponEnchant? boolean Check if any weapon enchant exists (oils, stones, imbues)
+---@field checkWeaponEnchantOH? boolean Check if off-hand weapon enchant exists
 ---@field excludeIfSpellKnown? number[] Don't show if player knows any of these spells
 ---@field buffIconID? number Check for any buff with this icon ID (e.g., 136000 for food)
 ---@field displaySpellIDs? SpellID Spell IDs to show icons for in UI (subset of spellID)

@@ -888,6 +888,7 @@ local BUFF_KEY_TO_CATEGORY = {
     food = "food",
     rune = "rune",
     weaponBuff = "weapon",
+    weaponBuffOH = "weapon",
 }
 
 ---Get cached consumable items for a buff definition.
@@ -941,9 +942,10 @@ local function UpdateConsumableButtons(frame, actionItems, clickable)
 
         -- Dirty tracking: skip redundant SetAttribute calls
         if btn._br_action_item ~= item.itemID then
-            if frame.key == "weaponBuff" then
+            if frame.key == "weaponBuff" or frame.key == "weaponBuffOH" then
+                local slot = frame.key == "weaponBuffOH" and 17 or 16
                 btn:SetAttribute("type", "macro")
-                btn:SetAttribute("macrotext", "/use item:" .. tostring(item.itemID) .. "\n/use 16")
+                btn:SetAttribute("macrotext", "/use item:" .. tostring(item.itemID) .. "\n/use " .. slot)
             else
                 btn:SetAttribute("type", "item")
                 btn:SetAttribute("item", "item:" .. tostring(item.itemID))
@@ -2832,9 +2834,10 @@ UpdateActionButtons = function(category)
                     if actionItems and #actionItems > 0 then
                         local item = actionItems[1]
                         mainBtn.itemID = item.itemID
-                        if frame.key == "weaponBuff" then
+                        if frame.key == "weaponBuff" or frame.key == "weaponBuffOH" then
+                            local slot = frame.key == "weaponBuffOH" and 17 or 16
                             mainBtn:SetAttribute("type", "macro")
-                            mainBtn:SetAttribute("macrotext", "/use item:" .. item.itemID .. "\n/use 16")
+                            mainBtn:SetAttribute("macrotext", "/use item:" .. item.itemID .. "\n/use " .. slot)
                         else
                             mainBtn:SetAttribute("type", "item")
                             mainBtn:SetAttribute("item", "item:" .. item.itemID)
@@ -2864,11 +2867,12 @@ UpdateActionButtons = function(category)
                                 end
                                 local eItem = actionItems[itemIdx]
                                 extra.clickOverlay.itemID = eItem.itemID
-                                if frame.key == "weaponBuff" then
+                                if frame.key == "weaponBuff" or frame.key == "weaponBuffOH" then
+                                    local slot = frame.key == "weaponBuffOH" and 17 or 16
                                     extra.clickOverlay:SetAttribute("type", "macro")
                                     extra.clickOverlay:SetAttribute(
                                         "macrotext",
-                                        "/use item:" .. eItem.itemID .. "\n/use 16"
+                                        "/use item:" .. eItem.itemID .. "\n/use " .. slot
                                     )
                                 else
                                     extra.clickOverlay:SetAttribute("type", "item")
@@ -3297,6 +3301,7 @@ eventFrame:RegisterEvent("UNIT_PET")
 eventFrame:RegisterEvent("PET_BAR_UPDATE")
 eventFrame:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
 eventFrame:RegisterEvent("PET_STABLE_UPDATE")
+eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 eventFrame:RegisterEvent("PLAYER_DIFFICULTY_CHANGED")
 eventFrame:RegisterEvent("PLAYER_UPDATE_RESTING")
 eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
@@ -3969,6 +3974,8 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         -- Catch delayed spell availability after spec/talent changes (noisy event, keep cheap)
         BR.BuffState.InvalidateSpellCache()
         BR.PetHelpers.InvalidatePetActions()
+    elseif event == "PLAYER_EQUIPMENT_CHANGED" then
+        UpdateDisplay()
     elseif event == "BAG_UPDATE_DELAYED" then
         InvalidateConsumableCache()
         UpdateDisplay()

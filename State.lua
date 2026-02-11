@@ -69,6 +69,9 @@ local cachedSpellKnowledge = {}
 -- Spec ID cache (invalidated on PLAYER_SPECIALIZATION_CHANGED)
 local cachedSpecId = nil
 
+-- Off-hand weapon cache (invalidated on equipment/spec change)
+local cachedHasOffHandWeapon = nil
+
 -- Weapon enchant info for current refresh cycle (set once per BuffState.Refresh())
 local currentWeaponEnchants = {
     hasMainHand = false,
@@ -687,7 +690,7 @@ end
 ---@param itemID? number|number[]
 ---@return boolean shouldShow
 ---@return number? remainingTime seconds remaining if buff is present and has a duration
-local function ShouldShowConsumableBuff(spellIDs, buffIconID, checkWeaponEnchant, itemID)
+local function ShouldShowConsumableBuff(spellIDs, buffIconID, checkWeaponEnchant, checkWeaponEnchantOH, itemID)
     -- Check buff auras by spell ID
     if spellIDs then
         local spellList = type(spellIDs) == "table" and spellIDs or { spellIDs }
@@ -729,6 +732,15 @@ local function ShouldShowConsumableBuff(spellIDs, buffIconID, checkWeaponEnchant
         end
     end
 
+    -- Check if off-hand weapon enchant exists
+    if checkWeaponEnchantOH then
+        if currentWeaponEnchants.hasOffHand then
+            local _, _, _, _, _, offExpiration = GetWeaponEnchantInfo()
+            local remaining = offExpiration and (offExpiration / 1000) or nil
+            return false, remaining
+        end
+    end
+
     -- Check inventory for item
     if itemID then
         local itemList = type(itemID) == "table" and itemID or { itemID }
@@ -741,7 +753,7 @@ local function ShouldShowConsumableBuff(spellIDs, buffIconID, checkWeaponEnchant
     end
 
     -- If we have nothing to check, return false
-    if not spellIDs and not buffIconID and not checkWeaponEnchant and not itemID then
+    if not spellIDs and not buffIconID and not checkWeaponEnchant and not checkWeaponEnchantOH and not itemID then
         return false, nil
     end
 
@@ -833,6 +845,9 @@ function BuffState.Refresh()
     if not db then
         return
     end
+
+    -- Invalidate off-hand weapon cache each refresh cycle (cheap lazy re-check)
+    cachedHasOffHandWeapon = nil
 
     -- Reset all entries to not visible
     for _, entry in pairs(BuffState.entries) do
@@ -1021,8 +1036,13 @@ function BuffState.Refresh()
 
         local hasCaster = not buff.class or HasCasterForBuff(buff.class, buff.levelRequired)
         if IsBuffEnabled(settingKey) and consumableVisible and hasCaster and PassesPreChecks(buff, nil, db) then
-            local shouldShow, remainingTime =
-                ShouldShowConsumableBuff(buff.spellID, buff.buffIconID, buff.checkWeaponEnchant, buff.itemID)
+            local shouldShow, remainingTime = ShouldShowConsumableBuff(
+                buff.spellID,
+                buff.buffIconID,
+                buff.checkWeaponEnchant,
+                buff.checkWeaponEnchantOH,
+                buff.itemID
+            )
             if shouldShow then
                 entry.visible = true
                 entry.displayType = "missing"
@@ -1144,6 +1164,26 @@ end
 function BuffState.InvalidateSpellCache()
     cachedSpellKnowledge = {}
     cachedSpecId = nil
+end
+
+---Check if off-hand slot has a weapon (cached)
+---@return boolean
+function BuffState.HasOffHandWeapon()
+    if cachedHasOffHandWeapon == nil then
+        local offhandItemID = GetInventoryItemID("player", 17) -- INVSLOT_OFFHAND
+        if not offhandItemID then
+            cachedHasOffHandWeapon = false
+        else
+            local _, _, _, _, _, itemClassID = GetItemInfoInstant(offhandItemID)
+            cachedHasOffHandWeapon = itemClassID == 2 -- Enum.ItemClass.Weapon
+        end
+    end
+    return cachedHasOffHandWeapon
+end
+
+---Invalidate off-hand weapon cache (call on PLAYER_EQUIPMENT_CHANGED, PLAYER_SPECIALIZATION_CHANGED)
+function BuffState.InvalidateOffHandCache()
+    cachedHasOffHandWeapon = nil
 end
 
 -- Export utility functions that display layer still needs

@@ -463,20 +463,27 @@ local function CreateOptionsPanel()
                     end
                 end
                 -- Resolve display icon(s) per entry: override > displaySpellIDs > primary spellID
+                -- Deduplicate icons within the same group (e.g., MH + OH weapon buffs share icons)
                 if not groupIconOverrides[buff.groupId] then
                     groupIconOverrides[buff.groupId] = {}
+                    groupIconOverrides[buff.groupId]._seen = {}
                 end
+                local seen = groupIconOverrides[buff.groupId]._seen
                 if buff.iconOverride then
                     local overrides = type(buff.iconOverride) == "table" and buff.iconOverride or { buff.iconOverride }
                     for _, icon in ipairs(overrides) do
-                        table.insert(groupIconOverrides[buff.groupId], icon)
+                        if not seen[icon] then
+                            seen[icon] = true
+                            table.insert(groupIconOverrides[buff.groupId], icon)
+                        end
                     end
                 elseif buff.displaySpellIDs then
                     local displayList = type(buff.displaySpellIDs) == "table" and buff.displaySpellIDs
                         or { buff.displaySpellIDs }
                     for _, id in ipairs(displayList) do
                         local texture = GetBuffTexture(id)
-                        if texture then
+                        if texture and not seen[texture] then
+                            seen[texture] = true
                             table.insert(groupIconOverrides[buff.groupId], texture)
                         end
                     end
@@ -484,7 +491,8 @@ local function CreateOptionsPanel()
                     local primarySpell = type(buff.spellID) == "table" and buff.spellID[1] or buff.spellID
                     if primarySpell and primarySpell > 0 then
                         local texture = GetBuffTexture(primarySpell)
-                        if texture then
+                        if texture and not seen[texture] then
+                            seen[texture] = true
                             table.insert(groupIconOverrides[buff.groupId], texture)
                         end
                     end

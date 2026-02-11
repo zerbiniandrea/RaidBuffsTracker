@@ -487,6 +487,27 @@ BR.BUFF_TABLES = {
                 433568, -- Rite of Sanctification
             },
         },
+        -- Weapon Buff (Off-Hand) - only shown when off-hand slot has a weapon
+        {
+            checkWeaponEnchantOH = true,
+            key = "weaponBuffOH",
+            name = "Weapon (OH)",
+            missingText = "NO\nWEAPON\nBUFF",
+            groupId = "weaponBuff",
+            iconOverride = { 609892, 3622195, 3622196 }, -- Oil, Whetstone, Weightstone/Razorstone
+            excludeIfSpellKnown = {
+                -- Shaman imbues
+                382021, -- Earthliving Weapon
+                318038, -- Flametongue Weapon
+                33757, -- Windfury Weapon
+                -- Paladin rites
+                433583, -- Rite of Adjuration
+                433568, -- Rite of Sanctification
+            },
+            visibilityCondition = function()
+                return BR.BuffState.HasOffHandWeapon()
+            end,
+        },
         -- Healthstone (ready check only - checks inventory)
         {
             itemID = { 5512, 224464 }, -- Healthstone, Demonic Healthstone
