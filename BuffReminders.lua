@@ -237,6 +237,7 @@ local defaults = {
             split = false,
             clickable = false,
             clickableHighlight = true,
+            subIconSide = "BOTTOM",
             priority = 6,
         },
         custom = {
@@ -360,6 +361,7 @@ local function GetCategorySettings(category)
         or defaultCatSettings.position
         or { point = "CENTER", x = 0, y = 0 }
     result.split = catSettings and catSettings.split or false
+    result.subIconSide = (catSettings and catSettings.subIconSide) or defaultCatSettings.subIconSide
 
     -- Appearance: inherit from defaults unless useCustomAppearance is true
     local useCustomAppearance = catSettings and catSettings.useCustomAppearance
@@ -720,7 +722,7 @@ end
 
 local ACTION_ICON_SCALE = 0.45
 local ACTION_ICON_MIN = 18
-local ACTION_ICON_Y_OFFSET = -6
+local ACTION_ICON_OFFSET = -6
 
 -- Quality text and colors for crafted consumables (rank 1/2/3)
 local QUALITY_INFO = {
@@ -1045,12 +1047,14 @@ local function SyncSecureButtons()
         -- Sync action buttons (consumable item row)
         if frame.actionButtons then
             if frame:IsShown() then
-                local left, bottom, width, _ = frame:GetRect()
+                local left, bottom, width, height = frame:GetRect()
                 if left then
                     local effectiveCat = GetEffectiveCategory(frame)
                     local catSettings = GetCategorySettings(effectiveCat)
+                    local consumableSettings = GetCategorySettings("consumable")
                     local size = math.max(ACTION_ICON_MIN, math.floor((catSettings.iconSize or 64) * ACTION_ICON_SCALE))
                     local btnSpacing = math.max(2, math.floor(size * 0.2))
+                    local subIconSide = consumableSettings.subIconSide or "BOTTOM"
                     -- Count visible buttons
                     local visibleCount = 0
                     for _, btn in ipairs(frame.actionButtons) do
@@ -1059,19 +1063,40 @@ local function SyncSecureButtons()
                         end
                     end
                     if visibleCount > 0 then
-                        -- Wrap into rows based on main icon width
-                        local maxPerRow = math.max(1, math.floor((width + btnSpacing) / (size + btnSpacing)))
                         local idx = 0
                         for _, btn in ipairs(frame.actionButtons) do
                             if btn._br_visible then
-                                local col = idx % maxPerRow
-                                local row = math.floor(idx / maxPerRow)
-                                -- Recalculate row width for partial last row
-                                local thisRowCount = math.min(maxPerRow, visibleCount - row * maxPerRow)
-                                local thisRowWidth = thisRowCount * size + (thisRowCount - 1) * btnSpacing
-                                local thisRowStartX = left + (width - thisRowWidth) / 2
-                                local btnX = thisRowStartX + col * (size + btnSpacing)
-                                local btnY = bottom + ACTION_ICON_Y_OFFSET - size - row * (size + btnSpacing)
+                                local btnX, btnY
+                                local isSideways = subIconSide == "LEFT" or subIconSide == "RIGHT"
+                                if isSideways then
+                                    local maxPerCol =
+                                        math.max(1, math.floor((height + btnSpacing) / (size + btnSpacing)))
+                                    local row = idx % maxPerCol
+                                    local col = math.floor(idx / maxPerCol)
+                                    local thisColCount = math.min(maxPerCol, visibleCount - col * maxPerCol)
+                                    local thisColHeight = thisColCount * size + (thisColCount - 1) * btnSpacing
+                                    local thisColStartY = bottom + (height - thisColHeight) / 2
+                                    if subIconSide == "LEFT" then
+                                        btnX = left + ACTION_ICON_OFFSET - size - col * (size + btnSpacing)
+                                    else
+                                        btnX = left + width - ACTION_ICON_OFFSET + col * (size + btnSpacing)
+                                    end
+                                    btnY = thisColStartY + row * (size + btnSpacing)
+                                else
+                                    local maxPerRow =
+                                        math.max(1, math.floor((width + btnSpacing) / (size + btnSpacing)))
+                                    local col = idx % maxPerRow
+                                    local row = math.floor(idx / maxPerRow)
+                                    local thisRowCount = math.min(maxPerRow, visibleCount - row * maxPerRow)
+                                    local thisRowWidth = thisRowCount * size + (thisRowCount - 1) * btnSpacing
+                                    local thisRowStartX = left + (width - thisRowWidth) / 2
+                                    btnX = thisRowStartX + col * (size + btnSpacing)
+                                    if subIconSide == "TOP" then
+                                        btnY = bottom + height - ACTION_ICON_OFFSET + row * (size + btnSpacing)
+                                    else
+                                        btnY = bottom + ACTION_ICON_OFFSET - size - row * (size + btnSpacing)
+                                    end
+                                end
                                 local needsUpdate = btn._br_needs_sync
                                     or btn._br_x ~= btnX
                                     or btn._br_y ~= btnY

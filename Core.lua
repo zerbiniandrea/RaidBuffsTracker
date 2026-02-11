@@ -86,6 +86,7 @@ local CategorySettingKeys = {
     expirationThreshold = "VisualsRefresh",
     spacing = "LayoutRefresh",
     growDirection = "LayoutRefresh",
+    subIconSide = "LayoutRefresh",
     -- Layout
     priority = "LayoutRefresh",
     -- Behavior
@@ -227,6 +228,7 @@ local function ValidatePath(segments)
                 "split",
                 "clickable",
                 "clickableHighlight",
+                "subIconSide",
             }
             for _, key in ipairs(knownKeys) do
                 if setting == key then

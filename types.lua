@@ -190,6 +190,7 @@
 ---@field split? boolean
 ---@field clickable? boolean
 ---@field clickableHighlight? boolean
+---@field subIconSide? string
 ---@field priority? number
 
 --- All category settings must be defined here. When adding a new category:

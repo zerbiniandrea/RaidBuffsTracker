@@ -1131,12 +1131,12 @@ local function CreateOptionsPanel()
                     return BR.Config.Get("defaults.petDisplayMode", "generic")
                 end,
                 options = {
-                    { value = "generic", label = "Generic icon" },
-                    { value = "expanded", label = "Summon spells" },
+                    { value = "generic", label = "Generic icon", desc = "A single generic 'NO PET' icon" },
+                    { value = "expanded", label = "Summon spells", desc = "Each pet summon spell as its own icon" },
                 },
                 tooltip = {
                     title = "Pet display mode",
-                    desc = "Generic icon: show a single 'NO PET' icon. Summon spells: show individual pet summon spell icons (e.g., each stable pet for hunters).",
+                    desc = "How missing pet reminders are displayed.",
                 },
                 onChange = function(val)
                     BR.Config.Set("defaults.petDisplayMode", val)
@@ -1145,7 +1145,7 @@ local function CreateOptionsPanel()
                     end
                 end,
             })
-            catLayout:Add(petDisplayModeHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
+            catLayout:Add(petDisplayModeHolder, nil, COMPONENT_GAP)
 
             -- Pet display mode preview (anchored to the right of the dropdown)
             local PP_ICON = 24
@@ -1156,18 +1156,17 @@ local function CreateOptionsPanel()
             local TEX_PET_GENERIC = 136082 -- Summon Demon flyout icon
             local TEX_PETS = { 136218, 136221, 136217 } -- Imp, Voidwalker, Felhunter
 
+            local petPreviewHeight = PP_ICON + PP_BORDER * 2
+            local PET_MODE_ICON_COUNT = { generic = 1, expanded = 3 }
+
             local petPreviewHolder = CreateFrame("Frame", nil, catContent)
-            petPreviewHolder:SetSize(260, PP_ICON + PP_BORDER * 2 + 14)
+            petPreviewHolder:SetSize(PP_STEP, petPreviewHeight)
             petPreviewHolder:SetPoint("TOPLEFT", petDisplayModeHolder, "TOPRIGHT", 12, 0)
 
             local petPreviewContainer = CreateFrame("Frame", nil, petPreviewHolder)
             petPreviewContainer:SetPoint("TOPLEFT", 0, 0)
-            petPreviewContainer:SetSize(260, PP_ICON + PP_BORDER * 2)
+            petPreviewContainer:SetSize(3 * PP_STEP, petPreviewHeight)
             petPreviewContainer:SetAlpha(0.7)
-
-            local petPreviewDesc = petPreviewHolder:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-            petPreviewDesc:SetPoint("TOPLEFT", petPreviewContainer, "BOTTOMLEFT", 0, -3)
-            petPreviewDesc:SetJustifyH("LEFT")
 
             local function CreatePetPreviewIcon(parent, texture, size)
                 local f = CreateFrame("Frame", nil, parent)
@@ -1206,11 +1205,6 @@ local function CreateOptionsPanel()
                 generic = { genericFrame },
                 expanded = expandedPetFrames,
             }
-            local PET_MODE_DESC = {
-                generic = "A single generic 'NO PET' icon",
-                expanded = "Each pet summon spell as its own icon",
-            }
-
             updatePetDisplayModePreview = function(mode)
                 for _, f in ipairs(allPetPreviewFrames) do
                     f:Hide()
@@ -1221,7 +1215,7 @@ local function CreateOptionsPanel()
                         f:Show()
                     end
                 end
-                petPreviewDesc:SetText(PET_MODE_DESC[mode] or "")
+                petPreviewHolder:SetWidth((PET_MODE_ICON_COUNT[mode] or 1) * PP_STEP)
             end
 
             -- Initial state
@@ -1237,28 +1231,36 @@ local function CreateOptionsPanel()
         -- Item display mode (consumable only, grouped with icon options)
         if category == "consumable" then
             local updateDisplayModePreview -- forward declaration for preview update
+            local updateSubIconSideVisibility -- forward declaration for sub-icon side visibility
             local displayModeHolder = Components.Dropdown(catContent, {
                 label = "Item display",
                 get = function()
                     return BR.Config.Get("defaults.consumableDisplayMode", "sub_icons")
                 end,
                 options = {
-                    { value = "icon_only", label = "Icon only" },
-                    { value = "sub_icons", label = "Sub-icons" },
-                    { value = "expanded", label = "Expanded" },
+                    { value = "icon_only", label = "Icon only", desc = "Shows the item with the highest count" },
+                    {
+                        value = "sub_icons",
+                        label = "Sub-icons",
+                        desc = "Small clickable item variants below each icon",
+                    },
+                    { value = "expanded", label = "Expanded", desc = "Each item variant as a full-sized icon" },
                 },
                 tooltip = {
                     title = "Consumable item display",
-                    desc = "Icon only: show the top item icon only. Sub-icons: show small clickable icons below the main icon. Expanded: show each item variant as a full-sized icon in the row.",
+                    desc = "How consumable items with multiple variants (e.g. different flask types) are displayed.",
                 },
                 onChange = function(val)
                     BR.Config.Set("defaults.consumableDisplayMode", val)
                     if updateDisplayModePreview then
                         updateDisplayModePreview(val)
                     end
+                    if updateSubIconSideVisibility then
+                        updateSubIconSideVisibility(val)
+                    end
                 end,
             })
-            catLayout:Add(displayModeHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
+            catLayout:Add(displayModeHolder, nil, COMPONENT_GAP)
 
             -- Display mode preview (anchored to the right of the dropdown)
             local P_ICON = 24
@@ -1272,18 +1274,17 @@ local function CreateOptionsPanel()
             local TEX_FOOD = { 134062, 133984 } -- main + 1 other variant
             local TEX_OIL = 609892
 
+            local previewHeight = P_ICON + P_SUB + P_GAP + P_BORDER * 2
+            local MODE_ICON_COUNT = { icon_only = 3, sub_icons = 3, expanded = 6 }
+
             local previewHolder = CreateFrame("Frame", nil, catContent)
-            previewHolder:SetSize(260, P_ICON + P_SUB + P_GAP + P_BORDER * 2 + 14)
+            previewHolder:SetSize(3 * P_STEP, previewHeight)
             previewHolder:SetPoint("TOPLEFT", displayModeHolder, "TOPRIGHT", 12, 0)
 
             local previewContainer = CreateFrame("Frame", nil, previewHolder)
             previewContainer:SetPoint("TOPLEFT", 0, 0)
-            previewContainer:SetSize(260, P_ICON + P_SUB + P_GAP + P_BORDER * 2)
+            previewContainer:SetSize(6 * P_STEP, previewHeight)
             previewContainer:SetAlpha(0.7)
-
-            local previewDesc = previewHolder:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-            previewDesc:SetPoint("TOPLEFT", previewContainer, "BOTTOMLEFT", 0, -3)
-            previewDesc:SetJustifyH("LEFT")
 
             local function CreatePreviewIcon(parent, texture, size)
                 local f = CreateFrame("Frame", nil, parent)
@@ -1369,12 +1370,6 @@ local function CreateOptionsPanel()
                 sub_icons = subIconsAll,
                 expanded = expandedFrames,
             }
-            local MODE_DESC = {
-                icon_only = "Shows the item with the highest count",
-                sub_icons = "Small clickable item variants below each icon",
-                expanded = "Each item variant as a full-sized icon",
-            }
-
             updateDisplayModePreview = function(mode)
                 for _, f in ipairs(allPreviewFrames) do
                     f:Hide()
@@ -1385,7 +1380,7 @@ local function CreateOptionsPanel()
                         f:Show()
                     end
                 end
-                previewDesc:SetText(MODE_DESC[mode] or "")
+                previewHolder:SetWidth((MODE_ICON_COUNT[mode] or 3) * P_STEP)
             end
 
             -- Initial state
@@ -1396,6 +1391,32 @@ local function CreateOptionsPanel()
                 updateDisplayModePreview(BR.Config.Get("defaults.consumableDisplayMode", "sub_icons"))
             end
             table.insert(BR.RefreshableComponents, previewHolder)
+
+            -- Sub-icon placement side (anchored below preview, visible only in sub_icons mode)
+            local subIconSideHolder = Components.Dropdown(catContent, {
+                label = "Side",
+                labelWidth = 30,
+                width = 85,
+                get = function()
+                    local catSettings = db.categorySettings and db.categorySettings[category]
+                    return catSettings and catSettings.subIconSide or "BOTTOM"
+                end,
+                options = {
+                    { value = "BOTTOM", label = "Bottom" },
+                    { value = "TOP", label = "Top" },
+                    { value = "LEFT", label = "Left" },
+                    { value = "RIGHT", label = "Right" },
+                },
+                onChange = function(val)
+                    BR.Config.Set("categorySettings." .. category .. ".subIconSide", val)
+                end,
+            })
+            subIconSideHolder:SetPoint("TOPLEFT", previewHolder, "TOPRIGHT", 12, 0)
+
+            updateSubIconSideVisibility = function(mode)
+                subIconSideHolder:SetShown(mode == "sub_icons")
+            end
+            updateSubIconSideVisibility(BR.Config.Get("defaults.consumableDisplayMode", "sub_icons"))
 
             -- Sub-header for behavior options
             catLayout:Space(SECTION_GAP)
