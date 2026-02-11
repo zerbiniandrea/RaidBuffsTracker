@@ -283,6 +283,7 @@ local isResting = false
 -- Category frame system
 local categoryFrames = {}
 local moverFrames = {} -- Per-category mover frames (shown when unlocked for drag positioning)
+local lastDirection = {} -- Tracks previous growDirection per catKey for position conversion
 local CATEGORIES = { "raid", "presence", "targeted", "self", "pet", "consumable", "custom" }
 local CATEGORY_LABELS = {
     raid = "Raid",
@@ -594,10 +595,12 @@ local function CreateCategoryFrame(category)
     local db = BuffRemindersDB
     local catSettings = db.categorySettings and db.categorySettings[category] or defaults.categorySettings[category]
     local pos = catSettings.position or defaults.categorySettings[category].position
+    local direction = catSettings.growDirection or defaults.defaults.growDirection or "CENTER"
+    local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
 
     local frame = CreateFrame("Frame", "BuffReminders_Category_" .. category, UIParent)
     frame:SetSize(200, 50)
-    frame:SetPoint("CENTER", UIParent, "CENTER", pos.x or 0, pos.y or 0)
+    frame:SetPoint(anchor, UIParent, "CENTER", pos.x or 0, pos.y or 0)
     frame.category = category
     frame:EnableMouse(false)
 
@@ -2173,6 +2176,21 @@ local function RoundCoord(x)
     return math.floor(x + 0.5)
 end
 
+-- Offset from anchor edge to frame center, in units of iconSize
+local ANCHOR_TO_CENTER = {
+    LEFT = { x = 0.5, y = 0 },
+    RIGHT = { x = -0.5, y = 0 },
+    TOP = { x = 0, y = -0.5 },
+    BOTTOM = { x = 0, y = 0.5 },
+    CENTER = { x = 0, y = 0 },
+}
+
+-- Convert saved position from one anchor to another so the frame stays in place
+local function ConvertPosition(oldAnchor, newAnchor, x, y, size)
+    local o, n = ANCHOR_TO_CENTER[oldAnchor], ANCHOR_TO_CENTER[newAnchor]
+    return RoundCoord(x + (o.x - n.x) * size), RoundCoord(y + (o.y - n.y) * size)
+end
+
 ---Get the saved position table for a category key
 ---@param catKey string "main" or a category name
 ---@return table position {point, x, y}
@@ -2204,23 +2222,13 @@ local function SavePosition(catKey, x, y)
     db.categorySettings[catKey].position = { x = x, y = y }
 
     -- Reposition the icon container frame
-    if catKey == "main" then
-        if mainFrame then
-            local mainSettings = GetCategorySettings("main")
-            local direction = mainSettings.growDirection or "CENTER"
-            local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
-            mainFrame:ClearAllPoints()
-            mainFrame:SetPoint(anchor, UIParent, "CENTER", x, y)
-        end
-    else
-        local catFrame = categoryFrames[catKey]
-        if catFrame then
-            local cs = GetCategorySettings(catKey)
-            local direction = cs.growDirection or "CENTER"
-            local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
-            catFrame:ClearAllPoints()
-            catFrame:SetPoint(anchor, UIParent, "CENTER", x, y)
-        end
+    local container = catKey == "main" and mainFrame or categoryFrames[catKey]
+    if container then
+        local settings = GetCategorySettings(catKey)
+        local direction = settings.growDirection or "CENTER"
+        local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
+        container:ClearAllPoints()
+        container:SetPoint(anchor, UIParent, "CENTER", x, y)
     end
 
     -- Keep the mover frame in sync
@@ -2270,6 +2278,7 @@ end
 
 -- Finish a mover drag: read the direction-anchor edge, re-anchor, save
 local function FinishMoverDrag(mover, catKey)
+    mover.isDragging = false
     mover:StopMovingOrSizing()
     local settings = GetCategorySettings(catKey)
     local direction = settings.growDirection or "CENTER"
@@ -2283,10 +2292,10 @@ local function FinishMoverDrag(mover, catKey)
         x = RoundCoord(mover:GetRight() - px)
         y = RoundCoord(select(2, mover:GetCenter()) - py)
     elseif anchor == "TOP" then
-        x = RoundCoord((mover:GetCenter()) - px)
+        x = RoundCoord(select(1, mover:GetCenter()) - px)
         y = RoundCoord(mover:GetTop() - py)
     elseif anchor == "BOTTOM" then
-        x = RoundCoord((mover:GetCenter()) - px)
+        x = RoundCoord(select(1, mover:GetCenter()) - px)
         y = RoundCoord(mover:GetBottom() - py)
     else -- CENTER
         local cx, cy = mover:GetCenter()
@@ -2418,12 +2427,13 @@ local function ShowCoordinatePopup(catKey, mover)
 end
 
 -- Create a mover frame for positioning a category.
--- The mover is a 48×48 draggable frame parented to UIParent. Shown when unlocked.
+-- The mover matches the category's iconSize for accurate positioning. Shown when unlocked.
 local function CreateMoverFrame(catKey, displayName)
-    local MOVER_SIZE = 48
+    local catSettings = GetCategorySettings(catKey)
+    local iconSize = catSettings.iconSize or 64
 
     local mover = CreateFrame("Frame", nil, UIParent)
-    mover:SetSize(MOVER_SIZE, MOVER_SIZE)
+    mover:SetSize(iconSize, iconSize)
     mover:SetFrameStrata("HIGH")
     mover:SetClampedToScreen(true)
     mover:SetMovable(true)
@@ -2450,6 +2460,12 @@ local function CreateMoverFrame(catKey, displayName)
 
     mover.catKey = catKey
 
+    function mover:UpdateSize()
+        local settings = GetCategorySettings(catKey)
+        local size = settings.iconSize or 64
+        self:SetSize(size, size)
+    end
+
     -- Position at saved location using direction-based anchor
     local pos = GetSavedPosition(catKey)
     local initSettings = GetCategorySettings(catKey)
@@ -2467,13 +2483,14 @@ local function CreateMoverFrame(catKey, displayName)
             coordPopup:Hide()
         end
         DimContainer(catKey)
+        self.isDragging = true
         self:StartMoving()
     end)
     mover:SetScript("OnDragStop", function(self)
         FinishMoverDrag(self, catKey)
     end)
     mover:SetScript("OnHide", function(self)
-        if self:IsMovable() then
+        if self.isDragging then
             FinishMoverDrag(self, catKey)
         end
     end)
@@ -2492,7 +2509,7 @@ end
 -- Position a mover frame at its saved coordinates using direction-based anchor
 PositionMoverFrame = function(catKey)
     local mover = moverFrames[catKey]
-    if not mover then
+    if not mover or mover.isDragging then
         return
     end
     local pos = GetSavedPosition(catKey)
@@ -2522,8 +2539,10 @@ local function InitializeFrames()
 
     -- Create mover frames (shown when unlocked for drag positioning)
     moverFrames["main"] = CreateMoverFrame("main", GetMainFrameLabel())
+    lastDirection["main"] = (GetCategorySettings("main").growDirection or "CENTER")
     for _, category in ipairs(CATEGORIES) do
         moverFrames[category] = CreateMoverFrame(category, CATEGORY_LABELS[category])
+        lastDirection[category] = (GetCategorySettings(category).growDirection or "CENTER")
     end
 
     -- Create buff frames for all categories (including custom, populated by BuildCustomBuffArray)
@@ -2653,10 +2672,8 @@ UpdateAnchor = function()
             local mainSettings = GetCategorySettings("main")
             mainMover.label:SetText(GetMainFrameLabel())
             mainMover.anchorText:SetText("Anchor \194\183 Growth " .. (mainSettings.growDirection or "CENTER"))
-            if not mainMover:IsShown() then
-                PositionMoverFrame("main")
-                mainMover:Show()
-            end
+            PositionMoverFrame("main")
+            mainMover:Show()
         else
             mainMover:Hide()
         end
@@ -2670,10 +2687,8 @@ UpdateAnchor = function()
                 local catSettings = GetCategorySettings(category)
                 mover.label:SetText(CATEGORY_LABELS[category])
                 mover.anchorText:SetText("Anchor \194\183 Growth " .. (catSettings.growDirection or "CENTER"))
-                if not mover:IsShown() then
-                    PositionMoverFrame(category)
-                    mover:Show()
-                end
+                PositionMoverFrame(category)
+                mover:Show()
             else
                 mover:Hide()
             end
@@ -2969,10 +2984,33 @@ local CallbackRegistry = BR.CallbackRegistry
 CallbackRegistry:RegisterCallback("VisualsRefresh", function()
     ResolveFontPath()
     UpdateVisuals()
+    for _, mover in pairs(moverFrames) do
+        mover:UpdateSize()
+    end
 end)
 
 -- Layout changes (spacing, grow direction)
 CallbackRegistry:RegisterCallback("LayoutRefresh", function()
+    -- If growth direction changed, convert saved positions so frames stay in place
+    local allCatKeys = { "main" }
+    for _, cat in ipairs(CATEGORIES) do
+        allCatKeys[#allCatKeys + 1] = cat
+    end
+    for _, catKey in ipairs(allCatKeys) do
+        local settings = GetCategorySettings(catKey)
+        local dir = settings.growDirection or "CENTER"
+        local oldDir = lastDirection[catKey]
+        if oldDir and oldDir ~= dir then
+            local oldAnchor = DIRECTION_ANCHORS[oldDir] or "CENTER"
+            local newAnchor = DIRECTION_ANCHORS[dir] or "CENTER"
+            local pos = GetSavedPosition(catKey)
+            local size = settings.iconSize or 64
+            local nx, ny = ConvertPosition(oldAnchor, newAnchor, pos.x or 0, pos.y or 0, size)
+            SavePosition(catKey, nx, ny)
+        end
+        lastDirection[catKey] = dir
+    end
+
     if testMode then
         RefreshTestDisplay()
     else
