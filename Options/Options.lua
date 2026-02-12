@@ -930,6 +930,20 @@ local function CreateOptionsPanel()
 
     appLayout:Add(defGlowHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
 
+    local defGlowWhenMissingHolder = Components.Checkbox(appearanceContent, {
+        label = "Also when missing",
+        tooltip = "Show glow on buff icons that are completely missing, not just expiring.",
+        get = function()
+            return BuffRemindersDB.defaults and BuffRemindersDB.defaults.glowWhenMissing ~= false
+        end,
+        enabled = isExpirationGlowEnabled,
+        onChange = function(checked)
+            BR.Config.Set("defaults.glowWhenMissing", checked)
+        end,
+    })
+    defGlowWhenMissingHolder:SetPoint("TOPLEFT", defGlowHolder, "BOTTOMLEFT", 20, -COMPONENT_GAP)
+    appLayout:Space(20 + COMPONENT_GAP)
+
     -- Per-Category Customization section
     LayoutSectionHeader(appLayout, appearanceContent, "Per-Category Customization")
     appLayout:Space(COMPONENT_GAP)
@@ -1751,9 +1765,68 @@ local function CreateOptionsPanel()
         })
         catTextColorHolder:SetPoint("LEFT", catTextSizeHolder, "RIGHT", 12, 0) -- aligns alpha % with slider values
 
-        local gridHeight = 72 -- 3 rows default
-        if category == "consumable" then
-            -- Row 4: Glow enable + threshold + type + color (consumable only)
+        -- Row 4: Glow settings
+        local gridHeight
+        if category == "pet" then
+            -- Pets don't expire — single "Glow when missing" checkbox
+            -- (sets both showExpirationGlow and glowWhenMissing under the hood)
+            local catPetGlowHolder = Components.Checkbox(appFrame, {
+                label = "Glow when missing",
+                get = function()
+                    return getCatOwnValue("showExpirationGlow", true) ~= false
+                        and getCatOwnValue("glowWhenMissing", true) ~= false
+                end,
+                enabled = isCustomAppearanceEnabled,
+                onChange = function(checked)
+                    BR.Config.SetMulti({
+                        ["categorySettings." .. category .. ".showExpirationGlow"] = checked,
+                        ["categorySettings." .. category .. ".glowWhenMissing"] = checked,
+                    })
+                end,
+            })
+            catPetGlowHolder:SetPoint("TOPLEFT", 0, -72)
+
+            local catGlowTypeOptions = {}
+            for gi, gt in ipairs(GlowTypes) do
+                catGlowTypeOptions[gi] = { label = gt.name, value = gi }
+            end
+
+            local function isPetGlowEnabled()
+                return isCustomAppearanceEnabled()
+                    and getCatOwnValue("showExpirationGlow", true) ~= false
+                    and getCatOwnValue("glowWhenMissing", true) ~= false
+            end
+
+            local catGlowTypeHolder = Components.Dropdown(appFrame, {
+                label = "Type:",
+                labelWidth = 34,
+                options = catGlowTypeOptions,
+                get = function()
+                    return getCatOwnValue("glowType", 1)
+                end,
+                enabled = isPetGlowEnabled,
+                width = 95,
+                onChange = function(val)
+                    BR.Config.Set("categorySettings." .. category .. ".glowType", val)
+                end,
+            }, "BuffReminders_" .. category .. "_GlowTypeDropdown")
+            catGlowTypeHolder:SetPoint("TOPLEFT", CAT_COL2, -72)
+
+            local catGlowColorHolder = Components.ColorSwatch(appFrame, {
+                hasOpacity = true,
+                get = function()
+                    local c = getCatOwnValue("glowColor", Glow.DEFAULT_COLOR)
+                    return c[1], c[2], c[3], c[4] or 1
+                end,
+                enabled = isPetGlowEnabled,
+                onChange = function(r, g, b, a)
+                    BR.Config.Set("categorySettings." .. category .. ".glowColor", { r, g, b, a or 1 })
+                end,
+            })
+            catGlowColorHolder:SetPoint("TOPLEFT", catTextColorHolder, "TOPLEFT", 0, -24)
+
+            gridHeight = 96 -- 4 rows (no threshold slider, no sub-checkbox)
+        else
             local function isGlowEnabled()
                 return isCustomAppearanceEnabled() and getCatOwnValue("showExpirationGlow", true) ~= false
             end
@@ -1819,7 +1892,20 @@ local function CreateOptionsPanel()
             })
             catGlowColorHolder:SetPoint("TOPLEFT", catTextColorHolder, "TOPLEFT", 0, -24)
 
-            gridHeight = 96 -- 4 rows with glow
+            local catGlowWhenMissingHolder = Components.Checkbox(appFrame, {
+                label = "Also when missing",
+                tooltip = "Show glow on buff icons that are completely missing, not just expiring.",
+                get = function()
+                    return getCatOwnValue("glowWhenMissing", true) ~= false
+                end,
+                enabled = isGlowEnabled,
+                onChange = function(checked)
+                    BR.Config.Set("categorySettings." .. category .. ".glowWhenMissing", checked)
+                end,
+            })
+            catGlowWhenMissingHolder:SetPoint("TOPLEFT", 20, -96)
+
+            gridHeight = 120 -- 5 rows with glow + when missing
         end
 
         -- Advance past the appFrame grid and finalize section height

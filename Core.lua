@@ -82,8 +82,9 @@ local CategorySettingKeys = {
     textColor = "VisualsRefresh",
     glowType = "VisualsRefresh",
     glowColor = "VisualsRefresh",
-    showExpirationGlow = "VisualsRefresh",
-    expirationThreshold = "VisualsRefresh",
+    showExpirationGlow = "DisplayRefresh",
+    glowWhenMissing = "DisplayRefresh",
+    expirationThreshold = "DisplayRefresh",
     spacing = "LayoutRefresh",
     growDirection = "LayoutRefresh",
     subIconSide = "LayoutRefresh",
@@ -112,8 +113,9 @@ local DefaultSettingKeys = {
     spacing = "LayoutRefresh",
     growDirection = "LayoutRefresh",
     -- Behavior (glow is global-only, lives under defaults)
-    showExpirationGlow = "VisualsRefresh",
-    expirationThreshold = "VisualsRefresh",
+    showExpirationGlow = "DisplayRefresh",
+    glowWhenMissing = "DisplayRefresh",
+    expirationThreshold = "DisplayRefresh",
     glowType = "VisualsRefresh",
     glowColor = "VisualsRefresh",
     showConsumablesWithoutItems = "DisplayRefresh",
@@ -219,6 +221,7 @@ local function ValidatePath(segments)
                 "glowType",
                 "glowColor",
                 "showExpirationGlow",
+                "glowWhenMissing",
                 "expirationThreshold",
                 "spacing",
                 "growDirection",
@@ -443,6 +446,11 @@ local AppearanceKeys = {
     spacing = true,
     iconZoom = true,
     borderSize = true,
+    showExpirationGlow = true,
+    glowWhenMissing = true,
+    expirationThreshold = true,
+    glowType = true,
+    glowColor = true,
 }
 
 ---Get a category setting with inheritance from defaults
@@ -467,7 +475,7 @@ function BR.Config.GetCategorySetting(category, key)
             -- No custom appearance: always inherit from defaults
             return db.defaults and db.defaults[key]
         end
-        -- Custom appearance: use category value only (independent from defaults)
+        -- Custom appearance: independent from defaults (callers handle nil with their own defaults)
         return catSettings[key]
     end
 

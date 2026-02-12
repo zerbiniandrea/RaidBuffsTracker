@@ -143,8 +143,9 @@ local defaults = {
         iconZoom = 8, -- percentage
         borderSize = 2,
         growDirection = "CENTER", -- "LEFT", "CENTER", "RIGHT", "UP", "DOWN"
-        -- Behavior (glow is global-only)
+        -- Behavior (glow settings)
         showExpirationGlow = true,
+        glowWhenMissing = true,
         expirationThreshold = 15, -- minutes
         glowType = 1, -- 1=Pixel, 2=AutoCast, 3=Proc
         glowColor = { 0.95, 0.57, 0.07, 1 }, -- orange RGBA
@@ -562,8 +563,10 @@ end
 ---Show a frame with missing text styling
 ---@param frame BuffFrame
 ---@param missingText? string
+---@param shouldGlow? boolean
+---@param category? CategoryName
 ---@return boolean true (for anyVisible chaining)
-local function ShowMissingFrame(frame, missingText)
+local function ShowMissingFrame(frame, missingText, shouldGlow, category)
     if missingText then
         frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
         frame.count:SetText(missingText)
@@ -572,7 +575,7 @@ local function ShowMissingFrame(frame, missingText)
         frame.count:Hide()
     end
     frame:Show()
-    SetExpirationGlow(frame, false)
+    SetExpirationGlow(frame, shouldGlow or false, category)
     return true
 end
 
@@ -1297,9 +1300,9 @@ local function RenderVisibleEntry(frame, entry)
                 frame.stackCount:SetText(items[1].count)
                 frame.stackCount:Show()
                 frame:Show()
-                SetExpirationGlow(frame, false)
+                SetExpirationGlow(frame, entry.shouldGlow, entry.category)
             elseif (BuffRemindersDB.defaults or {}).showConsumablesWithoutItems then
-                ShowMissingFrame(frame, entry.missingText)
+                ShowMissingFrame(frame, entry.missingText, entry.shouldGlow, entry.category)
             else
                 -- No items and setting is off: don't show the frame
                 return false
@@ -1311,7 +1314,7 @@ local function RenderVisibleEntry(frame, entry)
                     frame.icon:SetTexture(texture)
                 end
             end
-            ShowMissingFrame(frame, entry.missingText)
+            ShowMissingFrame(frame, entry.missingText, entry.shouldGlow, entry.category)
         end
     end
 

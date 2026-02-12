@@ -164,6 +164,7 @@
 ---@field borderSize number
 ---@field growDirection string
 ---@field showExpirationGlow boolean
+---@field glowWhenMissing boolean
 ---@field expirationThreshold number
 ---@field glowType number
 ---@field glowColor number[]
@@ -186,6 +187,11 @@
 ---@field growDirection? string
 ---@field iconZoom? number
 ---@field borderSize? number
+---@field showExpirationGlow? boolean
+---@field glowWhenMissing? boolean
+---@field expirationThreshold? number
+---@field glowType? number
+---@field glowColor? number[]
 ---@field showBuffReminder? boolean
 ---@field showText? boolean
 ---@field useCustomAppearance? boolean
@@ -204,6 +210,7 @@
 ---@field presence CategorySetting
 ---@field targeted CategorySetting
 ---@field self CategorySetting
+---@field pet CategorySetting
 ---@field consumable CategorySetting
 ---@field custom CategorySetting
 
