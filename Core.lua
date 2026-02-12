@@ -93,6 +93,7 @@ local CategorySettingKeys = {
     priority = "LayoutRefresh",
     -- Behavior
     showBuffReminder = "VisualsRefresh",
+    buffTextSize = "VisualsRefresh",
     showText = "VisualsRefresh",
     -- Toggles
     useCustomAppearance = "VisualsRefresh",
@@ -229,6 +230,7 @@ local function ValidatePath(segments)
                 "spacing",
                 "growDirection",
                 "showBuffReminder",
+                "buffTextSize",
                 "showText",
                 "useCustomAppearance",
                 "split",

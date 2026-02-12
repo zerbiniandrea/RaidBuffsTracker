@@ -709,7 +709,12 @@ local function CreateBuffFrame(buff, category)
     if frame.isPlayerBuff and category == "raid" then
         frame.buffText = frame:CreateFontString(nil, "OVERLAY")
         frame.buffText:SetPoint("TOP", frame, "BOTTOM", 0, -6)
-        frame.buffText:SetFont(fontPath, GetFontSize(0.8, catSettings.textSize, catSettings.iconSize), "OUTLINE")
+        local raidBts = db.categorySettings and db.categorySettings.raid and db.categorySettings.raid.buffTextSize
+        frame.buffText:SetFont(
+            fontPath,
+            raidBts or GetFontSize(0.8, catSettings.textSize, catSettings.iconSize),
+            "OUTLINE"
+        )
         frame.buffText:SetTextColor(textColor[1], textColor[2], textColor[3], textAlpha)
         frame.buffText:SetText("BUFF!")
         local raidCs = db.categorySettings and db.categorySettings.raid
@@ -1783,7 +1788,10 @@ local function UpdateVisuals()
         frame:SetAlpha(catSettings.iconAlpha or 1)
 
         if frame.buffText then
-            frame.buffText:SetFont(fontPath, GetFrameFontSize(frame, 0.8), "OUTLINE")
+            local raidBts = BuffRemindersDB.categorySettings
+                and BuffRemindersDB.categorySettings.raid
+                and BuffRemindersDB.categorySettings.raid.buffTextSize
+            frame.buffText:SetFont(fontPath, raidBts or GetFrameFontSize(frame, 0.8), "OUTLINE")
             frame.buffText:SetTextColor(tc[1], tc[2], tc[3], ta)
             -- BUFF! text: use buff's actual category (raid only)
             local buffCat = frame.buffCategory

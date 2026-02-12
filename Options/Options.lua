@@ -1052,9 +1052,38 @@ local function CreateOptionsPanel()
                 end,
                 onChange = function(checked)
                     BR.Config.Set("categorySettings.raid.showBuffReminder", checked)
+                    Components.RefreshAll()
                 end,
             })
             catLayout:Add(reminderHolder, nil, COMPONENT_GAP)
+
+            local buffTextSizeHolder = Components.NumericStepper(reminderHolder, {
+                label = "Size",
+                labelWidth = 28,
+                min = 6,
+                max = 40,
+                get = function()
+                    local cs = db.categorySettings and db.categorySettings.raid
+                    if cs and cs.buffTextSize then
+                        return cs.buffTextSize
+                    end
+                    -- Default: 80% of text size (matching current behavior)
+                    local textSize = cs and cs.textSize
+                    if not textSize then
+                        local iconSize = (cs and cs.iconSize) or 64
+                        textSize = math.floor(iconSize * 0.32)
+                    end
+                    return math.max(6, math.floor(textSize * 0.8))
+                end,
+                enabled = function()
+                    local cs = db.categorySettings and db.categorySettings.raid
+                    return not cs or cs.showBuffReminder ~= false
+                end,
+                onChange = function(val)
+                    BR.Config.Set("categorySettings.raid.buffTextSize", val)
+                end,
+            })
+            buffTextSizeHolder:SetPoint("LEFT", reminderHolder, "LEFT", 210, 0)
         end
 
         -- Click to cast checkbox (raid and consumable only)

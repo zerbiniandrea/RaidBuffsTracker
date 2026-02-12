@@ -195,6 +195,7 @@
 ---@field glowColor? number[]
 ---@field glowSize? number
 ---@field showBuffReminder? boolean
+---@field buffTextSize? number
 ---@field showText? boolean
 ---@field useCustomAppearance? boolean
 ---@field split? boolean
