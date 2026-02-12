@@ -1111,6 +1111,7 @@ local function CreateDropdownCore(parent, width, options, initialValue, onChange
     menu:SetBackdropColor(unpack(colors.menuBg))
     menu:SetBackdropBorderColor(unpack(colors.menuBorder))
     menu:SetFrameStrata("FULLSCREEN_DIALOG")
+    menu:EnableMouse(true)
     menu:Hide()
 
     -- Scroll frame (only created when needed)
@@ -1136,7 +1137,7 @@ local function CreateDropdownCore(parent, width, options, initialValue, onChange
     -- Position menu below button (updated when shown)
     local function PositionMenu()
         menu:ClearAllPoints()
-        menu:SetPoint("TOPLEFT", button, "BOTTOMLEFT", 0, -2)
+        menu:SetPoint("TOPLEFT", button, "BOTTOMLEFT", 0, 0)
     end
 
     -- ==================== VISUAL STATE ====================
