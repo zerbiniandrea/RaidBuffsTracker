@@ -627,11 +627,23 @@ end
 -- Apply icon zoom and border sizing (single source of truth for Masque vs native styling)
 local function UpdateIconStyling(frame, catSettings)
     if IsMasqueActive() then
-        -- Masque controls TexCoord; hide our border for a clean borderless look
+        -- Masque controls styling; hide our native border (Masque manages its own textures via ReSkin)
         frame.border:Hide()
         return
     end
-    -- Native styling: our zoom and border
+    -- When Masque is loaded but disabled, hide textures it created (Backdrop, Shadow, Gloss, etc.)
+    -- that linger with a default Blizzard look. Skip the loop entirely if Masque was never loaded.
+    if masqueGroup then
+        for _, region in next, { frame:GetRegions() } do
+            if region:IsObjectType("Texture") and region ~= frame.icon and region ~= frame.border then
+                region:Hide()
+            end
+        end
+    end
+    -- Restore border to native state (Masque changes texture, draw layer, alpha, etc. when skinning)
+    frame.border:SetDrawLayer("BACKGROUND")
+    frame.border:SetAlpha(1)
+    frame.border:SetColorTexture(0, 0, 0, 1)
     local zoom = (catSettings.iconZoom or DEFAULT_ICON_ZOOM) / 100
     frame.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
     local borderSize = catSettings.borderSize or DEFAULT_BORDER_SIZE
@@ -677,11 +689,11 @@ local function CreateBuffFrame(buff, category)
     frame.qualityOverlay = frame:CreateFontString(nil, "OVERLAY")
     frame.qualityOverlay:Hide()
 
-    -- Register with Masque (Normal = false: we handle borders, Masque handles TexCoord)
+    -- Register with Masque — provide Normal texture so skins like Caith can style it
     if masqueGroup then
         masqueGroup:AddButton(frame, {
             Icon = frame.icon,
-            Normal = false,
+            Normal = frame.border,
         })
     end
 
@@ -772,7 +784,7 @@ local function GetOrCreateExtraFrame(frame, index)
     if masqueGroup then
         masqueGroup:AddButton(extra, {
             Icon = extra.icon,
-            Normal = false,
+            Normal = extra.border,
         })
     end
 
@@ -1876,11 +1888,14 @@ CallbackRegistry:RegisterCallback("FramesReparent", function()
     UpdateVisuals()
 end)
 
--- Masque skin change callback — restore our TexCoord when Masque is disabled
+-- Masque skin change callback — restore native styling when Masque is disabled.
+-- Deferred because Masque modifies button regions after firing the callback.
 if masqueGroup then
     masqueGroup:RegisterCallback(function()
-        UpdateVisuals()
-        BR.Components.RefreshAll()
+        C_Timer.After(0, function()
+            UpdateVisuals()
+            BR.Components.RefreshAll()
+        end)
     end)
 end
 
