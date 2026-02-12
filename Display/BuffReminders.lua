@@ -640,7 +640,9 @@ local function UpdateIconStyling(frame, catSettings)
             end
         end
     end
-    -- Restore border to native state (Masque changes texture, draw layer, alpha, etc. when skinning)
+    -- Restore native state (Masque changes icon anchors, border texture/draw layer/alpha when skinning)
+    frame.icon:ClearAllPoints()
+    frame.icon:SetAllPoints()
     frame.border:SetDrawLayer("BACKGROUND")
     frame.border:SetAlpha(1)
     frame.border:SetColorTexture(0, 0, 0, 1)
