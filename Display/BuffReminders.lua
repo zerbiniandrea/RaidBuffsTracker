@@ -1104,6 +1104,9 @@ ToggleTestMode = function(showLabels)
         end
         BR.SecureButtons.HideAllSecureFrames()
         RefreshTestDisplay()
+        print(
+            "|cff00ccffBuffReminders:|r Test mode is a preview only. Glows and some display features may not reflect your current settings accurately. This will be improved in a future update."
+        )
         return true
     end
 end
