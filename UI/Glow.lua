@@ -163,11 +163,14 @@ function BR.Glow.SetExpiration(frame, show, category)
             color = (db.defaults and db.defaults.glowColor) or BR.Glow.DEFAULT_COLOR
         end
 
-        -- Stop previous glow if type changed, otherwise it's already the right one
-        if state then
-            if state.typeIndex ~= typeIndex then
-                BR.Glow.Stop(frame, state.typeIndex, EXPIRATION_KEY)
-            end
+        -- Already glowing with the same type — don't restart (preserves animation state)
+        if state and state.showing and state.typeIndex == typeIndex then
+            return
+        end
+
+        -- Stop previous glow if type changed
+        if state and state.showing and state.typeIndex ~= typeIndex then
+            BR.Glow.Stop(frame, state.typeIndex, EXPIRATION_KEY)
         end
 
         BR.Glow.Start(frame, typeIndex, color, EXPIRATION_KEY)

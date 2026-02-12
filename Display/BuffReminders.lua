@@ -551,13 +551,13 @@ local UpdateFallbackDisplay, RenderPetEntries
 -- Local alias for glow module
 local SetExpirationGlow = BR.Glow.SetExpiration
 
--- Hide a buff frame and clear its glow.
--- Overlays and action buttons are managed solely by SyncSecureButtons() based on
--- frame:IsShown(), so we don't touch them here — avoids hide/show flicker when
--- UpdateDisplay() hides all frames then re-shows visible ones each tick.
+-- Hide a buff frame without destroying its glow.
+-- The glow overlay is a child of the frame, so frame:Hide() visually hides it and
+-- pauses its OnUpdate (WoW doesn't fire OnUpdate on hidden frames). When the frame
+-- is re-shown, the glow animation resumes seamlessly from where it left off.
+-- SetExpirationGlow handles cleanup when a re-shown frame no longer needs a glow.
 local function HideFrame(frame)
     frame:Hide()
-    SetExpirationGlow(frame, false)
 end
 
 ---Show a frame with missing text styling
