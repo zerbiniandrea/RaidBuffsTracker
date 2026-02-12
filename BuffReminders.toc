@@ -15,11 +15,14 @@ Libs\LibSharedMedia-3.0\lib.xml
 Libs\LibCustomGlow-1.0\LibCustomGlow-1.0.lua
 
 Core.lua
-Buffs.lua
-ConsumableItems.lua
-Pets.lua
+Data\Buffs.lua
+Data\ConsumableItems.lua
+Data\Pets.lua
 State.lua
-Components.lua
-Glow.lua
-BuffReminders.lua
-Options.lua
+UI\Components.lua
+UI\Glow.lua
+Display\BuffReminders.lua
+Display\ImportExport.lua
+Display\Movers.lua
+Display\SecureButtons.lua
+Options\Options.lua
