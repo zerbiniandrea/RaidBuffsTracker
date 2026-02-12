@@ -2099,12 +2099,6 @@ local function CreateOptionsPanel()
     local profX = COL_PADDING
     local profLayout = Components.VerticalLayout(profilesContent, { x = profX, y = -10 })
 
-    local formatWarning = profilesContent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    formatWarning:SetText("|cffff9900Note:|r Export string format changed in v2.6.1. Old strings are incompatible.")
-    formatWarning:SetWidth(PANEL_WIDTH - COL_PADDING * 2)
-    formatWarning:SetJustifyH("LEFT")
-    profLayout:AddText(formatWarning, 12, SECTION_GAP)
-
     -- Export section
     LayoutSectionHeader(profLayout, profilesContent, "Export Settings")
 
