@@ -149,6 +149,7 @@ local defaults = {
         expirationThreshold = 15, -- minutes
         glowType = 1, -- 1=Pixel, 2=AutoCast, 3=Proc
         glowColor = { 0.95, 0.57, 0.07, 1 }, -- orange RGBA
+        glowSize = 2,
         showConsumablesWithoutItems = false,
         consumableDisplayMode = "sub_icons",
         petDisplayMode = "generic", -- "generic" or "expanded"
@@ -375,6 +376,7 @@ local function GetCategorySettings(category)
         result.growDirection = (catSettings and catSettings.growDirection) or "CENTER"
         result.glowType = (catSettings and catSettings.glowType) or 1
         result.glowColor = (catSettings and catSettings.glowColor) or { 0.95, 0.57, 0.07, 1 }
+        result.glowSize = (catSettings and catSettings.glowSize) or 2
         result.showExpirationGlow = catSettings and catSettings.showExpirationGlow
         result.expirationThreshold = (catSettings and catSettings.expirationThreshold)
     else
@@ -389,6 +391,7 @@ local function GetCategorySettings(category)
         result.growDirection = globalDefaults.growDirection or "CENTER"
         result.glowType = globalDefaults.glowType or 1
         result.glowColor = globalDefaults.glowColor or { 0.95, 0.57, 0.07, 1 }
+        result.glowSize = globalDefaults.glowSize or 2
         result.showExpirationGlow = globalDefaults.showExpirationGlow
         result.expirationThreshold = globalDefaults.expirationThreshold
     end

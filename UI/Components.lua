@@ -2152,7 +2152,7 @@ function Components.NumericStepper(parent, config)
     -- Minus button
     local minusBtn = CreateFrame("Button", nil, holder, "BackdropTemplate")
     minusBtn:SetSize(BTN_SIZE, BTN_SIZE)
-    minusBtn:SetPoint("LEFT", label, "RIGHT", 4, 0)
+    minusBtn:SetPoint("LEFT", label, "RIGHT", 5, 0)
     minusBtn:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",

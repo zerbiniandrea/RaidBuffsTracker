@@ -908,7 +908,7 @@ local function CreateOptionsPanel()
             return BuffRemindersDB.defaults and BuffRemindersDB.defaults.glowType or 1
         end,
         enabled = isExpirationGlowEnabled,
-        width = 95,
+        width = 130,
         onChange = function(val)
             BR.Config.Set("defaults.glowType", val)
         end,
@@ -926,8 +926,21 @@ local function CreateOptionsPanel()
             BR.Config.Set("defaults.glowColor", { r, g, b, a or 1 })
         end,
     })
-    defGlowColorHolder:SetPoint("LEFT", defTypeHolder, "RIGHT", 6, 0)
 
+    local defGlowSizeHolder = Components.NumericStepper(appearanceContent, {
+        label = "Size:",
+        labelWidth = 34,
+        min = 1,
+        max = 5,
+        step = 1,
+        get = function()
+            return BuffRemindersDB.defaults and BuffRemindersDB.defaults.glowSize or 2
+        end,
+        enabled = isExpirationGlowEnabled,
+        onChange = function(val)
+            BR.Config.Set("defaults.glowSize", val)
+        end,
+    })
     appLayout:Add(defGlowHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
 
     local defGlowWhenMissingHolder = Components.Checkbox(appearanceContent, {
@@ -942,6 +955,9 @@ local function CreateOptionsPanel()
         end,
     })
     defGlowWhenMissingHolder:SetPoint("TOPLEFT", defGlowHolder, "BOTTOMLEFT", 20, -COMPONENT_GAP)
+    defGlowSizeHolder:SetPoint("LEFT", defTypeHolder, "LEFT", 0, 0)
+    defGlowSizeHolder:SetPoint("TOP", defGlowWhenMissingHolder, "TOP")
+    defGlowColorHolder:SetPoint("LEFT", defGlowSizeHolder, "RIGHT", 6, 0)
     appLayout:Space(20 + COMPONENT_GAP)
 
     -- Per-Category Customization section
@@ -1798,13 +1814,13 @@ local function CreateOptionsPanel()
 
             local catGlowTypeHolder = Components.Dropdown(appFrame, {
                 label = "Type:",
-                labelWidth = 34,
+                labelWidth = CAT_LW,
                 options = catGlowTypeOptions,
                 get = function()
                     return getCatOwnValue("glowType", 1)
                 end,
                 enabled = isPetGlowEnabled,
-                width = 95,
+                width = 130,
                 onChange = function(val)
                     BR.Config.Set("categorySettings." .. category .. ".glowType", val)
                 end,
@@ -1822,9 +1838,24 @@ local function CreateOptionsPanel()
                     BR.Config.Set("categorySettings." .. category .. ".glowColor", { r, g, b, a or 1 })
                 end,
             })
-            catGlowColorHolder:SetPoint("TOPLEFT", catTextColorHolder, "TOPLEFT", 0, -24)
+            local catGlowSizeHolder = Components.NumericStepper(appFrame, {
+                label = "Size:",
+                labelWidth = CAT_LW,
+                min = 1,
+                max = 5,
+                step = 1,
+                get = function()
+                    return getCatOwnValue("glowSize", 2)
+                end,
+                enabled = isPetGlowEnabled,
+                onChange = function(val)
+                    BR.Config.Set("categorySettings." .. category .. ".glowSize", val)
+                end,
+            })
+            catGlowSizeHolder:SetPoint("TOPLEFT", CAT_COL2, -96)
+            catGlowColorHolder:SetPoint("LEFT", catGlowSizeHolder, "RIGHT", 12, 0)
 
-            gridHeight = 96 -- 4 rows (no threshold slider, no sub-checkbox)
+            gridHeight = 120 -- 5 rows (glow + size)
         else
             local function isGlowEnabled()
                 return isCustomAppearanceEnabled() and getCatOwnValue("showExpirationGlow", true) ~= false
@@ -1865,13 +1896,13 @@ local function CreateOptionsPanel()
 
             local catGlowTypeHolder = Components.Dropdown(appFrame, {
                 label = "Type:",
-                labelWidth = 34,
+                labelWidth = CAT_LW,
                 options = catGlowTypeOptions,
                 get = function()
                     return getCatOwnValue("glowType", 1)
                 end,
                 enabled = isGlowEnabled,
-                width = 95,
+                width = 130,
                 onChange = function(val)
                     BR.Config.Set("categorySettings." .. category .. ".glowType", val)
                 end,
@@ -1889,7 +1920,21 @@ local function CreateOptionsPanel()
                     BR.Config.Set("categorySettings." .. category .. ".glowColor", { r, g, b, a or 1 })
                 end,
             })
-            catGlowColorHolder:SetPoint("TOPLEFT", catTextColorHolder, "TOPLEFT", 0, -24)
+
+            local catGlowSizeHolder = Components.NumericStepper(appFrame, {
+                label = "Size:",
+                labelWidth = CAT_LW,
+                min = 1,
+                max = 5,
+                step = 1,
+                get = function()
+                    return getCatOwnValue("glowSize", 2)
+                end,
+                enabled = isGlowEnabled,
+                onChange = function(val)
+                    BR.Config.Set("categorySettings." .. category .. ".glowSize", val)
+                end,
+            })
 
             local catGlowWhenMissingHolder = Components.Checkbox(appFrame, {
                 label = "Also when missing",
@@ -1903,6 +1948,8 @@ local function CreateOptionsPanel()
                 end,
             })
             catGlowWhenMissingHolder:SetPoint("TOPLEFT", 20, -96)
+            catGlowSizeHolder:SetPoint("TOPLEFT", CAT_COL2, -96)
+            catGlowColorHolder:SetPoint("LEFT", catGlowSizeHolder, "RIGHT", 12, 0)
 
             gridHeight = 120 -- 5 rows with glow + when missing
         end
@@ -2232,7 +2279,8 @@ ShowGlowDemo = function()
         border:SetPoint("BOTTOMRIGHT", DEFAULT_BORDER_SIZE, -DEFAULT_BORDER_SIZE)
         border:SetColorTexture(0, 0, 0, 1)
 
-        Glow.Start(iconFrame, i, color, "BR_demo_" .. i)
+        local demoSize = BR.Config.Get("defaults.glowSize", 2)
+        Glow.Start(iconFrame, i, color, "BR_demo_" .. i, demoSize)
         demoFrames[i] = iconFrame
 
         local typeLabel = demoPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
