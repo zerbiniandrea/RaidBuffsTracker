@@ -1597,8 +1597,7 @@ local function CreateOptionsPanel()
                         cs.textColor = { tc[1], tc[2], tc[3] }
                     end
                 end
-                db.categorySettings[category].useCustomAppearance = checked
-                UpdateVisuals()
+                BR.Config.Set("categorySettings." .. category .. ".useCustomAppearance", checked)
                 Components.RefreshAll()
             end,
         })

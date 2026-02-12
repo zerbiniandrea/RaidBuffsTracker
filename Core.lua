@@ -94,7 +94,7 @@ local CategorySettingKeys = {
     showBuffReminder = "VisualsRefresh",
     showText = "VisualsRefresh",
     -- Toggles
-    useCustomAppearance = nil, -- No refresh, just toggle state
+    useCustomAppearance = "VisualsRefresh",
     split = "FramesReparent",
     clickable = nil, -- No auto-refresh, handled manually via UpdateClickOverlays
     clickableHighlight = nil, -- No auto-refresh, handled manually via UpdateClickOverlays
