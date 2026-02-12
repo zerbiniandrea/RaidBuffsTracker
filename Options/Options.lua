@@ -2152,7 +2152,7 @@ local function CreateOptionsPanel()
         self.text:SetText(isOn and "Stop Test" or "Test")
     end, {
         title = "Test icon's appearance",
-        desc = "Shows ALL buffs regardless of what you selected in the buffs section.",
+        desc = "Shows your selected buffs with fake values so you can preview their appearance.",
     })
     testBtn:SetText("Test")
     testBtn:SetSize(BTN_WIDTH, 22)
