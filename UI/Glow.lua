@@ -158,6 +158,20 @@ local EXPIRATION_KEY = "BR_expiration"
 -- Per-frame glow state key (avoids polluting frame namespace with multiple keys)
 local GLOW_STATE_KEY = "_brGlowState"
 
+---Compare two color tables {r, g, b, a} for equality
+---@param a number[]|nil
+---@param b number[]|nil
+---@return boolean
+local function ColorsEqual(a, b)
+    if a == b then
+        return true
+    end
+    if not a or not b then
+        return false
+    end
+    return a[1] == b[1] and a[2] == b[2] and a[3] == b[3] and a[4] == b[4]
+end
+
 ---Show/hide expiration glow on a buff frame (reads type + color from DB)
 ---@param frame table
 ---@param show boolean
@@ -178,18 +192,24 @@ function BR.Glow.SetExpiration(frame, show, category)
             size = (db.defaults and db.defaults.glowSize) or 2
         end
 
-        -- Already glowing with the same type and size — don't restart (preserves animation state)
-        if state and state.showing and state.typeIndex == typeIndex and state.size == size then
+        -- Already glowing with the same type, size, and color — don't restart (preserves animation state)
+        if
+            state
+            and state.showing
+            and state.typeIndex == typeIndex
+            and state.size == size
+            and ColorsEqual(state.color, color)
+        then
             return
         end
 
-        -- Stop previous glow if type or size changed
+        -- Stop previous glow if type, size, or color changed
         if state and state.showing then
             BR.Glow.Stop(frame, state.typeIndex, EXPIRATION_KEY)
         end
 
         BR.Glow.Start(frame, typeIndex, color, EXPIRATION_KEY, size)
-        frame[GLOW_STATE_KEY] = { showing = true, typeIndex = typeIndex, size = size }
+        frame[GLOW_STATE_KEY] = { showing = true, typeIndex = typeIndex, size = size, color = color }
     else
         if state and state.showing then
             BR.Glow.Stop(frame, state.typeIndex, EXPIRATION_KEY)
