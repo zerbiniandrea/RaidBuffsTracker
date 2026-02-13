@@ -279,7 +279,7 @@ local glowingSpells = {} -- Track which spell IDs are currently glowing (for act
 -- Dirty flag system: events set dirty=true, OnUpdate checks flag with throttle
 local dirty = false
 local lastUpdateTime = 0
-local MIN_UPDATE_INTERVAL = 0.2 -- seconds between actual updates
+local MIN_UPDATE_INTERVAL = 0.5 -- seconds between actual updates
 
 local function SetDirty()
     dirty = true
