@@ -411,7 +411,7 @@ local function SyncSecureButtons()
                 and BuffRemindersDB.categorySettings[frame.buffCategory]
             local clickable = cs and cs.clickable == true
             if frame:IsVisible() then
-                if not clickable then
+                if not clickable or not overlay._br_has_action then
                     overlay:EnableMouse(false)
                     overlay:Hide()
                     overlay._br_left = nil
@@ -639,19 +639,20 @@ local function UpdateActionButtons(category)
     for _, frame in pairs(BR.Display.frames) do
         if frame.buffCategory == category then
             if enabled then
-                -- Lazily create overlay on first enable
-                if not frame.clickOverlay then
-                    CreateClickOverlay(frame)
-                end
-                if frame.clickOverlay.highlight then
-                    frame.clickOverlay.highlight:SetShown(showHighlight)
-                end
                 if category == "consumable" then
+                    -- Lazily create overlay on first enable
+                    if not frame.clickOverlay then
+                        CreateClickOverlay(frame)
+                    end
+                    if frame.clickOverlay.highlight then
+                        frame.clickOverlay.highlight:SetShown(showHighlight)
+                    end
                     local actionItems = GetConsumableActionItems(frame.buffDef)
                     -- Update main overlay (uses first/best item)
                     local mainBtn = frame.clickOverlay
                     if actionItems and #actionItems > 0 then
                         local item = actionItems[1]
+                        mainBtn._br_has_action = true
                         mainBtn.itemID = item.itemID
                         if frame.key == "weaponBuff" or frame.key == "weaponBuffOH" then
                             local slot = frame.key == "weaponBuffOH" and 17 or 16
@@ -663,6 +664,7 @@ local function UpdateActionButtons(category)
                         end
                         mainBtn:EnableMouse(true)
                     else
+                        mainBtn._br_has_action = false
                         mainBtn.itemID = nil
                         mainBtn:EnableMouse(false)
                     end
@@ -718,25 +720,35 @@ local function UpdateActionButtons(category)
                         end
                     end
                 else
-                    -- Spells: pre-filter by talent/spec, then check castability
-                    local overlay = frame.clickOverlay
-                    overlay.itemID = nil
-                    -- Pet actions: use per-frame spell from expanded pet icons
+                    -- Spells: check castability before creating overlay
+                    local castableID
                     if frame._br_pet_spell then
-                        overlay:SetAttribute("type", "spell")
-                        overlay:SetAttribute("spell", frame._br_pet_spell)
-                        overlay:EnableMouse(true)
+                        castableID = frame._br_pet_spell
                     else
-                        local castableID = GetActionSpellID(frame.buffDef)
-                        if castableID then
-                            overlay:SetAttribute("type", "spell")
-                            overlay:SetAttribute("spell", castableID)
-                            overlay:SetAttribute("unit", category == "raid" and "player" or nil)
-                            overlay:EnableMouse(true)
-                        else
-                            overlay:EnableMouse(false)
-                        end
+                        castableID = GetActionSpellID(frame.buffDef)
                     end
+
+                    if castableID then
+                        if not frame.clickOverlay then
+                            CreateClickOverlay(frame)
+                        end
+                        local overlay = frame.clickOverlay
+                        overlay._br_has_action = true
+                        overlay.itemID = nil
+                        overlay:SetAttribute("type", "spell")
+                        overlay:SetAttribute("spell", castableID)
+                        overlay:SetAttribute("unit", category == "raid" and "player" or nil)
+                        overlay:EnableMouse(true)
+                        if overlay.highlight then
+                            overlay.highlight:SetShown(showHighlight)
+                        end
+                    elseif frame.clickOverlay then
+                        frame.clickOverlay._br_has_action = false
+                        frame.clickOverlay:EnableMouse(false)
+                        frame.clickOverlay:Hide()
+                        frame.clickOverlay._br_left = nil
+                    end
+
                     -- Pet extra frames: each has its own summon spell
                     if frame.extraFrames then
                         for _, extra in ipairs(frame.extraFrames) do
@@ -803,28 +815,17 @@ local function RefreshOverlaySpells()
     end
 
     local db = BuffRemindersDB
+    local seen = {}
     for _, frame in pairs(BR.Display.frames) do
-        if frame.clickOverlay then
-            local category = frame.buffCategory
-            local cs = category and db.categorySettings and db.categorySettings[category]
-            local enabled = cs and cs.clickable == true
-            if enabled and category ~= "consumable" then
-                local overlay = frame.clickOverlay
-                local castableID = GetActionSpellID(frame.buffDef)
-                if castableID then
-                    overlay:SetAttribute("type", "spell")
-                    overlay:SetAttribute("spell", castableID)
-                    overlay:SetAttribute("unit", category == "raid" and "player" or nil)
-                    overlay:EnableMouse(true)
-                else
-                    overlay:EnableMouse(false)
-                end
+        local cat = frame.buffCategory
+        if cat and not seen[cat] then
+            seen[cat] = true
+            local cs = db.categorySettings and db.categorySettings[cat]
+            if cs and cs.clickable == true then
+                UpdateActionButtons(cat)
             end
         end
     end
-    -- Also refresh consumable and pet action buttons
-    UpdateActionButtons("consumable")
-    UpdateActionButtons("pet")
 end
 
 -- Export module
