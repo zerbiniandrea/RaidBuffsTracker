@@ -33,15 +33,15 @@ local function GetCastableSpellID(spellIDs)
 end
 
 -- Pre-filter a buff's spell by talent/spec requirements, then find a castable spell ID.
--- Checks excludeTalentSpellID, requiresTalentSpellID, and requireSpecId before delegating
+-- Checks excludeSpellID, requiresSpellID, and requireSpecId before delegating
 -- to GetCastableSpellID. Returns nil if the buff is filtered out or no spell is castable.
 ---@param buff table The buff definition table
 ---@return number?
 local function GetActionSpellID(buff)
-    if buff.excludeTalentSpellID and IsPlayerSpell(buff.excludeTalentSpellID) then
+    if buff.excludeSpellID and IsPlayerSpell(buff.excludeSpellID) then
         return nil
     end
-    if buff.requiresTalentSpellID and not IsPlayerSpell(buff.requiresTalentSpellID) then
+    if buff.requiresSpellID and not IsPlayerSpell(buff.requiresSpellID) then
         return nil
     end
     if buff.requireSpecId then

@@ -54,7 +54,7 @@
 ---@field levelRequired? number
 ---@field missingText string
 ---@field groupId? string
----@field excludeTalentSpellID? number
+---@field excludeSpellID? number
 ---@field iconOverride? number
 ---@field infoTooltip? string
 ---@field noGlow? boolean
@@ -69,7 +69,7 @@
 ---@field missingText string
 ---@field groupId? string
 ---@field beneficiaryRole? RoleType
----@field excludeTalentSpellID? number
+---@field excludeSpellID? number
 ---@field iconOverride? number
 ---@field requireSpecId? number
 ---@field infoTooltip? string
@@ -85,8 +85,8 @@
 ---@field requiresBuffWithEnchant? boolean -- When true, require both enchant AND buff to be present (for Paladin Rites)
 ---@field buffIdOverride? number
 ---@field requireSpecId? number        -- Only show if player's current spec matches (WoW spec ID)
----@field requiresTalentSpellID? number -- TODO: rename to requiresSpellID (also used for baseline spec abilities, not just talents)
----@field excludeTalentSpellID? number -- TODO: rename to excludeSpellID
+---@field requiresSpellID? number
+---@field excludeSpellID? number
 ---@field iconOverride? number
 ---@field iconByRole? table<RoleType, number>
 ---@field infoTooltip? string

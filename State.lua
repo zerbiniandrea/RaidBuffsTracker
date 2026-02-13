@@ -581,8 +581,8 @@ local SKIP_SPELL_KNOWN_CATEGORIES = { custom = true }
 ---@param spellID SpellID
 ---@param requiredClass ClassName
 ---@param enchantID? number For weapon imbues, checks if this enchant is on either weapon
----@param requiresTalent? number Only show if player HAS this talent
----@param excludeTalent? number Hide if player HAS this talent
+---@param requiresSpell? number Only show if player knows this spell
+---@param excludeSpell? number Hide if player knows this spell
 ---@param buffIdOverride? number Separate buff ID to check (if different from spellID)
 ---@param customCheck? fun(): boolean? Custom check function for complex buff logic
 ---@param requireSpecId? number Only show if player's current spec matches (WoW spec ID)
@@ -593,8 +593,8 @@ local function ShouldShowSelfBuff(
     spellID,
     requiredClass,
     enchantID,
-    requiresTalent,
-    excludeTalent,
+    requiresSpell,
+    excludeSpell,
     buffIdOverride,
     customCheck,
     requireSpecId,
@@ -608,11 +608,11 @@ local function ShouldShowSelfBuff(
         return nil
     end
 
-    -- Talent checks (before spell availability check for talent-gated buffs)
-    if requiresTalent and not IsPlayerSpellCached(requiresTalent) then
+    -- Spell knowledge checks (before spell availability check for talent/ability-gated buffs)
+    if requiresSpell and not IsPlayerSpellCached(requiresSpell) then
         return nil
     end
-    if excludeTalent and IsPlayerSpellCached(excludeTalent) then
+    if excludeSpell and IsPlayerSpellCached(excludeSpell) then
         return nil
     end
 
@@ -827,7 +827,7 @@ local function PassesPreChecks(buff, presentClasses, db)
     end
 
     -- Talent exclusion
-    if buff.excludeTalentSpellID and IsPlayerSpellCached(buff.excludeTalentSpellID) then
+    if buff.excludeSpellID and IsPlayerSpellCached(buff.excludeSpellID) then
         return false
     end
 
@@ -1033,8 +1033,8 @@ function BuffState.Refresh()
                 buff.spellID,
                 buff.class,
                 buff.enchantID,
-                buff.requiresTalentSpellID,
-                buff.excludeTalentSpellID,
+                buff.requiresSpellID,
+                buff.excludeSpellID,
                 buff.buffIdOverride,
                 buff.customCheck,
                 buff.requireSpecId,
@@ -1068,8 +1068,8 @@ function BuffState.Refresh()
                 buff.spellID,
                 buff.class,
                 buff.enchantID,
-                buff.requiresTalentSpellID,
-                buff.excludeTalentSpellID,
+                buff.requiresSpellID,
+                buff.excludeSpellID,
                 buff.buffIdOverride,
                 buff.customCheck,
                 buff.requireSpecId,
@@ -1148,8 +1148,8 @@ function BuffState.Refresh()
                 buff.spellID,
                 buff.class,
                 buff.enchantID,
-                buff.requiresTalentSpellID,
-                buff.excludeTalentSpellID,
+                buff.requiresSpellID,
+                buff.excludeSpellID,
                 buff.buffIdOverride,
                 buff.customCheck,
                 buff.requireSpecId,

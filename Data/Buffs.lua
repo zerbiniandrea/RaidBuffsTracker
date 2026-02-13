@@ -110,7 +110,7 @@ BR.BUFF_TABLES = {
             missingText = "NO\nLIGHT",
             groupId = "beacons",
             requireSpecId = 65, -- Holy only
-            excludeTalentSpellID = 200025, -- Hide when Beacon of Virtue is known
+            excludeSpellID = 200025, -- Hide when Beacon of Virtue is known
             iconOverride = 236247, -- Force original icon (talents replace the texture)
         },
         {
@@ -137,7 +137,7 @@ BR.BUFF_TABLES = {
             beneficiaryRole = "TANK",
             missingText = "NO\nSCALES",
             requireSpecId = 1473, -- Augmentation
-            requiresTalentSpellID = 360827,
+            requiresSpellID = 360827,
         },
         {
             spellID = 474750,
@@ -289,7 +289,7 @@ BR.BUFF_TABLES = {
             name = "Earth Shield (Self)",
             class = "SHAMAN",
             missingText = "NO\nSELF ES",
-            requiresTalentSpellID = 383010,
+            requiresSpellID = 383010,
             groupId = "shamanShields",
             displaySpellIDs = 974, -- Earth Shield icon for group checkbox
         },
@@ -300,7 +300,7 @@ BR.BUFF_TABLES = {
             name = "Water/Lightning Shield",
             class = "SHAMAN",
             missingText = "NO\nSHIELD",
-            requiresTalentSpellID = 383010,
+            requiresSpellID = 383010,
             groupId = "shamanShields",
             displaySpellIDs = 192106, -- Lightning Shield icon for group checkbox
             iconByRole = { HEALER = 52127, DAMAGER = 192106, TANK = 192106 },
@@ -312,7 +312,7 @@ BR.BUFF_TABLES = {
             name = "Shield (No Talent)",
             class = "SHAMAN",
             missingText = "NO\nSHIELD",
-            excludeTalentSpellID = 383010,
+            excludeSpellID = 383010,
             groupId = "shamanShields",
             displaySpellIDs = 52127, -- Water Shield icon for group checkbox
             iconByRole = { HEALER = 52127, DAMAGER = 192106, TANK = 192106 },
@@ -328,7 +328,7 @@ BR.BUFF_TABLES = {
             class = "MAGE",
             missingText = "NO\nPET",
             requireSpecId = 64, -- Frost
-            requiresTalentSpellID = 31687,
+            requiresSpellID = 31687,
             groupId = "pets",
             customCheck = function()
                 return not UnitExists("pet")
@@ -378,7 +378,7 @@ BR.BUFF_TABLES = {
             class = "WARLOCK",
             missingText = "NO\nPET",
             iconOverride = 136082, -- Summon Demon flyout icon
-            excludeTalentSpellID = 108503, -- Grimoire of Sacrifice: pet intentionally sacrificed
+            excludeSpellID = 108503, -- Grimoire of Sacrifice: pet intentionally sacrificed
             groupId = "pets",
             customCheck = function()
                 return not UnitExists("pet")
