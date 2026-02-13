@@ -73,8 +73,10 @@ local function CreateClickOverlay(frame)
     -- Auto-hide in combat (secure state driver), auto-show after
     RegisterStateDriver(overlay, "visibility", "[combat] hide; show")
     -- When state driver re-shows after combat, hide if buff frame isn't visible
+    -- Uses IsVisible() (not IsShown()) to check entire parent chain — the frame's own
+    -- shown state can be true while its parent container is hidden.
     overlay:SetScript("OnShow", function(self)
-        if not frame:IsShown() then
+        if not frame:IsVisible() then
             self:Hide()
         end
     end)
@@ -141,9 +143,10 @@ local function CreateActionButton()
     -- Start hidden — state driver activated by SyncSecureButtons() after positioning
     RegisterStateDriver(btn, "visibility", "hide")
     -- When state driver re-shows after combat, hide if buff frame isn't visible
+    -- Uses IsVisible() to check entire parent chain (see CreateClickOverlay comment)
     btn:SetScript("OnShow", function(self)
         local bf = self._br_buff_frame
-        if not bf or not bf:IsShown() then
+        if not bf or not bf:IsVisible() then
             self:Hide()
         end
     end)
@@ -407,7 +410,7 @@ local function SyncSecureButtons()
                 and BuffRemindersDB.categorySettings
                 and BuffRemindersDB.categorySettings[frame.buffCategory]
             local clickable = cs and cs.clickable == true
-            if frame:IsShown() then
+            if frame:IsVisible() then
                 if not clickable then
                     overlay:EnableMouse(false)
                     overlay:Hide()
@@ -446,7 +449,7 @@ local function SyncSecureButtons()
         end
         -- Sync action buttons (consumable item row)
         if frame.actionButtons then
-            if frame:IsShown() then
+            if frame:IsVisible() then
                 local left, bottom, width, height = frame:GetRect()
                 if left then
                     local effectiveCat = GetEffectiveCategory(frame)
@@ -557,7 +560,7 @@ local function SyncSecureButtons()
             for _, extra in ipairs(frame.extraFrames) do
                 local extraOverlay = extra.clickOverlay
                 if extraOverlay then
-                    if extra:IsShown() then
+                    if extra:IsVisible() then
                         local extraCs = frame.buffCategory
                             and BuffRemindersDB.categorySettings
                             and BuffRemindersDB.categorySettings[frame.buffCategory]

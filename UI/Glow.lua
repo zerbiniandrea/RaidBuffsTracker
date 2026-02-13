@@ -172,16 +172,21 @@ local function ColorsEqual(a, b)
     return a[1] == b[1] and a[2] == b[2] and a[3] == b[3] and a[4] == b[4]
 end
 
----Show/hide expiration glow on a buff frame (reads type + color from DB)
+---Show/hide expiration glow on a buff frame (reads type + color from DB or cached settings)
 ---@param frame table
 ---@param show boolean
 ---@param category? string Category name for per-category glow settings (nil = use global defaults)
-function BR.Glow.SetExpiration(frame, show, category)
+---@param cachedSettings? {typeIndex: number, color: number[], size: number} Pre-fetched glow settings to avoid DB reads
+function BR.Glow.SetExpiration(frame, show, category, cachedSettings)
     local state = frame[GLOW_STATE_KEY]
 
     if show then
         local typeIndex, color, size
-        if category then
+        if cachedSettings then
+            typeIndex = cachedSettings.typeIndex
+            color = cachedSettings.color
+            size = cachedSettings.size
+        elseif category then
             typeIndex = BR.Config.GetCategorySetting(category, "glowType") or 1
             color = BR.Config.GetCategorySetting(category, "glowColor") or BR.Glow.DEFAULT_COLOR
             size = BR.Config.GetCategorySetting(category, "glowSize") or 2

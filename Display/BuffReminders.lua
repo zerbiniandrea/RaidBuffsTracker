@@ -261,6 +261,7 @@ local buffFrames = {}
 local updateTicker
 local readyCheckTimer = nil
 local testMode = false
+local eventFrame -- forward declaration; created later in file, referenced by StartUpdates
 
 ---@class TestModeData
 ---@field fakeTotal number Total group size for fake counts
@@ -274,9 +275,14 @@ local playerClass = nil -- Cached player class, set once on init
 local playerRole = nil -- Cached player role, invalidated on spec change
 local glowingSpells = {} -- Track which spell IDs are currently glowing (for action bar glow fallback)
 
--- Throttle for UNIT_AURA events (can fire rapidly during raid-wide buffs)
-local AURA_THROTTLE = 0.2 -- seconds
-local lastAuraUpdate = 0
+-- Dirty flag system: events set dirty=true, OnUpdate checks flag with throttle
+local dirty = false
+local lastUpdateTime = 0
+local MIN_UPDATE_INTERVAL = 0.2 -- seconds between actual updates
+
+local function SetDirty()
+    dirty = true
+end
 
 -- Track combat state via events (InCombatLockdown() can lag behind PLAYER_REGEN_DISABLED)
 local inCombat = false
@@ -285,6 +291,14 @@ local isResting = false
 -- Category frame system
 local categoryFrames = {}
 local CATEGORIES = { "raid", "presence", "targeted", "self", "pet", "consumable", "custom" }
+
+-- Track previously visible frame keys for selective hiding (Phase 3 optimization)
+local previouslyVisibleKeys = {} ---@type table<string, boolean>
+
+-- Layout signature tracking for skip-redundant-positioning (Phase 4 optimization)
+-- Signatures are concatenated visible frame keys; if unchanged, skip repositioning
+local lastMainSignature = ""
+local lastSplitSignatures = {} ---@type table<string, string>
 local CATEGORY_LABELS = {
     raid = "Raid",
     presence = "Presence",
@@ -554,6 +568,26 @@ local UpdateFallbackDisplay, RenderPetEntries
 -- Local alias for glow module
 local SetExpirationGlow = BR.Glow.SetExpiration
 
+-- Per-render-cycle cache for glow settings (avoids repeated BR.Config.GetCategorySetting calls)
+local glowSettingsCache = {} ---@type table<string, {typeIndex: number, color: number[], size: number}>
+
+---Get cached glow settings for a category (populated once per render cycle)
+---@param category string
+---@return {typeIndex: number, color: number[], size: number}
+local function GetCachedGlowSettings(category)
+    local cached = glowSettingsCache[category]
+    if cached then
+        return cached
+    end
+    cached = {
+        typeIndex = BR.Config.GetCategorySetting(category, "glowType") or 1,
+        color = BR.Config.GetCategorySetting(category, "glowColor") or BR.Glow.DEFAULT_COLOR,
+        size = BR.Config.GetCategorySetting(category, "glowSize") or 2,
+    }
+    glowSettingsCache[category] = cached
+    return cached
+end
+
 -- Hide a buff frame without destroying its glow.
 -- The glow overlay is a child of the frame, so frame:Hide() visually hides it and
 -- pauses its OnUpdate (WoW doesn't fire OnUpdate on hidden frames). When the frame
@@ -568,8 +602,15 @@ end
 ---@param missingText? string
 ---@param shouldGlow? boolean
 ---@param category? CategoryName
+---@param cachedGlow? {typeIndex: number, color: number[], size: number}
 ---@return boolean true (for anyVisible chaining)
-local function ShowMissingFrame(frame, missingText, shouldGlow, category)
+local function ShowMissingFrame(frame, missingText, shouldGlow, category, cachedGlow)
+    -- Hide stackCount/qualityOverlay — ShowMissingFrame can be called from fallback paths
+    -- (UpdateFallbackDisplay) that don't go through RenderVisibleEntry's cleanup.
+    frame.stackCount:Hide()
+    if frame.qualityOverlay then
+        frame.qualityOverlay:Hide()
+    end
     if missingText then
         frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
         frame.count:SetText(missingText)
@@ -578,7 +619,7 @@ local function ShowMissingFrame(frame, missingText, shouldGlow, category)
         frame.count:Hide()
     end
     frame:Show()
-    SetExpirationGlow(frame, shouldGlow or false, category)
+    SetExpirationGlow(frame, shouldGlow or false, category, cachedGlow)
     return true
 end
 
@@ -841,8 +882,17 @@ local function PositionFramesInContainer(container, frames, iconSize, spacing, d
     end
 end
 
--- Build a sorted category list by priority
+-- Build a sorted category list by priority (cached, invalidated on config change)
+local cachedSortedCategories = nil
+
+local function InvalidateSortedCategories()
+    cachedSortedCategories = nil
+end
+
 local function GetSortedCategories()
+    if cachedSortedCategories then
+        return cachedSortedCategories
+    end
     local db = BuffRemindersDB
     local sorted = {}
     for i, category in ipairs(CATEGORIES) do
@@ -858,7 +908,23 @@ local function GetSortedCategories()
         end
         return aPri < bPri
     end)
+    cachedSortedCategories = sorted
     return sorted
+end
+
+---Build a signature string from a list of frames (by buffKey)
+---@param frames table[]
+---@return string
+local function BuildLayoutSignature(frames)
+    if #frames == 0 then
+        return ""
+    end
+    -- Use table.concat for efficiency; keys are short strings
+    local keys = {}
+    for i, frame in ipairs(frames) do
+        keys[i] = (frame.buffDef and frame.buffDef.key) or ""
+    end
+    return table.concat(keys, ",")
 end
 
 -- Position and size the main container frame with the given buff frames
@@ -866,6 +932,13 @@ local function PositionMainContainer(mainFrameBuffs)
     local db = BuffRemindersDB
 
     if #mainFrameBuffs > 0 then
+        -- Skip repositioning if the same frames are visible in the same order
+        local sig = BuildLayoutSignature(mainFrameBuffs)
+        if sig == lastMainSignature then
+            return
+        end
+        lastMainSignature = sig
+
         local mainSettings = GetCategorySettings("main")
         local iconSize = mainSettings.iconSize or 64
         local spacing = math.floor(iconSize * (mainSettings.spacing or 0.2))
@@ -896,6 +969,7 @@ local function PositionMainContainer(mainFrameBuffs)
         PositionFramesInContainer(mainFrame, mainFrameBuffs, iconSize, spacing, direction)
         mainFrame:Show()
     else
+        lastMainSignature = ""
         mainFrame:Hide()
     end
 end
@@ -907,12 +981,18 @@ local function PositionSplitCategory(category, frames)
         return
     end
 
-    local catSettings = GetCategorySettings(category)
-    local direction = catSettings.growDirection or "CENTER"
-    local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
-    local pos = catSettings.position or { point = "CENTER", x = 0, y = 0 }
-
     if #frames > 0 then
+        -- Skip repositioning if the same frames are visible in the same order
+        local sig = BuildLayoutSignature(frames)
+        if sig == (lastSplitSignatures[category] or "") then
+            return
+        end
+        lastSplitSignatures[category] = sig
+
+        local catSettings = GetCategorySettings(category)
+        local direction = catSettings.growDirection or "CENTER"
+        local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
+        local pos = catSettings.position or { point = "CENTER", x = 0, y = 0 }
         local iconSize = catSettings.iconSize or 64
         local spacing = math.floor(iconSize * (catSettings.spacing or 0.2))
 
@@ -936,6 +1016,7 @@ local function PositionSplitCategory(category, frames)
         PositionFramesInContainer(catFrame, frames, iconSize, spacing, direction)
         catFrame:Show()
     else
+        lastSplitSignatures[category] = ""
         catFrame:Hide()
     end
 end
@@ -1099,13 +1180,25 @@ ToggleTestMode = function(showLabels)
     if testMode then
         testMode = false
         testModeData = nil
-        -- Clear all glows and hide test labels
+        -- Clear all glows, hide test labels, and hide ALL frames (including extra frames)
+        -- so UpdateDisplay starts from a clean slate. Without this, frames shown during
+        -- test mode but not tracked in previouslyVisibleKeys would linger as orphans.
         for _, frame in pairs(buffFrames) do
             SetExpirationGlow(frame, false)
             if frame.testText then
                 frame.testText:Hide()
             end
+            frame:Hide()
+            if frame.extraFrames then
+                for _, extra in ipairs(frame.extraFrames) do
+                    extra:Hide()
+                end
+            end
         end
+        wipe(previouslyVisibleKeys)
+        -- Reset layout signatures so positioning runs fresh
+        lastMainSignature = ""
+        wipe(lastSplitSignatures)
         UpdateDisplay()
         return false
     else
@@ -1138,6 +1231,12 @@ local function HideAllDisplayFrames()
             categoryFrames[category]:Hide()
         end
     end
+    wipe(previouslyVisibleKeys)
+    -- Reset layout signatures so next PositionMainContainer/PositionSplitCategory always
+    -- runs fresh. Without this, if the signature matches a previous value, positioning
+    -- returns early without calling mainFrame:Show(), leaving frames invisible.
+    lastMainSignature = ""
+    wipe(lastSplitSignatures)
     -- Also hide individual buff frames (so they don't reappear when mainFrame is shown by fallback)
     for _, frame in pairs(buffFrames) do
         frame:Hide()
@@ -1257,7 +1356,11 @@ local EATING_ICON = BR.EATING_AURA_ICON
 -- Uses the top item from the consumable cache (actual item in bags), falling back
 -- to the buff definition's iconOverride or buffIconID.
 local function ResolveConsumableIcon(frame)
-    local items = BR.SecureButtons.GetConsumableActionItems(frame.buffDef)
+    local items = frame._cachedItems
+    if items == nil then
+        items = BR.SecureButtons.GetConsumableActionItems(frame.buffDef) or false
+        frame._cachedItems = items
+    end
     if items and items[1] and items[1].icon then
         frame.icon:SetTexture(items[1].icon)
         if frame.qualityOverlay then
@@ -1300,22 +1403,29 @@ local function RenderVisibleEntry(frame, entry)
         ResolveConsumableIcon(frame)
     end
 
+    -- Get cached glow settings for this entry's category (avoids repeated DB reads)
+    local cachedGlow = entry.category and GetCachedGlowSettings(entry.category) or nil
+
     if entry.displayType == "count" then
         frame.count:SetFont(fontPath, GetFrameFontSize(frame), "OUTLINE")
         frame.count:SetText(entry.countText or "")
         frame.count:Show()
         frame:Show()
-        SetExpirationGlow(frame, entry.shouldGlow, entry.category)
+        SetExpirationGlow(frame, entry.shouldGlow, entry.category, cachedGlow)
     elseif entry.displayType == "expiring" then
         frame.count:SetFont(fontPath, GetFrameFontSize(frame), "OUTLINE")
         frame.count:SetText(entry.countText or "")
         frame.count:Show()
         frame:Show()
-        SetExpirationGlow(frame, true, entry.category)
+        SetExpirationGlow(frame, true, entry.category, cachedGlow)
     else -- "missing"
         -- Consumables with bag scan support: show actual item from bags
         if BUFF_KEY_TO_CATEGORY[frame.key] then
-            local items = BR.SecureButtons.GetConsumableActionItems(frame.buffDef)
+            local items = frame._cachedItems
+            if items == nil then
+                items = BR.SecureButtons.GetConsumableActionItems(frame.buffDef) or false
+                frame._cachedItems = items
+            end
             if items then
                 frame.icon:SetTexture(items[1].icon)
                 if frame.qualityOverlay then
@@ -1325,9 +1435,9 @@ local function RenderVisibleEntry(frame, entry)
                 frame.stackCount:SetText(items[1].count)
                 frame.stackCount:Show()
                 frame:Show()
-                SetExpirationGlow(frame, entry.shouldGlow, entry.category)
+                SetExpirationGlow(frame, entry.shouldGlow, entry.category, cachedGlow)
             elseif (BuffRemindersDB.defaults or {}).showConsumablesWithoutItems then
-                ShowMissingFrame(frame, entry.missingText, entry.shouldGlow, entry.category)
+                ShowMissingFrame(frame, entry.missingText, entry.shouldGlow, entry.category, cachedGlow)
             else
                 -- No items and setting is off: don't show the frame
                 return false
@@ -1339,7 +1449,7 @@ local function RenderVisibleEntry(frame, entry)
                     frame.icon:SetTexture(texture)
                 end
             end
-            ShowMissingFrame(frame, entry.missingText, entry.shouldGlow, entry.category)
+            ShowMissingFrame(frame, entry.missingText, entry.shouldGlow, entry.category, cachedGlow)
         end
     end
 
@@ -1365,7 +1475,11 @@ local function ApplyConsumableDisplayMode(frame, entry, frameList, parentFrame)
     end
 
     local displayMode = (BuffRemindersDB.defaults or {}).consumableDisplayMode or "sub_icons"
-    local items = BR.SecureButtons.GetConsumableActionItems(frame.buffDef)
+    local items = frame._cachedItems
+    if items == nil then
+        items = BR.SecureButtons.GetConsumableActionItems(frame.buffDef) or false
+        frame._cachedItems = items
+    end
     if displayMode == "sub_icons" then
         local cs = BuffRemindersDB.categorySettings and BuffRemindersDB.categorySettings.consumable
         local clickable = cs and cs.clickable == true
@@ -1460,9 +1574,11 @@ RenderPetEntries = function()
     if not petEntries or #petEntries == 0 then
         return
     end
-    table.sort(petEntries, function(a, b)
-        return a.sortOrder < b.sortOrder
-    end)
+    if not petEntries._sorted then
+        table.sort(petEntries, function(a, b)
+            return a.sortOrder < b.sortOrder
+        end)
+    end
     for _, entry in ipairs(petEntries) do
         local frame = buffFrames[entry.key]
         if frame then
@@ -1476,6 +1592,15 @@ end
 UpdateDisplay = function()
     if not mainFrame or testMode then
         return
+    end
+
+    -- Clear per-cycle caches (before early exits — fallback paths also use these)
+    wipe(glowSettingsCache)
+    for key in pairs(BUFF_KEY_TO_CATEGORY) do
+        local frame = buffFrames[key]
+        if frame then
+            frame._cachedItems = nil
+        end
     end
 
     -- Early exit: can't check buffs when dead, in combat, M+, instanced PvP, or player housing
@@ -1538,18 +1663,11 @@ UpdateDisplay = function()
     -- Refresh buff state
     BR.BuffState.Refresh()
 
-    -- Hide all frames first
-    for _, frame in pairs(buffFrames) do
-        HideFrame(frame)
-        if frame.extraFrames then
-            for _, extra in ipairs(frame.extraFrames) do
-                extra:Hide()
-            end
-        end
-    end
-
     local visibleByCategory = BR.BuffState.visibleByCategory
     local anyVisible = false
+
+    -- Track which keys are visible this cycle (for selective hiding)
+    local currentlyVisibleKeys = {} ---@type table<string, boolean>
 
     -- Build sorted category list by priority
     local sortedCategories = GetSortedCategories()
@@ -1562,9 +1680,11 @@ UpdateDisplay = function()
         local entries = visibleByCategory[category]
 
         if entries and #entries > 0 then
-            table.sort(entries, function(a, b)
-                return a.sortOrder < b.sortOrder
-            end)
+            if not entries._sorted then
+                table.sort(entries, function(a, b)
+                    return a.sortOrder < b.sortOrder
+                end)
+            end
             anyVisible = true
 
             if IsCategorySplit(category) then
@@ -1576,6 +1696,7 @@ UpdateDisplay = function()
                         local shown = RenderVisibleEntry(frame, entry)
                         if shown then
                             frames[#frames + 1] = frame
+                            currentlyVisibleKeys[entry.key] = true
                         end
                         -- Category-specific post-processing
                         if category == "consumable" then
@@ -1594,6 +1715,7 @@ UpdateDisplay = function()
                         local shown = RenderVisibleEntry(frame, entry)
                         if shown then
                             mainFrameBuffs[#mainFrameBuffs + 1] = frame
+                            currentlyVisibleKeys[entry.key] = true
                         end
                         -- Category-specific post-processing
                         if category == "consumable" then
@@ -1605,6 +1727,27 @@ UpdateDisplay = function()
                 end
             end
         end
+    end
+
+    -- Selectively hide frames that were visible last cycle but aren't now
+    for key in pairs(previouslyVisibleKeys) do
+        if not currentlyVisibleKeys[key] then
+            local frame = buffFrames[key]
+            if frame then
+                HideFrame(frame)
+                frame._cachedItems = nil
+                if frame.extraFrames then
+                    for _, extra in ipairs(frame.extraFrames) do
+                        extra:Hide()
+                    end
+                end
+            end
+        end
+    end
+    -- Update tracking set
+    wipe(previouslyVisibleKeys)
+    for key in pairs(currentlyVisibleKeys) do
+        previouslyVisibleKeys[key] = true
     end
 
     -- Position main container
@@ -1635,7 +1778,24 @@ local function StartUpdates()
     if updateTicker then
         updateTicker:Cancel()
     end
-    updateTicker = C_Timer.NewTicker(1, UpdateDisplay)
+    -- Slow fallback ticker for expiration text staleness (e.g. "14m" → "13m")
+    updateTicker = C_Timer.NewTicker(3, SetDirty)
+    -- OnUpdate checks dirty flag with throttle
+    eventFrame:SetScript("OnUpdate", function()
+        if not dirty then
+            return
+        end
+        local now = GetTime()
+        if now - lastUpdateTime < MIN_UPDATE_INTERVAL then
+            return
+        end
+        dirty = false
+        lastUpdateTime = now
+        UpdateDisplay()
+    end)
+    -- Immediate first update
+    dirty = false
+    lastUpdateTime = GetTime()
     UpdateDisplay()
 end
 
@@ -1645,6 +1805,8 @@ local function StopUpdates()
         updateTicker:Cancel()
         updateTicker = nil
     end
+    eventFrame:SetScript("OnUpdate", nil)
+    dirty = false
 end
 
 -- Forward declaration for ReparentBuffFrames (defined after InitializeFrames)
@@ -1850,9 +2012,16 @@ end
 
 local CallbackRegistry = BR.CallbackRegistry
 
+---Reset layout signatures so next UpdateDisplay forces repositioning
+local function ResetLayoutSignatures()
+    lastMainSignature = ""
+    wipe(lastSplitSignatures)
+end
+
 -- Visual changes (icon size, zoom, border, text visibility, font)
 CallbackRegistry:RegisterCallback("VisualsRefresh", function()
     ResolveFontPath()
+    ResetLayoutSignatures()
     UpdateVisuals()
     for _, mover in pairs(BR.Movers.GetMoverFrames()) do
         mover:UpdateSize()
@@ -1863,6 +2032,8 @@ end)
 CallbackRegistry:RegisterCallback("LayoutRefresh", function()
     -- If growth direction changed, convert saved positions so frames stay in place
     BR.Movers.ConvertDirectionPositions()
+    ResetLayoutSignatures()
+    InvalidateSortedCategories()
 
     if testMode then
         RefreshTestDisplay()
@@ -1873,6 +2044,8 @@ end)
 
 -- Display changes (enabled buffs, visibility settings, consumable display mode)
 CallbackRegistry:RegisterCallback("DisplayRefresh", function()
+    ResetLayoutSignatures()
+    InvalidateSortedCategories()
     if testMode then
         RefreshTestDisplay()
     else
@@ -1886,6 +2059,8 @@ end)
 
 -- Structural changes (split categories)
 CallbackRegistry:RegisterCallback("FramesReparent", function()
+    ResetLayoutSignatures()
+    InvalidateSortedCategories()
     ReparentBuffFrames()
     UpdateVisuals()
 end)
@@ -1979,7 +2154,7 @@ local function SlashHandler(msg)
 end
 
 -- Event handler
-local eventFrame = CreateFrame("Frame")
+eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("ADDON_LOADED")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
@@ -2552,9 +2727,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
             StartUpdates()
         end
         -- Delayed update to catch glow events that fire after reload
-        C_Timer.After(0.5, function()
-            UpdateDisplay()
-        end)
+        C_Timer.After(0.5, SetDirty)
         -- Refresh custom buff icons after spell data is fully loaded (talent-modified icons)
         C_Timer.After(1.5, function()
             for key, def in pairs(BuffRemindersDB.customBuffs or {}) do
@@ -2568,7 +2741,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
             end
         end)
     elseif event == "GROUP_ROSTER_UPDATE" then
-        UpdateDisplay()
+        SetDirty()
     elseif event == "PLAYER_REGEN_ENABLED" then
         inCombat = false
         BR.StateHelpers.ScanEatingState()
@@ -2577,64 +2750,58 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
     elseif event == "PLAYER_REGEN_DISABLED" then
         inCombat = true
         StopUpdates()
-        UpdateDisplay()
+        UpdateDisplay() -- last update before combat lockdown
     elseif event == "PLAYER_DEAD" then
         HideAllDisplayFrames()
     elseif event == "PLAYER_UNGHOST" then
-        UpdateDisplay()
+        SetDirty()
     elseif event == "UNIT_AURA" then
         -- Skip in combat (auras change frequently, and we can't check buffs or eat in combat)
-        -- Throttle rapid events (e.g., raid-wide buff application)
         if not InCombatLockdown() and mainFrame and mainFrame:IsShown() then
             if arg1 == "player" then
                 BR.StateHelpers.UpdateEatingState(arg2)
             end
-            local now = GetTime()
-            if now - lastAuraUpdate >= AURA_THROTTLE then
-                lastAuraUpdate = now
-                UpdateDisplay()
-            end
-            -- else: throttled, 1s ticker will catch it
+            dirty = true -- OnUpdate will pick this up with throttle
         end
     elseif event == "UNIT_PET" then
         if arg1 == "player" then
-            UpdateDisplay()
+            SetDirty()
         end
     elseif event == "PET_BAR_UPDATE" then
-        UpdateDisplay()
+        SetDirty()
     elseif event == "PET_STABLE_UPDATE" then
         BR.PetHelpers.InvalidatePetActions()
-        UpdateDisplay()
+        SetDirty()
     elseif event == "PLAYER_MOUNT_DISPLAY_CHANGED" then
-        UpdateDisplay()
+        SetDirty()
     elseif event == "PLAYER_DIFFICULTY_CHANGED" then
         BR.BuffState.InvalidateContentTypeCache()
-        UpdateDisplay()
+        SetDirty()
     elseif event == "PLAYER_UPDATE_RESTING" then
         isResting = IsResting()
-        UpdateDisplay()
+        SetDirty()
     elseif event == "READY_CHECK" then
         -- Cancel any existing timer
         if readyCheckTimer then
             readyCheckTimer:Cancel()
         end
         BR.BuffState.SetReadyCheckState(true)
-        UpdateDisplay()
+        UpdateDisplay() -- user-facing, must be instant
         -- Start timer to reset ready check state
         local duration = BuffRemindersDB.readyCheckDuration or 15
         readyCheckTimer = C_Timer.NewTimer(duration, function()
             BR.BuffState.SetReadyCheckState(false)
             readyCheckTimer = nil
-            UpdateDisplay()
+            UpdateDisplay() -- must be instant
         end)
     elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW" then
         local spellID = arg1
         glowingSpells[spellID] = true
-        UpdateDisplay()
+        SetDirty()
     elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE" then
         local spellID = arg1
         glowingSpells[spellID] = nil
-        UpdateDisplay()
+        SetDirty()
     elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
         if arg1 ~= "player" then
             return
@@ -2644,29 +2811,29 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         BR.BuffState.InvalidateSpellCache()
         BR.PetHelpers.InvalidatePetActions()
         BR.SecureButtons.RefreshOverlaySpells()
-        UpdateDisplay()
+        UpdateDisplay() -- cache invalidation + immediate feedback
         -- Spells can become available shortly after spec swap; refresh once more
         C_Timer.After(0.5, function()
             if not InCombatLockdown() then
                 BR.SecureButtons.RefreshOverlaySpells()
             end
-            UpdateDisplay()
+            SetDirty()
         end)
     elseif event == "TRAIT_CONFIG_UPDATED" then
         -- Invalidate spell cache when talents change (within same spec)
         BR.BuffState.InvalidateSpellCache()
         BR.PetHelpers.InvalidatePetActions()
         BR.SecureButtons.RefreshOverlaySpells()
-        UpdateDisplay()
+        SetDirty()
     elseif event == "SPELLS_CHANGED" then
         -- Catch delayed spell availability after spec/talent changes (noisy event, keep cheap)
         BR.BuffState.InvalidateSpellCache()
         BR.PetHelpers.InvalidatePetActions()
     elseif event == "PLAYER_EQUIPMENT_CHANGED" then
-        UpdateDisplay()
+        SetDirty()
     elseif event == "BAG_UPDATE_DELAYED" then
         BR.SecureButtons.InvalidateConsumableCache()
-        UpdateDisplay()
+        SetDirty()
         BR.SecureButtons.UpdateActionButtons("consumable")
     end
 end)

@@ -145,6 +145,8 @@
 ---@field isExtraFrame? boolean
 ---@field mainFrame? BuffFrame
 ---@field _br_pet_spell? string             -- Localized spell name for pet click-to-cast
+---@field qualityOverlay? FontString         -- Quality rank text (R1/R2/R3) for consumable frames
+---@field _cachedItems? table|false         -- Per-cycle cache for GetConsumableActionItems result
 
 ---@alias CategoryName "raid"|"presence"|"targeted"|"self"|"pet"|"consumable"|"custom"
 

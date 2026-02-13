@@ -76,14 +76,50 @@ local cachedHasOffHandWeapon = nil
 local currentWeaponEnchants = {
     hasMainHand = false,
     mainHandID = nil,
+    mainHandExpiration = nil,
     hasOffHand = false,
     offHandID = nil,
+    offHandExpiration = nil,
 }
 
 -- Valid group members for current refresh cycle (set once per BuffState.Refresh())
 -- Each entry: { unit = "raid1", class = "WARRIOR", isPlayer = true }
 ---@type {unit: string, class: string, isPlayer: boolean}[]
 local currentValidUnits = {}
+
+-- Pool of reusable unit entry tables (avoids creating new tables each refresh)
+---@type {unit: string, class: string, isPlayer: boolean}[]
+local unitEntryPool = {}
+local unitEntryPoolSize = 0
+
+---Get a unit entry from the pool or create a new one
+---@param unit string
+---@param class string
+---@param isPlayer boolean
+---@return {unit: string, class: string, isPlayer: boolean}
+local function AcquireUnitEntry(unit, class, isPlayer)
+    local entry
+    if unitEntryPoolSize > 0 then
+        entry = unitEntryPool[unitEntryPoolSize]
+        unitEntryPool[unitEntryPoolSize] = nil
+        unitEntryPoolSize = unitEntryPoolSize - 1
+        entry.unit = unit
+        entry.class = class
+        entry.isPlayer = isPlayer
+    else
+        entry = { unit = unit, class = class, isPlayer = isPlayer }
+    end
+    return entry
+end
+
+---Return all current unit entries to the pool for reuse
+local function RecycleUnitEntries()
+    for i = 1, #currentValidUnits do
+        unitEntryPoolSize = unitEntryPoolSize + 1
+        unitEntryPool[unitEntryPoolSize] = currentValidUnits[i]
+        currentValidUnits[i] = nil
+    end
+end
 
 -- Max level per class for current refresh cycle (players only, for caster availability checks)
 ---@type table<ClassName, number>
@@ -158,8 +194,8 @@ end
 ---Build the list of valid units for the current refresh cycle
 ---Called once at the start of BuffState.Refresh()
 local function BuildValidUnitCache()
-    currentValidUnits = {}
-    classMaxLevels = {}
+    RecycleUnitEntries()
+    wipe(classMaxLevels)
 
     local inRaid = IsInRaid()
     local groupSize = GetNumGroupMembers()
@@ -167,11 +203,7 @@ local function BuildValidUnitCache()
     if groupSize == 0 then
         -- Solo player
         local _, class = UnitClass("player")
-        table.insert(currentValidUnits, {
-            unit = "player",
-            class = class,
-            isPlayer = true,
-        })
+        currentValidUnits[1] = AcquireUnitEntry("player", class, true)
         classMaxLevels[class] = UnitLevel("player")
         return
     end
@@ -191,11 +223,7 @@ local function BuildValidUnitCache()
         if IsValidGroupMember(unit) then
             local _, class = UnitClass(unit)
             local isPlayer = UnitIsPlayer(unit)
-            table.insert(currentValidUnits, {
-                unit = unit,
-                class = class,
-                isPlayer = isPlayer,
-            })
+            currentValidUnits[#currentValidUnits + 1] = AcquireUnitEntry(unit, class, isPlayer)
             -- Track max level per class (players only, for buff caster checks)
             if isPlayer and class then
                 local level = UnitLevel(unit)
@@ -245,21 +273,22 @@ local function UnitHasBuff(unit, spellIDs)
         spellIDs = { spellIDs }
     end
 
-    for _, id in ipairs(spellIDs) do
-        local auraData
-        pcall(function()
-            auraData = C_UnitAuras.GetUnitAuraBySpellID(unit, id)
-        end)
-        if auraData then
-            local remaining = nil
-            if auraData.expirationTime and auraData.expirationTime > 0 then
-                remaining = auraData.expirationTime - GetTime()
+    local hasBuff, remaining, source
+    pcall(function()
+        for _, id in ipairs(spellIDs) do
+            local auraData = C_UnitAuras.GetUnitAuraBySpellID(unit, id)
+            if auraData then
+                hasBuff = true
+                if auraData.expirationTime and auraData.expirationTime > 0 then
+                    remaining = auraData.expirationTime - GetTime()
+                end
+                source = auraData.sourceUnit
+                return
             end
-            return true, remaining, auraData.sourceUnit
         end
-    end
+    end)
 
-    return false, nil, nil
+    return hasBuff or false, remaining, source
 end
 
 ---Format remaining time in seconds to a short string (e.g., "5m" or "30s")
@@ -734,9 +763,9 @@ local function ShouldShowConsumableBuff(spellIDs, buffIconID, checkWeaponEnchant
     -- Check if any weapon enchant exists (oils, stones, shaman imbues, etc.)
     if checkWeaponEnchant then
         if currentWeaponEnchants.hasMainHand then
-            -- GetWeaponEnchantInfo returns: hasMainHand, mainExpiration, mainCharges, mainEnchantID, ...
-            local _, mainExpiration = GetWeaponEnchantInfo()
-            local remaining = mainExpiration and (mainExpiration / 1000) or nil
+            local remaining = currentWeaponEnchants.mainHandExpiration
+                    and (currentWeaponEnchants.mainHandExpiration / 1000)
+                or nil
             return false, remaining -- Has a weapon enchant
         end
     end
@@ -744,8 +773,9 @@ local function ShouldShowConsumableBuff(spellIDs, buffIconID, checkWeaponEnchant
     -- Check if off-hand weapon enchant exists
     if checkWeaponEnchantOH then
         if currentWeaponEnchants.hasOffHand then
-            local _, _, _, _, _, offExpiration = GetWeaponEnchantInfo()
-            local remaining = offExpiration and (offExpiration / 1000) or nil
+            local remaining = currentWeaponEnchants.offHandExpiration
+                    and (currentWeaponEnchants.offHandExpiration / 1000)
+                or nil
             return false, remaining
         end
     end
@@ -902,11 +932,13 @@ function BuffState.Refresh()
     BuildValidUnitCache()
 
     -- Fetch weapon enchant info once per refresh cycle
-    local hasMain, _, _, mainID, hasOff, _, _, offID = GetWeaponEnchantInfo()
+    local hasMain, mainExp, _, mainID, hasOff, offExp, _, offID = GetWeaponEnchantInfo()
     currentWeaponEnchants.hasMainHand = hasMain or false
     currentWeaponEnchants.mainHandID = mainID
+    currentWeaponEnchants.mainHandExpiration = mainExp
     currentWeaponEnchants.hasOffHand = hasOff or false
     currentWeaponEnchants.offHandID = offID
+    currentWeaponEnchants.offHandExpiration = offExp
 
     local trackingMode = db.buffTrackingMode
 
@@ -1136,8 +1168,10 @@ function BuffState.Refresh()
         end
     end
 
-    -- Build visibleByCategory in one pass from entries
-    BuffState.visibleByCategory = {}
+    -- Build visibleByCategory in one pass from entries (reuse sub-tables)
+    for _, list in pairs(BuffState.visibleByCategory) do
+        wipe(list)
+    end
     for _, entry in pairs(BuffState.entries) do
         if entry.visible then
             local cat = entry.category
@@ -1146,6 +1180,19 @@ function BuffState.Refresh()
             end
             table.insert(BuffState.visibleByCategory[cat], entry)
         end
+    end
+
+    -- Check if each category's entries are already sorted by sortOrder
+    for _, list in pairs(BuffState.visibleByCategory) do
+        local sorted = true
+        for j = 2, #list do
+            if list[j].sortOrder < list[j - 1].sortOrder then
+                sorted = false
+                break
+            end
+        end
+        ---@diagnostic disable-next-line: inject-field
+        list._sorted = sorted
     end
 
     BuffState.lastUpdate = GetTime()
