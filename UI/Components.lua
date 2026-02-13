@@ -205,10 +205,6 @@ end
 ---@field width? number Dropdown width (default 90)
 ---@field labelWidth? number Label width (default 70)
 
----@class CategoryHeaderConfig : ComponentConfig
----@field text string Header text
----@field category CategoryName Category for visibility toggles
-
 -- Panel EditBoxes tracking (populated by CreateOptionsPanel, used by Components)
 local panelEditBoxes = nil ---@type table[]?
 
@@ -1567,21 +1563,6 @@ local function MakeContentBarConfig(category, onChange)
         end,
         onChange = onChange,
     }
-end
-
----Create category header with content visibility toggles [W][S][D][R]
----@param parent table Parent frame
----@param config CategoryHeaderConfig Configuration table
----@param updateCallback fun() Function to call when visibility changes (UpdateDisplay or RefreshTestDisplay)
----@return table header FontString for the header
-function Components.CategoryHeader(parent, config, updateCallback)
-    local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    header:SetText("|cffffcc00" .. config.text .. "|r")
-
-    local bar = CreateSegmentedBar(parent, MakeContentBarConfig(config.category, updateCallback))
-    bar:SetPoint("LEFT", header, "RIGHT", 8, 0)
-
-    return header
 end
 
 ---@class VisibilityTogglesConfig : ComponentConfig

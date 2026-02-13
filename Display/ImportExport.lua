@@ -97,6 +97,7 @@ end
 -- PUBLIC API (for external addon integration)
 -- ============================================================================
 
+--- PUBLIC API — used by Wago UI and other external addons. Do not remove or rename.
 --- Export settings to a prefixed string that can be imported by other addons
 --- @param profileKey string|nil Optional profile name (ignored - BuffReminders uses single profile)
 --- @return string|nil Encoded settings string with !BR_ prefix, or nil on error
@@ -109,6 +110,7 @@ function BuffReminders:Export(profileKey)
     return EXPORT_PREFIX .. exportString
 end
 
+--- PUBLIC API — used by Wago UI and other external addons. Do not remove or rename.
 --- Import settings from a prefixed string
 --- @param importString string The encoded settings string (must start with !BR_)
 --- @param profileKey string|nil Optional profile name (ignored - BuffReminders uses single profile)

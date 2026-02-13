@@ -2107,11 +2107,9 @@ end
 
 -- Export display functions for Options.lua
 BR.Display.Update = UpdateDisplay
-BR.Display.RefreshTest = UpdateDisplay
 BR.Display.ToggleTestMode = ToggleTestMode
 BR.Display.ToggleLock = ToggleLock
 BR.Display.UpdateVisuals = UpdateVisuals
-BR.Display.UpdateFallback = UpdateFallbackDisplay
 BR.Display.UpdateActionButtons = function(category)
     return BR.SecureButtons.UpdateActionButtons(category)
 end

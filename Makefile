@@ -6,10 +6,10 @@ lint:
 	luacheck .
 
 format:
-	stylua .
+	stylua --glob '!ignored/**' --glob '*.lua' .
 
 typecheck:
 	lua-language-server --check . --checklevel=Warning
 
 check: typecheck lint
-	stylua --check .
+	stylua --check --glob '!ignored/**' --glob '*.lua' .

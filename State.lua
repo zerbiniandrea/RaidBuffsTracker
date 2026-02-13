@@ -166,31 +166,6 @@ local function IsValidGroupMember(unit)
         and UnitIsVisible(unit)
 end
 
----Iterate over valid group members, calling callback(unit) for each
----Handles raid vs party unit naming automatically
----@param callback fun(unit: string)
-local function IterateGroupMembers(callback)
-    local inRaid = IsInRaid()
-    local groupSize = GetNumGroupMembers()
-
-    for i = 1, groupSize do
-        local unit
-        if inRaid then
-            unit = "raid" .. i
-        else
-            if i == 1 then
-                unit = "player"
-            else
-                unit = "party" .. (i - 1)
-            end
-        end
-
-        if IsValidGroupMember(unit) then
-            callback(unit)
-        end
-    end
-end
-
 ---Build the list of valid units for the current refresh cycle
 ---Called once at the start of BuffState.Refresh()
 local function BuildValidUnitCache()
@@ -246,20 +221,6 @@ local function HasCasterForBuff(requiredClass, levelRequired)
         return false
     end
     return not levelRequired or maxLevel >= levelRequired
-end
-
----Get classes present in the group (players only, excludes NPCs)
----Uses currentValidUnits cache built at start of refresh cycle
----@return table<ClassName, boolean>
-local function GetGroupClasses()
-    local classes = {}
-    for _, data in ipairs(currentValidUnits) do
-        -- Only count actual players as potential buffers (NPCs won't cast buffs like Skyfury)
-        if data.isPlayer and data.class then
-            classes[data.class] = true
-        end
-    end
-    return classes
 end
 
 ---Check if unit has a specific buff (handles single spellID or table of spellIDs)
@@ -1263,12 +1224,7 @@ end
 -- Export utility functions that display layer still needs
 BR.StateHelpers = {
     GetPlayerSpecId = GetPlayerSpecId,
-    UnitHasBuff = UnitHasBuff,
-    GetGroupClasses = GetGroupClasses,
-    IterateGroupMembers = IterateGroupMembers,
-    IsValidGroupMember = IsValidGroupMember,
     FormatRemainingTime = FormatRemainingTime,
-    IsPlayerEating = IsPlayerEating,
     UpdateEatingState = UpdateEatingState,
     ScanEatingState = ScanEatingState,
     GetCurrentContentType = GetCurrentContentType,

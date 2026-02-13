@@ -2,7 +2,7 @@
 std = "lua51"
 max_line_length = false
 codes = true
-exclude_files = { "Libs/" }
+exclude_files = { "Libs/", "ignored/" }
 
 ignore = {
 	"21./_",
