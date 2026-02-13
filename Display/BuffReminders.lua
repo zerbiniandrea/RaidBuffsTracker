@@ -1044,7 +1044,6 @@ end
 --- and BR.BuffState.visibleByCategory so UpdateDisplay can render via the normal pipeline.
 local function GenerateTestEntries()
     assert(testModeData, "GenerateTestEntries called with nil testModeData")
-    local db = BuffRemindersDB
 
     -- Reset all entries (same pattern as State.lua:Refresh)
     for _, entry in pairs(BR.BuffState.entries) do
@@ -1058,10 +1057,14 @@ local function GenerateTestEntries()
         entry.iconByRole = nil
     end
 
-    local glowShown = false
     local raidIndex = 1
 
     for _, category in ipairs(CATEGORIES) do
+        -- Per-category glow settings (same pattern as State.lua:GetCategoryGlow)
+        local glowEnabled = BR.Config.GetCategorySetting(category, "showExpirationGlow") ~= false
+        local glowWhenMissing = glowEnabled and BR.Config.GetCategorySetting(category, "glowWhenMissing") ~= false
+        local expiringShown = false
+
         local buffTable = BUFF_TABLES[category]
         for i, buff in ipairs(buffTable) do
             local settingKey = buff.groupId or buff.key
@@ -1083,23 +1086,26 @@ local function GenerateTestEntries()
                 entry.sortOrder = i
                 entry.visible = true
 
+                local noGlow = buff.noGlow
+
                 if category == "raid" then
-                    local glowEnabled = db.defaults and db.defaults.showExpirationGlow ~= false
-                    if glowEnabled and not glowShown then
+                    if glowEnabled and not expiringShown then
                         entry.displayType = "expiring"
                         entry.countText = FormatRemainingTime(testModeData.fakeRemaining)
                         entry.shouldGlow = true
-                        glowShown = true
+                        expiringShown = true
                     else
                         entry.displayType = "count"
                         local fakeBuffed = testModeData.fakeTotal - testModeData.fakeMissing[raidIndex]
                         entry.countText = fakeBuffed .. "/" .. testModeData.fakeTotal
+                        entry.shouldGlow = glowWhenMissing
                     end
                     raidIndex = raidIndex + 1
                 elseif category == "pet" then
                     entry.displayType = "missing"
                     entry.missingText = buff.missingText
                     entry.iconByRole = buff.iconByRole
+                    entry.shouldGlow = glowWhenMissing
                     if buff.groupId == "pets" and BR.PetHelpers then
                         local actions = BR.PetHelpers.GetPetActions(playerClass)
                         if actions and #actions > 0 then
@@ -1111,6 +1117,15 @@ local function GenerateTestEntries()
                     entry.displayType = "missing"
                     entry.missingText = buff.missingText
                     entry.iconByRole = buff.iconByRole
+                    entry.shouldGlow = glowWhenMissing and not noGlow
+
+                    -- Show first buff as expiring to preview expiration glow
+                    if glowEnabled and not noGlow and not expiringShown then
+                        entry.displayType = "expiring"
+                        entry.countText = FormatRemainingTime(testModeData.fakeRemaining)
+                        entry.shouldGlow = true
+                        expiringShown = true
+                    end
                 end
             end
         end
