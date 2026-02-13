@@ -48,7 +48,6 @@ local GenerateCustomBuffKey = BR.Helpers.GenerateCustomBuffKey
 
 -- Display function aliases
 local UpdateDisplay = BR.Display.Update
-local RefreshTestDisplay = BR.Display.RefreshTest
 local ToggleTestMode = BR.Display.ToggleTestMode
 local UpdateVisuals = BR.Display.UpdateVisuals
 local ResetCategoryFramePosition = BR.Display.ResetCategoryFramePosition
@@ -424,11 +423,7 @@ local function CreateOptionsPanel()
             end,
             onChange = function(checked)
                 BuffRemindersDB.enabledBuffs[key] = checked
-                if BR.Display.IsTestMode() then
-                    RefreshTestDisplay()
-                else
-                    UpdateDisplay()
-                end
+                UpdateDisplay()
             end,
         })
         holder:SetPoint("TOPLEFT", x, y)
@@ -654,11 +649,7 @@ local function CreateOptionsPanel()
                 end,
                 onChange = function(checked)
                     BuffRemindersDB.enabledBuffs[key] = checked
-                    if BR.Display.IsTestMode() then
-                        RefreshTestDisplay()
-                    else
-                        UpdateDisplay()
-                    end
+                    UpdateDisplay()
                 end,
                 onRightClick = function()
                     ShowCustomBuffModal(key, RenderCustomBuffRows)
@@ -1002,11 +993,7 @@ local function CreateOptionsPanel()
 
         -- Visibility callback for W/S/D/R toggles
         local function OnCategoryVisibilityChange()
-            if BR.Display.IsTestMode() then
-                RefreshTestDisplay()
-            else
-                UpdateDisplay()
-            end
+            UpdateDisplay()
         end
 
         -- W/S/D/R content visibility toggles

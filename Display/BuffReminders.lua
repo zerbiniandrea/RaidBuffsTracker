@@ -562,7 +562,7 @@ local function SeedGlowingSpells()
 end
 
 -- Forward declarations
-local UpdateDisplay, ToggleTestMode, RefreshTestDisplay
+local UpdateDisplay, ToggleTestMode
 local UpdateFallbackDisplay, RenderPetEntries
 
 -- Local alias for glow module
@@ -1040,135 +1040,107 @@ local function PositionSplitCategories(visibleByCategory)
     end
 end
 
---- Helper function to render a single buff in test mode
----@param buff table Buff definition from buff tables
----@param frame BuffFrame The frame to render into
----@param category CategoryName The category this buff belongs to
----@param raidIndex? number For raid buffs, the index in the RaidBuffs array (accounting for enabled buffs)
----@param glowShown boolean Whether expiration glow has already been shown
----@return boolean glowShown Updated glow shown state
-local function RenderTestBuff(buff, frame, category, raidIndex, glowShown)
+--- Generate fake state entries for test mode, populating BR.BuffState.entries
+--- and BR.BuffState.visibleByCategory so UpdateDisplay can render via the normal pipeline.
+local function GenerateTestEntries()
+    assert(testModeData, "GenerateTestEntries called with nil testModeData")
     local db = BuffRemindersDB
-    assert(testModeData, "RenderTestBuff called with nil testModeData")
 
-    -- Hide stackCount by default (only consumables show it)
-    frame.stackCount:Hide()
-
-    if category == "raid" then
-        -- Raid buffs show count or expiration time with glow
-        frame.count:SetFont(fontPath, GetFrameFontSize(frame), "OUTLINE")
-        if (db.defaults and db.defaults.showExpirationGlow ~= false) and not glowShown then
-            frame.count:SetText(FormatRemainingTime(testModeData.fakeRemaining))
-            SetExpirationGlow(frame, true, "raid")
-            glowShown = true
-        else
-            local fakeBuffed = testModeData.fakeTotal - testModeData.fakeMissing[raidIndex]
-            frame.count:SetText(fakeBuffed .. "/" .. testModeData.fakeTotal)
-        end
-        frame.count:Show()
-    elseif category == "consumable" then
-        -- Consumables show fake stack count (mimics having items in bags)
-        frame.count:Hide()
-        frame.stackCount:SetText(tostring(math.random(10, 25)))
-        frame.stackCount:SetFont(fontPath, GetFrameFontSize(frame), "OUTLINE")
-        frame.stackCount:Show()
-    elseif category == "pet" then
-        -- Pets show missingText (simpler than mocking pet actions)
-        frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
-        frame.count:SetText(buff.missingText)
-        frame.count:Show()
-    elseif category == "custom" then
-        -- Custom buffs may not have missingText
-        if buff.missingText then
-            frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
-            frame.count:SetText(buff.missingText)
-            frame.count:Show()
-        else
-            frame.count:Hide()
-        end
-    else
-        -- All other categories show missingText
-        frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
-        frame.count:SetText(buff.missingText)
-        frame.count:Show()
-    end
-
-    -- Show test labels if enabled
-    if frame.testText and testModeData.showLabels then
-        frame.testText:SetFont(fontPath, GetFrameFontSize(frame, 0.6), "OUTLINE")
-        frame.testText:Show()
-    end
-
-    frame:Show()
-    return glowShown
-end
-
--- Refresh the test mode display (used when settings change while in test mode)
--- Uses seeded values from testModeData for consistent display
-RefreshTestDisplay = function()
-    if not testModeData then
-        return
-    end
-
-    -- Hide all frames, clear glows, and hide test labels first
-    for _, frame in pairs(buffFrames) do
-        HideFrame(frame)
-        if frame.testText then
-            frame.testText:Hide()
-        end
+    -- Reset all entries (same pattern as State.lua:Refresh)
+    for _, entry in pairs(BR.BuffState.entries) do
+        entry.visible = false
+        entry.shouldGlow = false
+        entry.countText = nil
+        entry.missingText = nil
+        entry.expiringTime = nil
+        entry.isEating = nil
+        entry.petActions = nil
+        entry.iconByRole = nil
     end
 
     local glowShown = false
     local raidIndex = 1
 
-    -- Iterate through all buff categories
     for _, category in ipairs(CATEGORIES) do
         local buffTable = BUFF_TABLES[category]
-        for _, buff in ipairs(buffTable) do
-            if IsBuffEnabled(buff.key) then
-                local frame = buffFrames[buff.key]
-                if frame then
-                    glowShown = RenderTestBuff(buff, frame, category, raidIndex, glowShown)
-                    if category == "raid" then
-                        raidIndex = raidIndex + 1
+        for i, buff in ipairs(buffTable) do
+            local settingKey = buff.groupId or buff.key
+            if IsBuffEnabled(settingKey) then
+                -- Get or create entry (mirrors State.lua pattern)
+                local entry = BR.BuffState.entries[buff.key]
+                if not entry then
+                    entry = {
+                        key = buff.key,
+                        category = category,
+                        sortOrder = i,
+                        visible = false,
+                        displayType = "missing",
+                        shouldGlow = false,
+                    }
+                    BR.BuffState.entries[buff.key] = entry
+                end
+                entry.category = category
+                entry.sortOrder = i
+                entry.visible = true
+
+                if category == "raid" then
+                    local glowEnabled = db.defaults and db.defaults.showExpirationGlow ~= false
+                    if glowEnabled and not glowShown then
+                        entry.displayType = "expiring"
+                        entry.countText = FormatRemainingTime(testModeData.fakeRemaining)
+                        entry.shouldGlow = true
+                        glowShown = true
+                    else
+                        entry.displayType = "count"
+                        local fakeBuffed = testModeData.fakeTotal - testModeData.fakeMissing[raidIndex]
+                        entry.countText = fakeBuffed .. "/" .. testModeData.fakeTotal
                     end
+                    raidIndex = raidIndex + 1
+                elseif category == "pet" then
+                    entry.displayType = "missing"
+                    entry.missingText = buff.missingText
+                    entry.iconByRole = buff.iconByRole
+                    if buff.groupId == "pets" and BR.PetHelpers then
+                        local actions = BR.PetHelpers.GetPetActions(playerClass)
+                        if actions and #actions > 0 then
+                            entry.petActions = actions
+                        end
+                    end
+                else
+                    -- consumable, presence, targeted, self, custom
+                    entry.displayType = "missing"
+                    entry.missingText = buff.missingText
+                    entry.iconByRole = buff.iconByRole
                 end
             end
         end
     end
 
-    -- Position using category-first helpers
-    local sortedCategories = GetSortedCategories()
-    local mainFrameBuffs = {}
-
-    -- Collect shown frames by category for positioning
-    local shownByCategory = {}
-    for _, frame in pairs(buffFrames) do
-        if frame:IsShown() and frame.buffCategory then
-            local cat = frame.buffCategory
-            if not shownByCategory[cat] then
-                shownByCategory[cat] = {}
+    -- Build visibleByCategory (same pattern as State.lua)
+    for _, list in pairs(BR.BuffState.visibleByCategory) do
+        wipe(list)
+    end
+    for _, entry in pairs(BR.BuffState.entries) do
+        if entry.visible then
+            local cat = entry.category
+            if not BR.BuffState.visibleByCategory[cat] then
+                BR.BuffState.visibleByCategory[cat] = {}
             end
-            table.insert(shownByCategory[cat], frame)
+            table.insert(BR.BuffState.visibleByCategory[cat], entry)
         end
     end
 
-    for _, catEntry in ipairs(sortedCategories) do
-        local category = catEntry.name
-        local frames = shownByCategory[category] or {}
-
-        if #frames > 0 and IsCategorySplit(category) then
-            PositionSplitCategory(category, frames)
-        elseif not IsCategorySplit(category) then
-            for _, frame in ipairs(frames) do
-                table.insert(mainFrameBuffs, frame)
+    -- Mark sorted status
+    for _, list in pairs(BR.BuffState.visibleByCategory) do
+        local sorted = true
+        for j = 2, #list do
+            if list[j].sortOrder < list[j - 1].sortOrder then
+                sorted = false
+                break
             end
         end
+        list._sorted = sorted
     end
-
-    PositionMainContainer(mainFrameBuffs)
-    PositionSplitCategories(shownByCategory)
-    BR.Movers.UpdateAnchor()
 end
 
 -- Toggle test mode - returns true if test mode is now ON, false if OFF
@@ -1215,10 +1187,9 @@ ToggleTestMode = function(showLabels)
             testModeData.fakeMissing[i] = math.random(1, 5)
         end
         BR.SecureButtons.HideAllSecureFrames()
-        RefreshTestDisplay()
-        print(
-            "|cff00ccffBuffReminders:|r Test mode is a preview only. Glows and some display features may not reflect your current settings accurately. This will be improved in a future update."
-        )
+        lastMainSignature = ""
+        wipe(lastSplitSignatures)
+        UpdateDisplay()
         return true
     end
 end
@@ -1352,30 +1323,41 @@ end
 -- Eating icon texture ID (from State.lua, matches the eating channel aura icon)
 local EATING_ICON = BR.EATING_AURA_ICON
 
--- Resolve the correct icon for a consumable frame.
--- Uses the top item from the consumable cache (actual item in bags), falling back
--- to the buff definition's iconOverride or buffIconID.
-local function ResolveConsumableIcon(frame)
+-- Resolve a consumable frame's icon from bag items.
+-- Returns "items" if bag items found (sets icon, quality overlay, stack count),
+-- "missing" if no items but showConsumablesWithoutItems is on,
+-- or false if no items and setting is off.
+---@param frame BuffFrame
+---@return string|false result "items", "missing", or false
+local function ResolveConsumableFrame(frame)
     local items = frame._cachedItems
     if items == nil then
         items = BR.SecureButtons.GetConsumableActionItems(frame.buffDef) or false
         frame._cachedItems = items
     end
-    if items and items[1] and items[1].icon then
+    if items and items[1] then
         frame.icon:SetTexture(items[1].icon)
         if frame.qualityOverlay then
             BR.SecureButtons.SetQualityOverlay(frame.qualityOverlay, items[1].craftedQuality, frame:GetWidth())
         end
-    else
-        local def = frame.buffDef
-        local fallback = def and (def.iconOverride or def.buffIconID)
-        if fallback then
-            frame.icon:SetTexture(fallback)
-        end
-        if frame.qualityOverlay then
-            frame.qualityOverlay:Hide()
-        end
+        frame.count:Hide()
+        frame.stackCount:SetText(items[1].count)
+        frame.stackCount:Show()
+        return "items"
     end
+    -- No items: fall back icon to buff definition
+    local def = frame.buffDef
+    local fallback = def and (def.iconOverride or def.buffIconID)
+    if fallback then
+        frame.icon:SetTexture(fallback)
+    end
+    if frame.qualityOverlay then
+        frame.qualityOverlay:Hide()
+    end
+    if (BuffRemindersDB.defaults or {}).showConsumablesWithoutItems then
+        return "missing"
+    end
+    return false
 end
 
 -- Render a single visible entry into its frame using the appropriate display type.
@@ -1400,7 +1382,7 @@ local function RenderVisibleEntry(frame, entry)
     elseif frame._br_eating_icon then
         -- Transition from eating → not eating: restore the correct consumable icon
         frame._br_eating_icon = nil
-        ResolveConsumableIcon(frame)
+        ResolveConsumableFrame(frame)
     end
 
     -- Get cached glow settings for this entry's category (avoids repeated DB reads)
@@ -1421,26 +1403,18 @@ local function RenderVisibleEntry(frame, entry)
     else -- "missing"
         -- Consumables with bag scan support: show actual item from bags
         if BUFF_KEY_TO_CATEGORY[frame.key] then
-            local items = frame._cachedItems
-            if items == nil then
-                items = BR.SecureButtons.GetConsumableActionItems(frame.buffDef) or false
-                frame._cachedItems = items
-            end
-            if items then
-                frame.icon:SetTexture(items[1].icon)
-                if frame.qualityOverlay then
-                    BR.SecureButtons.SetQualityOverlay(frame.qualityOverlay, items[1].craftedQuality, frame:GetWidth())
-                end
-                frame.count:Hide()
-                frame.stackCount:SetText(items[1].count)
-                frame.stackCount:Show()
+            local result = ResolveConsumableFrame(frame)
+            if result == "items" then
                 frame:Show()
                 SetExpirationGlow(frame, entry.shouldGlow, entry.category, cachedGlow)
-            elseif (BuffRemindersDB.defaults or {}).showConsumablesWithoutItems then
+            elseif result == "missing" then
                 ShowMissingFrame(frame, entry.missingText, entry.shouldGlow, entry.category, cachedGlow)
             else
-                -- No items and setting is off: don't show the frame
-                return false
+                if testMode then
+                    ShowMissingFrame(frame, entry.missingText, entry.shouldGlow, entry.category, cachedGlow)
+                else
+                    return false
+                end
             end
         else
             if entry.iconByRole then
@@ -1590,7 +1564,7 @@ end
 
 -- Update the display
 UpdateDisplay = function()
-    if not mainFrame or testMode then
+    if not mainFrame then
         return
     end
 
@@ -1603,65 +1577,70 @@ UpdateDisplay = function()
         end
     end
 
-    -- Early exit: can't check buffs when dead, in combat, M+, instanced PvP, or player housing
-    local _, instanceType = IsInInstance()
-    local inMythicPlus = C_ChallengeMode
-        and C_ChallengeMode.IsChallengeModeActive
-        and C_ChallengeMode.IsChallengeModeActive()
-    local inHousing = C_Housing
-        and (
-            (C_Housing.IsInsideHouseOrPlot and C_Housing.IsInsideHouseOrPlot())
-            or (C_Housing.IsOnNeighborhoodMap and C_Housing.IsOnNeighborhoodMap())
-        )
+    if testMode then
+        -- Test mode: generate fake state entries through the normal pipeline
+        GenerateTestEntries()
+    else
+        -- Early exit: can't check buffs when dead, in combat, M+, instanced PvP, or player housing
+        local _, instanceType = IsInInstance()
+        local inMythicPlus = C_ChallengeMode
+            and C_ChallengeMode.IsChallengeModeActive
+            and C_ChallengeMode.IsChallengeModeActive()
+        local inHousing = C_Housing
+            and (
+                (C_Housing.IsInsideHouseOrPlot and C_Housing.IsInsideHouseOrPlot())
+                or (C_Housing.IsOnNeighborhoodMap and C_Housing.IsOnNeighborhoodMap())
+            )
 
-    local isDead = UnitIsDeadOrGhost("player")
-    -- Use both our event-tracked flag AND the API (event fires before API updates)
-    local combatCheck = inCombat or InCombatLockdown()
+        local isDead = UnitIsDeadOrGhost("player")
+        -- Use both our event-tracked flag AND the API (event fires before API updates)
+        local combatCheck = inCombat or InCombatLockdown()
 
-    -- Absolute exit: nothing should show when dead or in housing
-    if isDead or inHousing then
-        HideAllDisplayFrames()
-        return
-    end
-
-    -- Restricted contexts: hide secure frames, but glow + pet reminders can still show
-    if inMythicPlus or instanceType == "pvp" or instanceType == "arena" then
-        HideAllDisplayFrames()
-        UpdateFallbackDisplay()
-        BR.SecureButtons.ScheduleSecureSync()
-        return
-    end
-
-    -- Combat: glow fallback + pet reminders (both handled by UpdateFallbackDisplay)
-    if combatCheck then
-        for _, frame in pairs(buffFrames) do
-            HideFrame(frame)
+        -- Absolute exit: nothing should show when dead or in housing
+        if isDead or inHousing then
+            HideAllDisplayFrames()
+            return
         end
-        UpdateFallbackDisplay()
-        BR.SecureButtons.ScheduleSecureSync()
-        return
+
+        -- Restricted contexts: hide secure frames, but glow + pet reminders can still show
+        if inMythicPlus or instanceType == "pvp" or instanceType == "arena" then
+            HideAllDisplayFrames()
+            UpdateFallbackDisplay()
+            BR.SecureButtons.ScheduleSecureSync()
+            return
+        end
+
+        -- Combat: glow fallback + pet reminders (both handled by UpdateFallbackDisplay)
+        if combatCheck then
+            for _, frame in pairs(buffFrames) do
+                HideFrame(frame)
+            end
+            UpdateFallbackDisplay()
+            BR.SecureButtons.ScheduleSecureSync()
+            return
+        end
+
+        local db = BuffRemindersDB
+
+        -- Hide based on visibility settings
+        if db.showOnlyOnReadyCheck and not BR.BuffState.GetReadyCheckState() then
+            HideAllDisplayFrames()
+            return
+        end
+
+        if db.showOnlyInGroup and GetNumGroupMembers() == 0 then
+            HideAllDisplayFrames()
+            return
+        end
+
+        if db.hideWhileResting and isResting then
+            HideAllDisplayFrames()
+            return
+        end
+
+        -- Refresh buff state
+        BR.BuffState.Refresh()
     end
-
-    local db = BuffRemindersDB
-
-    -- Hide based on visibility settings
-    if db.showOnlyOnReadyCheck and not BR.BuffState.GetReadyCheckState() then
-        HideAllDisplayFrames()
-        return
-    end
-
-    if db.showOnlyInGroup and GetNumGroupMembers() == 0 then
-        HideAllDisplayFrames()
-        return
-    end
-
-    if db.hideWhileResting and isResting then
-        HideAllDisplayFrames()
-        return
-    end
-
-    -- Refresh buff state
-    BR.BuffState.Refresh()
 
     local visibleByCategory = BR.BuffState.visibleByCategory
     local anyVisible = false
@@ -1760,16 +1739,30 @@ UpdateDisplay = function()
         HideAllDisplayFrames()
     end
     BR.Movers.UpdateAnchor()
-    BR.SecureButtons.ScheduleSecureSync()
 
-    -- Sync click overlays on expanded extra frames (they are created above but
-    -- UpdateActionButtons is the only place that wires up their click overlays).
-    if not InCombatLockdown() then
-        local displayMode = (BuffRemindersDB.defaults or {}).consumableDisplayMode
-        if displayMode == "expanded" then
-            BR.SecureButtons.UpdateActionButtons("consumable")
+    -- Show TEST labels in test mode (after positioning so font size is correct)
+    if testMode and testModeData and testModeData.showLabels then
+        for _, frame in pairs(buffFrames) do
+            if frame:IsShown() and frame.testText then
+                frame.testText:SetFont(fontPath, GetFrameFontSize(frame, 0.6), "OUTLINE")
+                frame.testText:Show()
+            end
         end
-        BR.SecureButtons.UpdateActionButtons("pet")
+    end
+
+    -- Skip secure frame sync in test mode (secure frames are hidden)
+    if not testMode then
+        BR.SecureButtons.ScheduleSecureSync()
+
+        -- Sync click overlays on expanded extra frames (they are created above but
+        -- UpdateActionButtons is the only place that wires up their click overlays).
+        if not InCombatLockdown() then
+            local displayMode = (BuffRemindersDB.defaults or {}).consumableDisplayMode
+            if displayMode == "expanded" then
+                BR.SecureButtons.UpdateActionButtons("consumable")
+            end
+            BR.SecureButtons.UpdateActionButtons("pet")
+        end
     end
 end
 
@@ -1997,11 +1990,7 @@ local function UpdateVisuals()
     if IsMasqueActive() then
         masqueGroup:ReSkin()
     end
-    if testMode then
-        RefreshTestDisplay()
-    else
-        UpdateDisplay()
-    end
+    UpdateDisplay()
 end
 
 -- ============================================================================
@@ -2035,22 +2024,14 @@ CallbackRegistry:RegisterCallback("LayoutRefresh", function()
     ResetLayoutSignatures()
     InvalidateSortedCategories()
 
-    if testMode then
-        RefreshTestDisplay()
-    else
-        UpdateDisplay()
-    end
+    UpdateDisplay()
 end)
 
 -- Display changes (enabled buffs, visibility settings, consumable display mode)
 CallbackRegistry:RegisterCallback("DisplayRefresh", function()
     ResetLayoutSignatures()
     InvalidateSortedCategories()
-    if testMode then
-        RefreshTestDisplay()
-    else
-        UpdateDisplay()
-    end
+    UpdateDisplay()
     -- Refresh consumable action button clickability/visibility after mode changes
     if not InCombatLockdown() then
         BR.SecureButtons.UpdateActionButtons("consumable")
@@ -2109,7 +2090,7 @@ end
 
 -- Export display functions for Options.lua
 BR.Display.Update = UpdateDisplay
-BR.Display.RefreshTest = RefreshTestDisplay
+BR.Display.RefreshTest = UpdateDisplay
 BR.Display.ToggleTestMode = ToggleTestMode
 BR.Display.ToggleLock = ToggleLock
 BR.Display.UpdateVisuals = UpdateVisuals
