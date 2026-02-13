@@ -906,13 +906,29 @@ local function CreateOptionsPanel()
     }, "BuffRemindersDefGlowTypeDropdown")
     defTypeHolder:SetPoint("LEFT", defThresholdHolder, "RIGHT", 8, 0)
 
+    local defUseCustomColorHolder = Components.Checkbox(appearanceContent, {
+        label = "Color",
+        tooltip = "Use a custom glow color instead of the default.\nWhen off, glows use the native library color which looks more vibrant.",
+        get = function()
+            return BuffRemindersDB.defaults and BuffRemindersDB.defaults.useCustomGlowColor or false
+        end,
+        enabled = isExpirationGlowEnabled,
+        onChange = function(checked)
+            BR.Config.Set("defaults.useCustomGlowColor", checked)
+            Components.RefreshAll()
+        end,
+    })
+
     local defGlowColorHolder = Components.ColorSwatch(appearanceContent, {
         hasOpacity = true,
         get = function()
             local c = BR.Config.Get("defaults.glowColor", Glow.DEFAULT_COLOR)
             return c[1], c[2], c[3], c[4] or 1
         end,
-        enabled = isExpirationGlowEnabled,
+        enabled = function()
+            return isExpirationGlowEnabled()
+                and (BuffRemindersDB.defaults and BuffRemindersDB.defaults.useCustomGlowColor or false)
+        end,
         onChange = function(r, g, b, a)
             BR.Config.Set("defaults.glowColor", { r, g, b, a or 1 })
         end,
@@ -948,7 +964,8 @@ local function CreateOptionsPanel()
     defGlowWhenMissingHolder:SetPoint("TOPLEFT", defGlowHolder, "BOTTOMLEFT", 20, -COMPONENT_GAP)
     defGlowSizeHolder:SetPoint("LEFT", defTypeHolder, "LEFT", 0, 0)
     defGlowSizeHolder:SetPoint("TOP", defGlowWhenMissingHolder, "TOP")
-    defGlowColorHolder:SetPoint("LEFT", defGlowSizeHolder, "RIGHT", 6, 0)
+    defUseCustomColorHolder:SetPoint("LEFT", defGlowSizeHolder, "RIGHT", 6, 0)
+    defGlowColorHolder:SetPoint("LEFT", defUseCustomColorHolder.label, "RIGHT", 4, 0)
     appLayout:Space(20 + COMPONENT_GAP)
 
     -- Per-Category Customization section
@@ -1843,13 +1860,27 @@ local function CreateOptionsPanel()
             }, "BuffReminders_" .. category .. "_GlowTypeDropdown")
             catGlowTypeHolder:SetPoint("TOPLEFT", CAT_COL2, -72)
 
+            local catUseCustomColorHolder = Components.Checkbox(appFrame, {
+                label = "Color",
+                tooltip = "Use a custom glow color instead of the default.\nWhen off, glows use the native library color which looks more vibrant.",
+                get = function()
+                    return getCatOwnValue("useCustomGlowColor", false)
+                end,
+                enabled = isPetGlowEnabled,
+                onChange = function(checked)
+                    BR.Config.Set("categorySettings." .. category .. ".useCustomGlowColor", checked)
+                    Components.RefreshAll()
+                end,
+            })
             local catGlowColorHolder = Components.ColorSwatch(appFrame, {
                 hasOpacity = true,
                 get = function()
                     local c = getCatOwnValue("glowColor", Glow.DEFAULT_COLOR)
                     return c[1], c[2], c[3], c[4] or 1
                 end,
-                enabled = isPetGlowEnabled,
+                enabled = function()
+                    return isPetGlowEnabled() and (getCatOwnValue("useCustomGlowColor", false) or false)
+                end,
                 onChange = function(r, g, b, a)
                     BR.Config.Set("categorySettings." .. category .. ".glowColor", { r, g, b, a or 1 })
                 end,
@@ -1869,7 +1900,8 @@ local function CreateOptionsPanel()
                 end,
             })
             catGlowSizeHolder:SetPoint("TOPLEFT", CAT_COL2, -96)
-            catGlowColorHolder:SetPoint("LEFT", catGlowSizeHolder, "RIGHT", 12, 0)
+            catUseCustomColorHolder:SetPoint("LEFT", catGlowSizeHolder, "RIGHT", 6, 0)
+            catGlowColorHolder:SetPoint("LEFT", catUseCustomColorHolder.label, "RIGHT", 4, 0)
 
             gridHeight = 120 -- 5 rows (glow + size)
         else
@@ -1925,13 +1957,27 @@ local function CreateOptionsPanel()
             }, "BuffReminders_" .. category .. "_GlowTypeDropdown")
             catGlowTypeHolder:SetPoint("TOPLEFT", CAT_COL2, -72)
 
+            local catUseCustomColorHolder = Components.Checkbox(appFrame, {
+                label = "Color",
+                tooltip = "Use a custom glow color instead of the default.\nWhen off, glows use the native library color which looks more vibrant.",
+                get = function()
+                    return getCatOwnValue("useCustomGlowColor", false)
+                end,
+                enabled = isGlowEnabled,
+                onChange = function(checked)
+                    BR.Config.Set("categorySettings." .. category .. ".useCustomGlowColor", checked)
+                    Components.RefreshAll()
+                end,
+            })
             local catGlowColorHolder = Components.ColorSwatch(appFrame, {
                 hasOpacity = true,
                 get = function()
                     local c = getCatOwnValue("glowColor", Glow.DEFAULT_COLOR)
                     return c[1], c[2], c[3], c[4] or 1
                 end,
-                enabled = isGlowEnabled,
+                enabled = function()
+                    return isGlowEnabled() and (getCatOwnValue("useCustomGlowColor", false) or false)
+                end,
                 onChange = function(r, g, b, a)
                     BR.Config.Set("categorySettings." .. category .. ".glowColor", { r, g, b, a or 1 })
                 end,
@@ -1965,7 +2011,8 @@ local function CreateOptionsPanel()
             })
             catGlowWhenMissingHolder:SetPoint("TOPLEFT", 20, -96)
             catGlowSizeHolder:SetPoint("TOPLEFT", CAT_COL2, -96)
-            catGlowColorHolder:SetPoint("LEFT", catGlowSizeHolder, "RIGHT", 12, 0)
+            catUseCustomColorHolder:SetPoint("LEFT", catGlowSizeHolder, "RIGHT", 6, 0)
+            catGlowColorHolder:SetPoint("LEFT", catUseCustomColorHolder.label, "RIGHT", 4, 0)
 
             gridHeight = 120 -- 5 rows with glow + when missing
         end
@@ -2271,7 +2318,8 @@ ShowGlowDemo = function()
     demoCloseBtn:SetSize(22, 22)
     demoCloseBtn:SetPoint("TOPRIGHT", -5, -5)
 
-    local color = BR.Config.Get("defaults.glowColor", Glow.DEFAULT_COLOR)
+    local useCustomColor = BR.Config.Get("defaults.useCustomGlowColor", false)
+    local color = useCustomColor and BR.Config.Get("defaults.glowColor", Glow.DEFAULT_COLOR) or nil
     local demoFrames = {}
 
     for i, gt in ipairs(GlowTypes) do

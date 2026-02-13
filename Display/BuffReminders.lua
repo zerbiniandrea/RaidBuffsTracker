@@ -147,8 +147,9 @@ local defaults = {
         showExpirationGlow = true,
         glowWhenMissing = true,
         expirationThreshold = 15, -- minutes
-        glowType = 1, -- 1=Pixel, 2=AutoCast, 3=Proc
-        glowColor = { 0.95, 0.57, 0.07, 1 }, -- orange RGBA
+        glowType = 1, -- 1=Pixel, 2=AutoCast, 3=Border, 4=Proc
+        glowColor = BR.Glow.DEFAULT_COLOR,
+        useCustomGlowColor = false,
         glowSize = 2,
         showConsumablesWithoutItems = false,
         consumableDisplayMode = "sub_icons",
@@ -389,7 +390,7 @@ local function GetCategorySettings(category)
         result.borderSize = (catSettings and catSettings.borderSize) or 2
         result.growDirection = (catSettings and catSettings.growDirection) or "CENTER"
         result.glowType = (catSettings and catSettings.glowType) or 1
-        result.glowColor = (catSettings and catSettings.glowColor) or { 0.95, 0.57, 0.07, 1 }
+        result.glowColor = (catSettings and catSettings.glowColor) or BR.Glow.DEFAULT_COLOR
         result.glowSize = (catSettings and catSettings.glowSize) or 2
         result.showExpirationGlow = catSettings and catSettings.showExpirationGlow
         result.expirationThreshold = (catSettings and catSettings.expirationThreshold)
@@ -404,7 +405,7 @@ local function GetCategorySettings(category)
         result.borderSize = globalDefaults.borderSize or 2
         result.growDirection = globalDefaults.growDirection or "CENTER"
         result.glowType = globalDefaults.glowType or 1
-        result.glowColor = globalDefaults.glowColor or { 0.95, 0.57, 0.07, 1 }
+        result.glowColor = globalDefaults.glowColor or BR.Glow.DEFAULT_COLOR
         result.glowSize = globalDefaults.glowSize or 2
         result.showExpirationGlow = globalDefaults.showExpirationGlow
         result.expirationThreshold = globalDefaults.expirationThreshold
@@ -582,6 +583,7 @@ local function GetCachedGlowSettings(category)
     cached = {
         typeIndex = BR.Config.GetCategorySetting(category, "glowType") or 1,
         color = BR.Config.GetCategorySetting(category, "glowColor") or BR.Glow.DEFAULT_COLOR,
+        useCustomColor = BR.Config.GetCategorySetting(category, "useCustomGlowColor") or false,
         size = BR.Config.GetCategorySetting(category, "glowSize") or 2,
     }
     glowSettingsCache[category] = cached
@@ -2218,7 +2220,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         -- ====================================================================
         -- Versioned migrations — each runs exactly once, tracked by dbVersion
         -- ====================================================================
-        local DB_VERSION = 15
+        local DB_VERSION = 16
 
         local migrations = {
             -- [1] Consolidate all pre-versioning migrations (v2.8 → v3.x)
@@ -2607,6 +2609,33 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
                     buff.invertGlow = nil
                 end
             end,
+            -- [16] Migrate glow color: old orange default → new yellow default,
+            -- and auto-enable useCustomGlowColor for users who had a custom color
+            [16] = function()
+                local oldOrange = { 0.95, 0.57, 0.07, 1 }
+                local newDefault = BR.Glow.DEFAULT_COLOR
+                local function isOldOrange(c)
+                    return c and c[1] == oldOrange[1] and c[2] == oldOrange[2] and c[3] == oldOrange[3]
+                end
+                if db.defaults and db.defaults.glowColor then
+                    if isOldOrange(db.defaults.glowColor) then
+                        db.defaults.glowColor = { newDefault[1], newDefault[2], newDefault[3], newDefault[4] }
+                    else
+                        db.defaults.useCustomGlowColor = true
+                    end
+                end
+                if db.categorySettings then
+                    for _, catSettings in pairs(db.categorySettings) do
+                        if catSettings.glowColor then
+                            if isOldOrange(catSettings.glowColor) then
+                                catSettings.glowColor = { newDefault[1], newDefault[2], newDefault[3], newDefault[4] }
+                            else
+                                catSettings.useCustomGlowColor = true
+                            end
+                        end
+                    end
+                end
+            end,
         }
 
         -- Run pending migrations
@@ -2617,6 +2646,23 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
             end
         end
         db.dbVersion = DB_VERSION
+
+        -- One-time glow update notice
+        if not db.glowUpdateNoticeShown then
+            db.glowUpdateNoticeShown = true
+            local hasCustomColor = db.defaults and db.defaults.useCustomGlowColor
+            C_Timer.After(5, function()
+                if hasCustomColor then
+                    print(
+                        "|cff00ccffBuffReminders:|r Glows now have a more vibrant default color. Try unchecking |cffffcc00Color|r in |cffffcc00/br|r glow settings to see it!"
+                    )
+                else
+                    print(
+                        "|cff00ccffBuffReminders:|r Glows now use a more vibrant default color. Use the |cffffcc00Color|r checkbox in |cffffcc00/br|r glow settings to customize it."
+                    )
+                end
+            end)
+        end
 
         -- Deep copy defaults for non-defaults tables
         DeepCopyDefault(defaults, db)

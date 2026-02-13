@@ -82,6 +82,7 @@ local CategorySettingKeys = {
     textColor = "VisualsRefresh",
     glowType = "VisualsRefresh",
     glowColor = "VisualsRefresh",
+    useCustomGlowColor = "VisualsRefresh",
     glowSize = "VisualsRefresh",
     showExpirationGlow = "DisplayRefresh",
     glowWhenMissing = "DisplayRefresh",
@@ -120,6 +121,7 @@ local DefaultSettingKeys = {
     expirationThreshold = "DisplayRefresh",
     glowType = "VisualsRefresh",
     glowColor = "VisualsRefresh",
+    useCustomGlowColor = "VisualsRefresh",
     glowSize = "VisualsRefresh",
     showConsumablesWithoutItems = "DisplayRefresh",
     -- Consumable display mode
@@ -223,6 +225,7 @@ local function ValidatePath(segments)
                 "textColor",
                 "glowType",
                 "glowColor",
+                "useCustomGlowColor",
                 "glowSize",
                 "showExpirationGlow",
                 "glowWhenMissing",
@@ -456,6 +459,7 @@ local AppearanceKeys = {
     expirationThreshold = true,
     glowType = true,
     glowColor = true,
+    useCustomGlowColor = true,
     glowSize = true,
 }
 

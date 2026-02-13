@@ -170,6 +170,7 @@
 ---@field expirationThreshold number
 ---@field glowType number
 ---@field glowColor number[]
+---@field useCustomGlowColor boolean
 ---@field glowSize number
 ---@field fontFace? string
 ---@field showConsumablesWithoutItems? boolean
@@ -195,6 +196,7 @@
 ---@field expirationThreshold? number
 ---@field glowType? number
 ---@field glowColor? number[]
+---@field useCustomGlowColor? boolean
 ---@field glowSize? number
 ---@field showBuffReminder? boolean
 ---@field buffTextSize? number

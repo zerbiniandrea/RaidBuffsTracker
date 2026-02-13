@@ -10,8 +10,8 @@ local LCG = LibStub("LibCustomGlow-1.0")
 
 BR.Glow = {}
 
--- Default glow color (orange) — used as fallback throughout the addon
-BR.Glow.DEFAULT_COLOR = { 0.95, 0.57, 0.07, 1 }
+-- Default glow color (yellow, matches LibCustomGlow default)
+BR.Glow.DEFAULT_COLOR = { 0.95, 0.95, 0.32, 1 }
 
 -- ============================================================================
 -- PULSING BORDER (shared primitive)
@@ -22,9 +22,10 @@ BR.Glow.DEFAULT_COLOR = { 0.95, 0.57, 0.07, 1 }
 
 ---@param frame table
 ---@param key string Unique key to namespace this border's state on the frame
----@param color number[] {r, g, b [, a]}
+---@param color number[]|nil {r, g, b [, a]} or nil for default color
 ---@param thickness? number Border thickness in pixels (default 2)
 function BR.Glow.PulsingBorderStart(frame, key, color, thickness)
+    color = color or BR.Glow.DEFAULT_COLOR
     local cr, cg, cb, ca = color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1
     local stateKey = "_pulsingBorder_" .. key
     local state = frame[stateKey]
@@ -107,22 +108,25 @@ BR.Glow.Types = {
     { name = "Pixel" },
     { name = "AutoCast" },
     { name = "Border" },
+    { name = "Proc" },
 }
 
 ---Start a glow by type index
 ---@param frame table
----@param typeIndex number 1=Pixel, 2=AutoCast, 3=Border
----@param color number[] {r, g, b, a}
+---@param typeIndex number 1=Pixel, 2=AutoCast, 3=Border, 4=Proc
+---@param color number[]|nil {r, g, b, a} or nil for native library color
 ---@param key string Unique key for this glow instance
 ---@param size? number Glow thickness/scale (default 2)
 function BR.Glow.Start(frame, typeIndex, color, key, size)
     size = size or 2
     if typeIndex == 1 then
-        LCG.PixelGlow_Start(frame, color, nil, nil, nil, size, nil, nil, nil, key)
+        LCG.PixelGlow_Start(frame, color, nil, nil, 10, size, nil, nil, nil, key)
     elseif typeIndex == 2 then
         LCG.AutoCastGlow_Start(frame, color, nil, nil, size / 2, nil, nil, key)
     elseif typeIndex == 3 then
         BR.Glow.PulsingBorderStart(frame, key, color, size)
+    elseif typeIndex == 4 then
+        LCG.ProcGlow_Start(frame, { color = color, key = key, duration = 1, startAnim = false })
     end
 end
 
@@ -137,6 +141,8 @@ function BR.Glow.Stop(frame, typeIndex, key)
         LCG.AutoCastGlow_Stop(frame, key)
     elseif typeIndex == 3 then
         BR.Glow.PulsingBorderStop(frame, key)
+    elseif typeIndex == 4 then
+        LCG.ProcGlow_Stop(frame, key)
     end
 end
 
@@ -147,6 +153,7 @@ function BR.Glow.StopAll(frame, key)
     LCG.PixelGlow_Stop(frame, key)
     LCG.AutoCastGlow_Stop(frame, key)
     BR.Glow.PulsingBorderStop(frame, key)
+    LCG.ProcGlow_Stop(frame, key)
 end
 
 -- ============================================================================
@@ -176,7 +183,7 @@ end
 ---@param frame table
 ---@param show boolean
 ---@param category? string Category name for per-category glow settings (nil = use global defaults)
----@param cachedSettings? {typeIndex: number, color: number[], size: number} Pre-fetched glow settings to avoid DB reads
+---@param cachedSettings? {typeIndex: number, color: number[], useCustomColor: boolean, size: number} Pre-fetched glow settings to avoid DB reads
 function BR.Glow.SetExpiration(frame, show, category, cachedSettings)
     local state = frame[GLOW_STATE_KEY]
 
@@ -184,16 +191,18 @@ function BR.Glow.SetExpiration(frame, show, category, cachedSettings)
         local typeIndex, color, size
         if cachedSettings then
             typeIndex = cachedSettings.typeIndex
-            color = cachedSettings.color
+            color = cachedSettings.useCustomColor and cachedSettings.color or nil
             size = cachedSettings.size
         elseif category then
             typeIndex = BR.Config.GetCategorySetting(category, "glowType") or 1
-            color = BR.Config.GetCategorySetting(category, "glowColor") or BR.Glow.DEFAULT_COLOR
+            local useCustom = BR.Config.GetCategorySetting(category, "useCustomGlowColor")
+            color = useCustom and (BR.Config.GetCategorySetting(category, "glowColor") or BR.Glow.DEFAULT_COLOR) or nil
             size = BR.Config.GetCategorySetting(category, "glowSize") or 2
         else
             local db = BuffRemindersDB
             typeIndex = (db.defaults and db.defaults.glowType) or 1
-            color = (db.defaults and db.defaults.glowColor) or BR.Glow.DEFAULT_COLOR
+            local useCustom = db.defaults and db.defaults.useCustomGlowColor
+            color = useCustom and ((db.defaults and db.defaults.glowColor) or BR.Glow.DEFAULT_COLOR) or nil
             size = (db.defaults and db.defaults.glowSize) or 2
         end
 
