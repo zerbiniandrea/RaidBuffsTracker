@@ -359,8 +359,8 @@ function Components.Slider(parent, config)
         local pct = pos / (sliderWidth - THUMB_WIDTH)
         pct = math.max(0, math.min(1, pct))
         local val = config.min + pct * (config.max - config.min)
-        -- Round to step
-        val = math.floor((val - config.min) / step + 0.5) * step + config.min
+        -- Snap to nearest multiple of step (aligned to 0, not min)
+        val = math.floor(val / step + 0.5) * step
         return math.max(config.min, math.min(config.max, val))
     end
 
@@ -499,7 +499,18 @@ function Components.Slider(parent, config)
     holder:EnableMouseWheel(true)
     holder:SetScript("OnMouseWheel", function(_, delta)
         if isEnabled then
-            local newVal = currentValue + (delta * step)
+            local newVal
+            local remainder = currentValue % step
+            if remainder == 0 then
+                -- Already aligned, move by full step
+                newVal = currentValue + (delta * step)
+            elseif delta > 0 then
+                -- Snap up to next multiple of step
+                newVal = currentValue + (step - remainder)
+            else
+                -- Snap down to previous multiple of step
+                newVal = currentValue - remainder
+            end
             newVal = math.max(config.min, math.min(config.max, newVal))
             currentValue = newVal
             valueText:SetText(math.floor(currentValue) .. suffix)
