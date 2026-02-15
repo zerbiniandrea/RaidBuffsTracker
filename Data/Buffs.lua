@@ -203,7 +203,7 @@ BR.BUFF_TABLES = {
         -- With Dragon-Tempered Blades (381801): need 2 lethal + 2 non-lethal
         -- Without talent: need 1 lethal + 1 non-lethal
         {
-            spellID = 2823, -- Deadly Poison (for icon)
+            iconOverride = 136242, -- Deadly Poison
             castSpellID = 315584, -- Instant Poison (baseline, ensures click-to-cast overlay is created)
             key = "roguePoisons",
             name = "Rogue Poisons",
@@ -371,7 +371,7 @@ BR.BUFF_TABLES = {
     pet = {
         -- Pet reminders (alphabetical: Frost Mage, Hunter, Passive, Unholy DK, Warlock)
         {
-            spellID = 31687, -- Summon Water Elemental (for icon)
+            iconOverride = 135862, -- Summon Water Elemental
             key = "frostMagePet",
             name = "Water Elemental",
             class = "MAGE",
@@ -384,7 +384,6 @@ BR.BUFF_TABLES = {
             end,
         },
         {
-            spellID = 883, -- Call Pet 1 (unused: customCheck bypasses spell check, iconOverride bypasses icon)
             key = "hunterPet",
             name = "Hunter Pet",
             class = "HUNTER",
@@ -400,7 +399,6 @@ BR.BUFF_TABLES = {
             end,
         },
         {
-            spellID = 0, -- No spell needed (customCheck + iconOverride)
             key = "petPassive",
             name = "Pet Passive",
             -- No class: applies to any class with a pet
@@ -409,7 +407,7 @@ BR.BUFF_TABLES = {
             customCheck = IsPetOnPassive,
         },
         {
-            spellID = 46584, -- Raise Dead (for icon)
+            iconOverride = 1100170, -- Raise Dead
             key = "unholyPet",
             name = "Unholy Ghoul",
             class = "DEATHKNIGHT",
@@ -421,7 +419,6 @@ BR.BUFF_TABLES = {
             end,
         },
         {
-            spellID = 688, -- Summon Imp (unused: customCheck bypasses spell check, iconOverride bypasses icon)
             key = "warlockPet",
             name = "Warlock Demon",
             class = "WARLOCK",

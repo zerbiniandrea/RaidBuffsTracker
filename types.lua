@@ -75,7 +75,7 @@
 ---@field infoTooltip? string
 
 ---@class SelfBuff
----@field spellID SpellID -- TODO: make optional (entries with customCheck + iconOverride don't need it)
+---@field spellID? SpellID
 ---@field key string
 ---@field name string
 ---@field class? ClassName

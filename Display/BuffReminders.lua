@@ -50,7 +50,7 @@ local CustomBuffs = BUFF_TABLES.custom
 local IconOverrides = {} ---@type table<number, number>
 for _, buffArray in ipairs({ PresenceBuffs, TargetedBuffs, SelfBuffs, PetBuffs }) do
     for _, buff in ipairs(buffArray) do
-        if buff.iconOverride then
+        if buff.iconOverride and buff.spellID then
             local spellList = (type(buff.spellID) == "table" and buff.spellID or { buff.spellID }) --[[@as number[] ]]
             for _, id in ipairs(spellList) do
                 IconOverrides[id] = buff.iconOverride
