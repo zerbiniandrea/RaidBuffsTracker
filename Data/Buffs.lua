@@ -6,6 +6,97 @@ local _, BR = ...
 -- This file contains all buff definition tables.
 -- Loaded after Core.lua so BR namespace is available.
 
+-- ============================================================================
+-- TYPE DEFINITIONS
+-- ============================================================================
+
+---@class RaidBuff
+---@field spellID SpellID
+---@field castSpellID? number Spell ID used for click-to-cast when different from the buff aura IDs
+---@field key string
+---@field name string
+---@field class ClassName
+---@field levelRequired? number
+
+---@class PresenceBuff
+---@field spellID SpellID
+---@field key string
+---@field name string
+---@field class ClassName
+---@field levelRequired? number
+---@field missingText string
+---@field groupId? string
+---@field excludeSpellID? number
+---@field displayIcon? number
+---@field infoTooltip? string
+---@field noGlow? boolean
+---@field readyCheckOnly? boolean Only show during ready checks
+---@field castOnOthers? boolean Buff exists on the target, not the caster (e.g., Soulstone)
+
+---@class TargetedBuff
+---@field spellID SpellID
+---@field key string
+---@field name string
+---@field class ClassName
+---@field missingText string
+---@field groupId? string
+---@field beneficiaryRole? RoleType
+---@field excludeSpellID? number
+---@field displayIcon? number
+---@field requireSpecId? number
+---@field infoTooltip? string
+
+---@class SelfBuff
+---@field spellID? SpellID
+---@field key string
+---@field name string
+---@field class? ClassName
+---@field missingText string
+---@field groupId? string
+---@field enchantID? number
+---@field requiresBuffWithEnchant? boolean -- When true, require both enchant AND buff to be present (for Paladin Rites)
+---@field castSpellID? number           -- Spell ID used for click-to-cast when different from spellID
+---@field clickMacro? fun(spellID: number): string -- Macro text override for click-to-cast, receives castable spell ID
+---@field buffIdOverride? number
+---@field requireSpecId? number        -- Only show if player's current spec matches (WoW spec ID)
+---@field requiresSpellID? number
+---@field excludeSpellID? number
+---@field displayIcon? number
+---@field displaySpells? SpellID Spell IDs to show icons for in Options checkbox (subset of spellID)
+---@field iconByRole? table<RoleType, number>
+---@field infoTooltip? string
+---@field customCheck? fun(): boolean?
+
+---@class ConsumableBuff
+---@field spellID? SpellID
+---@field key string
+---@field name string
+---@field missingText string
+---@field groupId? string
+---@field checkWeaponEnchant? boolean Check if any weapon enchant exists (oils, stones, imbues)
+---@field checkWeaponEnchantOH? boolean Check if off-hand weapon enchant exists
+---@field excludeIfSpellKnown? number[] Don't show if player knows any of these spells
+---@field buffIconID? number Check for any buff with this icon ID (e.g., 136000 for food)
+---@field displaySpells? SpellID Spell IDs to show icons for in UI (subset of spellID)
+---@field displayIcon? number|number[] Icon texture ID(s) to use instead of spell icon
+---@field itemID? number|number[] Check if player has this item in inventory
+---@field readyCheckOnly? boolean Only show during ready checks
+---@field infoTooltip? string Tooltip text shown on hover (pipe-separated: title|description)
+---@field visibilityCondition? fun(): boolean Custom function that gates visibility (return false to hide)
+
+---@class BuffGroup
+---@field displayName string
+
+---@class CustomBuff
+---@field spellID SpellID
+---@field key string
+---@field name string
+---@field missingText? string
+---@field class? ClassName
+---@field requireSpecId? number
+---@field showWhenPresent? boolean  -- Show icon when buff IS on player (default: show when missing)
+---@field glowMode? "whenGlowing"|"whenNotGlowing"|"disabled"  -- Action bar glow fallback mode: nil/"whenGlowing" = detect when glowing (default), "whenNotGlowing" = detect when NOT glowing, "disabled" = don't track glow
+
 ---Check if the player's pet is on passive stance
 ---@return boolean? true if pet exists and is on passive, nil otherwise
 local function IsPetOnPassive()

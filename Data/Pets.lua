@@ -6,6 +6,21 @@ local _, BR = ...
 -- Builds per-class lists of pet summon actions for expanded pet icons.
 -- Each action has a spellID, icon, label, and sortOrder for display.
 
+-- ============================================================================
+-- TYPE DEFINITIONS
+-- ============================================================================
+
+---@class PetAction
+---@field key string
+---@field spellID number
+---@field spellName string             -- Localized spell name for SecureActionButton casting
+---@field icon number
+---@field label string
+---@field sortOrder number
+
+---@class PetActionList : PetAction[]
+---@field genericIndex? number  -- Preferred index for generic (collapsed) display mode
+
 -- Hunter Call Pet spell IDs (Call Pet 1 through Call Pet 5)
 local CALL_PET_SPELLS = { 883, 83242, 83243, 83244, 83245 }
 

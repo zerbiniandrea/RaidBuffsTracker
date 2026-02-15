@@ -1,5 +1,106 @@
 local addonName, BR = ...
 
+-- ============================================================================
+-- TYPE DEFINITIONS
+-- ============================================================================
+
+---@class DefaultSettings
+---@field iconSize number
+---@field textSize? number
+---@field iconAlpha number
+---@field textAlpha number
+---@field textColor number[]
+---@field spacing number
+---@field iconZoom number
+---@field borderSize number
+---@field growDirection string
+---@field showExpirationGlow boolean
+---@field glowWhenMissing boolean
+---@field expirationThreshold number
+---@field glowType number
+---@field glowColor number[]
+---@field useCustomGlowColor boolean
+---@field glowSize number
+---@field fontFace? string
+---@field showConsumablesWithoutItems? boolean
+---@field consumableRebuffWarning? boolean
+---@field consumableRebuffThreshold? number
+---@field consumableRebuffColor? number[]
+---@field consumableDisplayMode? "icon_only"|"sub_icons"|"expanded"
+---@field petDisplayMode? "generic"|"expanded"
+
+---@class CategorySetting
+---@field position CategoryPosition
+---@field iconSize? number
+---@field textSize? number
+---@field iconAlpha? number
+---@field textAlpha? number
+---@field textColor? number[]
+---@field spacing? number
+---@field growDirection? string
+---@field iconZoom? number
+---@field borderSize? number
+---@field showExpirationGlow? boolean
+---@field glowWhenMissing? boolean
+---@field expirationThreshold? number
+---@field glowType? number
+---@field glowColor? number[]
+---@field useCustomGlowColor? boolean
+---@field glowSize? number
+---@field showBuffReminder? boolean
+---@field buffTextSize? number
+---@field showText? boolean
+---@field useCustomAppearance? boolean
+---@field split? boolean
+---@field clickable? boolean
+---@field clickableHighlight? boolean
+---@field subIconSide? string
+---@field priority? number
+
+--- All category settings must be defined here. When adding a new category:
+--- 1. Add it to CategoryName alias in Core.lua
+--- 2. Add a field here with the same name
+---@class AllCategorySettings
+---@field main CategorySetting
+---@field raid CategorySetting
+---@field presence CategorySetting
+---@field targeted CategorySetting
+---@field self CategorySetting
+---@field pet CategorySetting
+---@field consumable CategorySetting
+---@field custom CategorySetting
+
+---@class CategoryFrame: Frame
+---@field category CategoryName
+
+---@alias SplitCategories table<CategoryName, boolean>
+
+---@class BuffFrame: Button
+---@field key string
+---@field spellIDs SpellID
+---@field displayName string
+---@field buffDef table
+---@field icon Texture
+---@field border Texture
+---@field count FontString
+---@field stackCount FontString
+---@field buffText? FontString
+---@field testText FontString
+---@field isPlayerBuff? boolean
+---@field buffCategory? CategoryName
+---@field glowTexture? Texture
+---@field glowAnim? AnimationGroup
+---@field glowShowing? boolean
+---@field currentGlowStyle? number
+---@field clickOverlay? Button
+---@field actionButtons? Button[]
+---@field extraFrames? table[]
+---@field isExtraFrame? boolean
+---@field mainFrame? BuffFrame
+---@field _br_pet_spell? string             -- Localized spell name for pet click-to-cast
+---@field qualityOverlay? FontString         -- Quality rank text (R1/R2/R3) for consumable frames
+---@field _cachedItems? table|false         -- Per-cycle cache for GetConsumableActionItems result
+
 -- Shared constants (from Core.lua)
 local DEFAULT_BORDER_SIZE = BR.DEFAULT_BORDER_SIZE
 local DEFAULT_ICON_ZOOM = BR.DEFAULT_ICON_ZOOM

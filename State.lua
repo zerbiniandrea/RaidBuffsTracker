@@ -6,6 +6,25 @@ local _, BR = ...
 -- Pure data layer: computes "what buffs are missing" without any UI concerns.
 -- Display layer subscribes to BuffStateChanged events to render.
 
+-- ============================================================================
+-- TYPE DEFINITIONS
+-- ============================================================================
+
+---@class BuffStateEntry
+---@field key string                         -- "intellect", "devotionAura", etc.
+---@field category CategoryName              -- "raid", "presence", "targeted", "self", "pet", "consumable", "custom"
+---@field sortOrder number                   -- Position within category for display ordering
+---@field visible boolean                    -- Should show?
+---@field displayType "count"|"missing"|"expiring"
+---@field countText string?                  -- "17/20" for raid buffs, "5m" for expiring consumables
+---@field missingText string?                -- "NO\nAURA" for non-raid
+---@field expiringTime number?               -- Seconds remaining if expiring
+---@field shouldGlow boolean                 -- Expiration glow?
+---@field iconByRole table<RoleType,number>? -- Role-based icon override
+---@field rebuffWarning boolean?             -- Consumable rebuff pulsing border?
+---@field isEating boolean?                 -- Food entry: player is currently eating
+---@field petActions PetActionList?           -- Expanded pet summon actions
+
 -- Buff tables from Buffs.lua (via BR namespace)
 local BUFF_TABLES = BR.BUFF_TABLES
 local BuffBeneficiaries = BR.BuffBeneficiaries

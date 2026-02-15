@@ -3,8 +3,35 @@ local _, BR = ...
 -- ============================================================================
 -- UI COMPONENT FACTORY
 -- ============================================================================
--- Reusable UI components for the options panel (Platynator-style factory pattern).
+-- Reusable UI components for the options panel
 -- These reduce code duplication and provide consistent styling.
+
+-- ============================================================================
+-- TYPE DEFINITIONS
+-- ============================================================================
+
+---@class ScrollableContainerConfig
+---@field contentHeight? number Initial content height (default 600)
+---@field scrollbarWidth? number Width reserved for scrollbar (default 24)
+
+---@class VerticalLayoutConfig
+---@field x? number Starting X position (default 0)
+---@field y? number Starting Y position (default 0)
+
+---@class CollapsibleSectionConfig
+---@field title string Header text
+---@field defaultCollapsed? boolean Start collapsed (default true)
+---@field width? number Optional explicit width override
+---@field scrollbarOffset? number Offset to subtract from parent width (used when width not specified)
+---@field onToggle? fun(expanded: boolean) Optional callback when toggled
+
+---@class ToggleConfig
+---@field label string
+---@field checked? boolean
+---@field get? fun(): boolean
+---@field enabled? fun(): boolean
+---@field onChange fun(checked: boolean)
+---@field tooltip? string|table
 
 local Components = BR.Components
 local RefreshableComponents = BR.RefreshableComponents
