@@ -2645,22 +2645,20 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         end
         db.dbVersion = DB_VERSION
 
-        -- One-time glow update notice
-        if not db.glowUpdateNoticeShown then
-            db.glowUpdateNoticeShown = true
-            local hasCustomColor = db.defaults and db.defaults.useCustomGlowColor
+        -- One-time self buffs click-to-cast notice
+        if not db.selfClickNoticeShown then
+            db.selfClickNoticeShown = true
             C_Timer.After(5, function()
-                if hasCustomColor then
+                if BuffRemindersDB.showLoginMessages ~= false then
                     print(
-                        "|cff00ccffBuffReminders:|r Glows now have a more vibrant default color. Try unchecking |cffffcc00Color|r in |cffffcc00/br|r glow settings to see it!"
-                    )
-                else
-                    print(
-                        "|cff00ccffBuffReminders:|r Glows now use a more vibrant default color. Use the |cffffcc00Color|r checkbox in |cffffcc00/br|r glow settings to customize it."
+                        "|cff00ccffBuffReminders:|r Self buffs now support clickable icons! Enable it in |cffffcc00/br|r under the Self category."
                     )
                 end
             end)
         end
+
+        -- Clean up old one-time notice flags
+        db.glowUpdateNoticeShown = nil
 
         -- Deep copy defaults for non-defaults tables
         DeepCopyDefault(defaults, db)
