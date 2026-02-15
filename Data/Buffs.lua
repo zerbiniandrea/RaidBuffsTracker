@@ -153,6 +153,7 @@ BR.BUFF_TABLES = {
         {
             spellID = 205022,
             buffIdOverride = 210126,
+            castSpellID = 1459,
             key = "arcaneFamiliar",
             name = "Arcane Familiar",
             class = "MAGE",
@@ -179,6 +180,9 @@ BR.BUFF_TABLES = {
             enchantID = 7144,
             buffIdOverride = 433584, -- Actual buff ID on player
             requiresBuffWithEnchant = true,
+            clickMacro = function(spellID)
+                return "/cast " .. C_Spell.GetSpellName(spellID) .. "\n/use 16"
+            end,
             groupId = "paladinRites",
         },
         {
@@ -190,6 +194,9 @@ BR.BUFF_TABLES = {
             enchantID = 7143,
             buffIdOverride = 433550, -- Actual buff ID on player
             requiresBuffWithEnchant = true,
+            clickMacro = function(spellID)
+                return "/cast " .. C_Spell.GetSpellName(spellID) .. "\n/use 16"
+            end,
             groupId = "paladinRites",
         },
         -- Rogue poisons: lethal (Instant, Wound, Deadly, Amplifying) and non-lethal (Numbing, Atrophic, Crippling)
@@ -197,6 +204,7 @@ BR.BUFF_TABLES = {
         -- Without talent: need 1 lethal + 1 non-lethal
         {
             spellID = 2823, -- Deadly Poison (for icon)
+            castSpellID = 315584, -- Instant Poison (baseline, ensures click-to-cast overlay is created)
             key = "roguePoisons",
             name = "Rogue Poisons",
             class = "ROGUE",
@@ -248,6 +256,47 @@ BR.BUFF_TABLES = {
                 local requiredNonLethal = math.min(knownNonLethal, hasDragonTemperedBlades and 2 or 1)
 
                 return activeLethal < requiredLethal or activeNonLethal < requiredNonLethal
+            end,
+            clickMacro = function()
+                -- Priority: non-lethal (Atrophic > Numbing > Crippling), then lethal (Amplifying > Deadly > Instant > Wound)
+                -- Balance: apply to whichever category has fewer active, prefer non-lethal when tied
+                local nonLethalPriority = { 381637, 5761, 3408 } -- Atrophic, Numbing, Crippling
+                local lethalPriority = { 381664, 2823, 315584, 8679 } -- Amplifying, Deadly, Instant, Wound
+
+                local function countActiveAndFindMissing(poisons)
+                    local active, missing = 0, nil
+                    for _, id in ipairs(poisons) do
+                        if IsPlayerSpell(id) then
+                            local auraData
+                            pcall(function()
+                                auraData = C_UnitAuras.GetUnitAuraBySpellID("player", id)
+                            end)
+                            if auraData then
+                                active = active + 1
+                            elseif not missing then
+                                missing = id
+                            end
+                        end
+                    end
+                    return active, missing
+                end
+
+                local activeNL, missingNL = countActiveAndFindMissing(nonLethalPriority)
+                local activeL, missingL = countActiveAndFindMissing(lethalPriority)
+
+                local castID = nil
+                if missingNL and activeNL <= activeL then
+                    castID = missingNL
+                elseif missingL then
+                    castID = missingL
+                elseif missingNL then
+                    castID = missingNL
+                end
+
+                if castID then
+                    return "/cast " .. C_Spell.GetSpellName(castID)
+                end
+                return ""
             end,
         },
         -- Shadowform will drop during Void Form, but that only happens in combat. We're happy enough just checking Shadowform before going into combat.

@@ -83,6 +83,8 @@
 ---@field groupId? string
 ---@field enchantID? number
 ---@field requiresBuffWithEnchant? boolean -- When true, require both enchant AND buff to be present (for Paladin Rites)
+---@field castSpellID? number           -- Spell ID used for click-to-cast when different from spellID
+---@field clickMacro? fun(spellID: number): string -- Macro text override for click-to-cast, receives castable spell ID
 ---@field buffIdOverride? number
 ---@field requireSpecId? number        -- Only show if player's current spec matches (WoW spec ID)
 ---@field requiresSpellID? number

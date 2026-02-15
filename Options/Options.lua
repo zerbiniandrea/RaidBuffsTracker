@@ -1090,8 +1090,8 @@ local function CreateOptionsPanel()
             buffTextSizeHolder:SetPoint("LEFT", reminderHolder, "LEFT", 210, 0)
         end
 
-        -- Click to cast checkbox (raid and consumable only)
-        if category == "raid" or category == "consumable" or category == "pet" then
+        -- Click to cast checkbox
+        if category == "raid" or category == "self" or category == "consumable" or category == "pet" then
             local clickableHolder = Components.Checkbox(catContent, {
                 label = "Click to cast",
                 get = function()

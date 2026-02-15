@@ -80,13 +80,26 @@ local function CreateClickOverlay(frame)
             self:Hide()
         end
     end)
-    -- Refresh display shortly after click so the consumed buff disappears quickly
-    overlay:SetScript("PostClick", function()
+    -- Re-evaluate dynamic macros before each click, refresh display after
+    overlay:SetScript("PreClick", function(self)
+        if self._br_clickMacroFn then
+            self:SetAttribute("macrotext", self._br_clickMacroFn(self._br_clickMacroSpellID))
+        end
+    end)
+    overlay:SetScript("PostClick", function(self)
         C_Timer.After(0.3, function()
             if not InCombatLockdown() then
                 BR.Display.Update()
             end
         end)
+        -- Delayed refresh for cast-time spells (e.g. rogue poisons ~1.5s)
+        if self._br_clickMacroFn then
+            C_Timer.After(2, function()
+                if not InCombatLockdown() then
+                    BR.Display.Update()
+                end
+            end)
+        end
     end)
     overlay.highlight = overlay:CreateTexture(nil, "HIGHLIGHT")
     overlay.highlight:SetAllPoints()
@@ -735,9 +748,18 @@ local function UpdateActionButtons(category)
                         local overlay = frame.clickOverlay
                         overlay._br_has_action = true
                         overlay.itemID = nil
-                        overlay:SetAttribute("type", "spell")
-                        overlay:SetAttribute("spell", castableID)
-                        overlay:SetAttribute("unit", category == "raid" and "player" or nil)
+                        if frame.buffDef and frame.buffDef.clickMacro then
+                            overlay._br_clickMacroFn = frame.buffDef.clickMacro
+                            overlay._br_clickMacroSpellID = castableID
+                            overlay:SetAttribute("type", "macro")
+                            overlay:SetAttribute("macrotext", frame.buffDef.clickMacro(castableID))
+                        else
+                            overlay._br_clickMacroFn = nil
+                            overlay._br_clickMacroSpellID = nil
+                            overlay:SetAttribute("type", "spell")
+                            overlay:SetAttribute("spell", castableID)
+                            overlay:SetAttribute("unit", category == "raid" and "player" or nil)
+                        end
                         overlay:EnableMouse(true)
                         if overlay.highlight then
                             overlay.highlight:SetShown(showHighlight)
