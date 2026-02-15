@@ -386,14 +386,14 @@ local function CreateOptionsPanel()
 
     -- ========== HELPER FUNCTIONS ==========
 
-    -- Resolve icons from iconOverride or spellIDs
-    local function ResolveBuffIcons(iconOverride, spellIDs)
-        if iconOverride then
+    -- Resolve icon textures from displayIcon texture IDs or spell IDs
+    local function ResolveBuffIcons(displayIcon, spellIDs)
+        if displayIcon then
             -- Use override textures directly
-            if type(iconOverride) == "table" then
-                return iconOverride
+            if type(displayIcon) == "table" then
+                return displayIcon
             else
-                return { iconOverride }
+                return { displayIcon }
             end
         elseif spellIDs then
             -- Look up textures from spell IDs (deduplicated)
@@ -413,10 +413,10 @@ local function CreateOptionsPanel()
     end
 
     -- Create buff checkbox using Components.Checkbox
-    local function CreateBuffCheckbox(parent, x, y, spellIDs, key, displayName, infoTooltip, iconOverride)
+    local function CreateBuffCheckbox(parent, x, y, spellIDs, key, displayName, infoTooltip, displayIcon)
         local holder = Components.Checkbox(parent, {
             label = displayName,
-            icons = ResolveBuffIcons(iconOverride, spellIDs),
+            icons = ResolveBuffIcons(displayIcon, spellIDs),
             infoTooltip = infoTooltip,
             get = function()
                 return BuffRemindersDB.enabledBuffs[key] ~= false
@@ -450,31 +450,31 @@ local function CreateOptionsPanel()
                         table.insert(groupSpells[buff.groupId], id)
                     end
                 end
-                if buff.displaySpellIDs then
-                    local displayList = type(buff.displaySpellIDs) == "table" and buff.displaySpellIDs
-                        or { buff.displaySpellIDs }
+                if buff.displaySpells then
+                    local displayList = type(buff.displaySpells) == "table" and buff.displaySpells
+                        or { buff.displaySpells }
                     for _, id in ipairs(displayList) do
                         table.insert(groupDisplaySpells[buff.groupId], id)
                     end
                 end
-                -- Resolve display icon(s) per entry: override > displaySpellIDs > primary spellID
+                -- Resolve display icon(s) per entry: displayIcon > displaySpells > primary spellID
                 -- Deduplicate icons within the same group (e.g., MH + OH weapon buffs share icons)
                 if not groupIconOverrides[buff.groupId] then
                     groupIconOverrides[buff.groupId] = {}
                     groupIconOverrides[buff.groupId]._seen = {}
                 end
                 local seen = groupIconOverrides[buff.groupId]._seen
-                if buff.iconOverride then
-                    local overrides = type(buff.iconOverride) == "table" and buff.iconOverride or { buff.iconOverride }
+                if buff.displayIcon then
+                    local overrides = type(buff.displayIcon) == "table" and buff.displayIcon or { buff.displayIcon }
                     for _, icon in ipairs(overrides) do
                         if not seen[icon] then
                             seen[icon] = true
                             table.insert(groupIconOverrides[buff.groupId], icon)
                         end
                     end
-                elseif buff.displaySpellIDs then
-                    local displayList = type(buff.displaySpellIDs) == "table" and buff.displaySpellIDs
-                        or { buff.displaySpellIDs }
+                elseif buff.displaySpells then
+                    local displayList = type(buff.displaySpells) == "table" and buff.displaySpells
+                        or { buff.displaySpells }
                     for _, id in ipairs(displayList) do
                         local texture = GetBuffTexture(id)
                         if texture and not seen[texture] then
@@ -501,9 +501,9 @@ local function CreateOptionsPanel()
                 if not seenGroups[buff.groupId] then
                     seenGroups[buff.groupId] = true
                     local groupInfo = BuffGroups[buff.groupId]
-                    local iconOverride = groupIconOverrides[buff.groupId]
-                    if iconOverride and #iconOverride == 0 then
-                        iconOverride = nil
+                    local displayIcon = groupIconOverrides[buff.groupId]
+                    if displayIcon and #displayIcon == 0 then
+                        displayIcon = nil
                     end
                     local displaySpells = groupDisplaySpells[buff.groupId]
                     local spells = (#displaySpells > 0) and displaySpells or groupSpells[buff.groupId]
@@ -518,11 +518,11 @@ local function CreateOptionsPanel()
                         buff.groupId,
                         groupInfo.displayName,
                         buff.infoTooltip,
-                        iconOverride
+                        displayIcon
                     )
                 end
             else
-                local displaySpells = buff.displaySpellIDs or buff.spellID
+                local displaySpells = buff.displaySpells or buff.spellID
                 y = CreateBuffCheckbox(
                     parent,
                     x,
@@ -531,7 +531,7 @@ local function CreateOptionsPanel()
                     buff.key,
                     buff.name,
                     buff.infoTooltip,
-                    buff.iconOverride
+                    buff.displayIcon
                 )
             end
         end

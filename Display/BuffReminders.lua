@@ -50,10 +50,10 @@ local CustomBuffs = BUFF_TABLES.custom
 local IconOverrides = {} ---@type table<number, number>
 for _, buffArray in ipairs({ PresenceBuffs, TargetedBuffs, SelfBuffs, PetBuffs }) do
     for _, buff in ipairs(buffArray) do
-        if buff.iconOverride and buff.spellID then
+        if buff.displayIcon and buff.spellID then
             local spellList = (type(buff.spellID) == "table" and buff.spellID or { buff.spellID }) --[[@as number[] ]]
             for _, id in ipairs(spellList) do
-                IconOverrides[id] = buff.iconOverride
+                IconOverrides[id] = buff.displayIcon
             end
         end
     end
@@ -724,11 +724,11 @@ local function CreateBuffFrame(buff, category)
     frame:SetSize(iconSize, iconSize)
 
     -- Icon + border textures
-    local iconOverride = buff.iconOverride
-    if type(iconOverride) == "table" then
-        iconOverride = iconOverride[1] -- Use first icon for buff frame
+    local displayIcon = buff.displayIcon
+    if type(displayIcon) == "table" then
+        displayIcon = displayIcon[1] -- Use first icon for buff frame
     end
-    local texture = iconOverride or GetBuffTexture(buff.spellID, buff.iconByRole)
+    local texture = displayIcon or GetBuffTexture(buff.spellID, buff.iconByRole)
     CreateIconTextures(frame, texture)
 
     frame.qualityOverlay = frame:CreateFontString(nil, "OVERLAY")
@@ -1364,7 +1364,7 @@ local function ResolveConsumableFrame(frame)
     end
     -- No items: fall back icon to buff definition
     local def = frame.buffDef
-    local fallback = def and (def.iconOverride or def.buffIconID)
+    local fallback = def and (def.displayIcon or def.buffIconID)
     if fallback then
         frame.icon:SetTexture(fallback)
     end

@@ -111,7 +111,7 @@ BR.BUFF_TABLES = {
             groupId = "beacons",
             requireSpecId = 65, -- Holy only
             excludeSpellID = 200025, -- Hide when Beacon of Virtue is known
-            iconOverride = 236247, -- Force original icon (talents replace the texture)
+            displayIcon = 236247, -- Force original icon (talents replace the texture)
         },
         {
             spellID = 974,
@@ -203,7 +203,7 @@ BR.BUFF_TABLES = {
         -- With Dragon-Tempered Blades (381801): need 2 lethal + 2 non-lethal
         -- Without talent: need 1 lethal + 1 non-lethal
         {
-            iconOverride = 136242, -- Deadly Poison
+            displayIcon = 136242, -- Deadly Poison
             castSpellID = 315584, -- Instant Poison (baseline, ensures click-to-cast overlay is created)
             key = "roguePoisons",
             name = "Rogue Poisons",
@@ -329,6 +329,12 @@ BR.BUFF_TABLES = {
             enchantID = 5401,
             groupId = "shamanImbues",
         },
+        -- Icon fields:
+        --   displayIcon     = Texture ID(s). Primary icon for Display frame + Options checkbox.
+        --   displaySpells   = Spell ID(s). Icons for Options checkbox only (subset of spellID).
+        --   iconByRole      = Role→SpellID. Dynamic Display frame icon based on player role.
+        -- Priority: displayIcon > displaySpells > spellID[1]
+        --
         -- Shaman shields (alphabetical: Earth, Lightning, Water)
         -- With Elemental Orbit: need Earth Shield (passive self-buff)
         {
@@ -340,7 +346,7 @@ BR.BUFF_TABLES = {
             missingText = "NO\nSELF ES",
             requiresSpellID = 383010,
             groupId = "shamanShields",
-            displaySpellIDs = 974, -- Earth Shield icon for group checkbox
+            displaySpells = 974, -- Earth Shield icon for group checkbox
         },
         -- With Elemental Orbit: need Lightning Shield or Water Shield
         {
@@ -351,7 +357,7 @@ BR.BUFF_TABLES = {
             missingText = "NO\nSHIELD",
             requiresSpellID = 383010,
             groupId = "shamanShields",
-            displaySpellIDs = 192106, -- Lightning Shield icon for group checkbox
+            displaySpells = 192106, -- Lightning Shield icon for group checkbox
             iconByRole = { HEALER = 52127, DAMAGER = 192106, TANK = 192106 },
         },
         -- Without Elemental Orbit: need either Earth Shield, Lightning Shield, or Water Shield on self
@@ -363,7 +369,7 @@ BR.BUFF_TABLES = {
             missingText = "NO\nSHIELD",
             excludeSpellID = 383010,
             groupId = "shamanShields",
-            displaySpellIDs = 52127, -- Water Shield icon for group checkbox
+            displaySpells = 52127, -- Water Shield icon for group checkbox
             iconByRole = { HEALER = 52127, DAMAGER = 192106, TANK = 192106 },
         },
     },
@@ -371,7 +377,7 @@ BR.BUFF_TABLES = {
     pet = {
         -- Pet reminders (alphabetical: Frost Mage, Hunter, Passive, Unholy DK, Warlock)
         {
-            iconOverride = 135862, -- Summon Water Elemental
+            displayIcon = 135862, -- Summon Water Elemental
             key = "frostMagePet",
             name = "Water Elemental",
             class = "MAGE",
@@ -388,7 +394,7 @@ BR.BUFF_TABLES = {
             name = "Hunter Pet",
             class = "HUNTER",
             missingText = "NO\nPET",
-            iconOverride = 132161,
+            displayIcon = 132161,
             groupId = "pets",
             customCheck = function()
                 -- MM Hunters don't use pets unless they have Unbreakable Bond
@@ -403,11 +409,11 @@ BR.BUFF_TABLES = {
             name = "Pet Passive",
             -- No class: applies to any class with a pet
             missingText = "PASSIVE\nPET",
-            iconOverride = 132311,
+            displayIcon = 132311,
             customCheck = IsPetOnPassive,
         },
         {
-            iconOverride = 1100170, -- Raise Dead
+            displayIcon = 1100170, -- Raise Dead
             key = "unholyPet",
             name = "Unholy Ghoul",
             class = "DEATHKNIGHT",
@@ -423,7 +429,7 @@ BR.BUFF_TABLES = {
             name = "Warlock Demon",
             class = "WARLOCK",
             missingText = "NO\nPET",
-            iconOverride = 136082, -- Summon Demon flyout icon
+            displayIcon = 136082, -- Summon Demon flyout icon
             excludeSpellID = 108503, -- Grimoire of Sacrifice: pet intentionally sacrificed
             groupId = "pets",
             customCheck = function()
@@ -445,7 +451,7 @@ BR.BUFF_TABLES = {
                 1264426, -- Void-Touched Augment Rune (Midnight)
                 347901, -- Veiled Augment Rune (Shadowlands) - legacy
             },
-            displaySpellIDs = { 1234969, 1242347, 453250, 393438 }, -- Show rune icons in priority order
+            displaySpells = { 1234969, 1242347, 453250, 393438 }, -- Show rune icons in priority order
             key = "rune",
             name = "Rune",
             missingText = "NO\nRUNE",
@@ -466,7 +472,7 @@ BR.BUFF_TABLES = {
                 1235110, -- Flask of the Blood Knights (Haste)
                 1235111, -- Flask of the Shattered Sun (Critical Strike)
             },
-            displaySpellIDs = {
+            displaySpells = {
                 -- Show only TWW flask icons in UI
                 432021, -- Flask of Alchemical Chaos
                 431971, -- Flask of Tempered Aggression
@@ -486,7 +492,7 @@ BR.BUFF_TABLES = {
             name = "Food",
             missingText = "NO\nFOOD",
             groupId = "food",
-            iconOverride = 136000,
+            displayIcon = 136000,
         },
         -- Delve Food (only when inside a delve with Brann or Valeera)
         {
@@ -495,7 +501,7 @@ BR.BUFF_TABLES = {
             name = "Delve Food",
             missingText = "NO\nFOOD",
             groupId = "delveFood",
-            iconOverride = 133954,
+            displayIcon = 133954,
             infoTooltip = "Delves Only|Only shown inside delves when Brann or Valeera are in your party.",
             visibilityCondition = function()
                 local inInstance, instanceType = IsInInstance()
@@ -522,7 +528,7 @@ BR.BUFF_TABLES = {
             name = "Weapon",
             missingText = "NO\nWEAPON\nBUFF",
             groupId = "weaponBuff",
-            iconOverride = { 609892, 3622195, 3622196 }, -- Oil, Whetstone, Weightstone/Razorstone
+            displayIcon = { 609892, 3622195, 3622196 }, -- Oil, Whetstone, Weightstone/Razorstone
             excludeIfSpellKnown = {
                 -- Shaman imbues
                 382021, -- Earthliving Weapon
@@ -540,7 +546,7 @@ BR.BUFF_TABLES = {
             name = "Weapon (OH)",
             missingText = "NO\nWEAPON\nBUFF",
             groupId = "weaponBuff",
-            iconOverride = { 609892, 3622195, 3622196 }, -- Oil, Whetstone, Weightstone/Razorstone
+            displayIcon = { 609892, 3622195, 3622196 }, -- Oil, Whetstone, Weightstone/Razorstone
             excludeIfSpellKnown = {
                 -- Shaman imbues
                 382021, -- Earthliving Weapon
@@ -562,7 +568,7 @@ BR.BUFF_TABLES = {
             class = "WARLOCK",
             missingText = "NO\nSTONE",
             groupId = "healthstone",
-            iconOverride = 538745, -- Healthstone icon
+            displayIcon = 538745, -- Healthstone icon
             readyCheckOnly = true,
             infoTooltip = "Ready Check Only|This is only shown during ready checks.",
         },
