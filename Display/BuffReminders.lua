@@ -223,6 +223,7 @@ local defaults = {
         burningRush = false,
     },
     showOnlyInGroup = false,
+    hideWhileResting = false,
     buffTrackingMode = "all",
     showOnlyOnReadyCheck = false,
     hidePetWhileMounted = true,
