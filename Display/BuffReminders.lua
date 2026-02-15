@@ -1911,14 +1911,14 @@ local function StartUpdates()
     UpdateDisplay()
 end
 
--- Stop update ticker
-local function StopUpdates()
+-- Stop update ticker (keeps OnUpdate dirty-flag handler active for combat-safe updates)
+local function StopTicker()
     if updateTicker then
         updateTicker:Cancel()
         updateTicker = nil
     end
-    eventFrame:SetScript("OnUpdate", nil)
-    dirty = false
+    -- OnUpdate handler stays active so SetDirty() works during combat
+    -- (UpdateDisplay routes to UpdateFallbackDisplay when in combat)
 end
 
 -- Forward declaration for ReparentBuffFrames (defined after InitializeFrames)
@@ -2889,7 +2889,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         StartUpdates()
     elseif event == "PLAYER_REGEN_DISABLED" then
         inCombat = true
-        StopUpdates()
+        StopTicker()
         UpdateDisplay() -- last update before combat lockdown
     elseif event == "PLAYER_DEAD" then
         HideAllDisplayFrames()
