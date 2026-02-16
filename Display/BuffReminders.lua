@@ -2896,12 +2896,12 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
     elseif event == "PLAYER_UNGHOST" then
         SetDirty()
     elseif event == "UNIT_AURA" then
-        -- Skip in combat (auras change frequently, and we can't check buffs or eat in combat)
-        if not InCombatLockdown() and mainFrame and mainFrame:IsShown() then
+        -- Skip in combat (auras change frequently, and we can't recheck buffs in combat)
+        if not InCombatLockdown() then
             if arg1 == "player" then
                 BR.StateHelpers.UpdateEatingState(arg2)
             end
-            dirty = true -- OnUpdate will pick this up with throttle
+            SetDirty()
         end
     elseif event == "UNIT_PET" then
         if arg1 == "player" then
