@@ -382,9 +382,20 @@ local glowingSpells = {} -- Track which spell IDs are currently glowing (for act
 local dirty = false
 local lastUpdateTime = 0
 local MIN_UPDATE_INTERVAL = 0.5 -- seconds between actual updates
+local auraDebounceTicker = nil -- debounce rapid UNIT_AURA bursts (e.g., encounter start)
+local AURA_DEBOUNCE = 0.1 -- seconds to wait after last UNIT_AURA before marking dirty
 
 local function SetDirty()
     dirty = true
+end
+
+---Debounced SetDirty for UNIT_AURA: waits for rapid aura changes to settle before refreshing.
+---Prevents brief count flicker when the server batch-updates auras (e.g., boss pull).
+local function SetDirtyDebounced()
+    if auraDebounceTicker then
+        auraDebounceTicker:Cancel()
+    end
+    auraDebounceTicker = C_Timer.NewTimer(AURA_DEBOUNCE, SetDirty)
 end
 
 -- Track combat state via events (InCombatLockdown() can lag behind PLAYER_REGEN_DISABLED)
@@ -2901,7 +2912,9 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
             if arg1 == "player" then
                 BR.StateHelpers.UpdateEatingState(arg2)
             end
-            SetDirty()
+            -- Debounce: rapid aura bursts (e.g., boss pull) can briefly leave unit aura
+            -- data mid-transition, causing a 1-frame count flicker before data settles.
+            SetDirtyDebounced()
         end
     elseif event == "UNIT_PET" then
         if arg1 == "player" then
