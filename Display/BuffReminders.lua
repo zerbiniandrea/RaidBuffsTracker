@@ -1721,6 +1721,24 @@ UpdateDisplay = function()
             return
         end
 
+        local db = BuffRemindersDB
+
+        -- Hide based on visibility settings (checked before combat/instance overrides)
+        if db.showOnlyOnReadyCheck and not BR.BuffState.GetReadyCheckState() then
+            HideAllDisplayFrames()
+            return
+        end
+
+        if db.showOnlyInGroup and GetNumGroupMembers() == 0 then
+            HideAllDisplayFrames()
+            return
+        end
+
+        if db.hideWhileResting and isResting then
+            HideAllDisplayFrames()
+            return
+        end
+
         -- Restricted contexts: hide secure frames, but glow + pet reminders can still show
         if inMythicPlus or instanceType == "pvp" or instanceType == "arena" then
             HideAllDisplayFrames()
@@ -1736,24 +1754,6 @@ UpdateDisplay = function()
             end
             UpdateFallbackDisplay()
             BR.SecureButtons.ScheduleSecureSync()
-            return
-        end
-
-        local db = BuffRemindersDB
-
-        -- Hide based on visibility settings
-        if db.showOnlyOnReadyCheck and not BR.BuffState.GetReadyCheckState() then
-            HideAllDisplayFrames()
-            return
-        end
-
-        if db.showOnlyInGroup and GetNumGroupMembers() == 0 then
-            HideAllDisplayFrames()
-            return
-        end
-
-        if db.hideWhileResting and isResting then
-            HideAllDisplayFrames()
             return
         end
 
