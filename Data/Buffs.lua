@@ -57,7 +57,7 @@ local _, BR = ...
 ---@field requiresBuffWithEnchant? boolean -- When true, require both enchant AND buff to be present (for Paladin Rites)
 ---@field castSpellID? number           -- Spell ID used for click-to-cast when different from spellID
 ---@field clickMacro? fun(spellID: number): string -- Macro text override for click-to-cast, receives castable spell ID
----@field buffIdOverride? number
+---@field buffIdOverride? number|number[]
 ---@field requireSpecId? number        -- Only show if player's current spec matches (WoW spec ID)
 ---@field requiresSpellID? number
 ---@field excludeSpellID? number
@@ -390,8 +390,15 @@ BR.BUFF_TABLES = {
                 return ""
             end,
         },
-        -- Shadowform will drop during Void Form, but that only happens in combat. We're happy enough just checking Shadowform before going into combat.
-        { spellID = 232698, key = "shadowform", name = "Shadowform", class = "PRIEST", missingText = "NO\nFORM" },
+        -- Voidform (194249) replaces Shadowform temporarily
+        {
+            spellID = 232698,
+            key = "shadowform",
+            name = "Shadowform",
+            class = "PRIEST",
+            missingText = "NO\nFORM",
+            buffIdOverride = { 232698, 194249 },
+        },
         -- Shaman weapon imbues (alphabetical: Earthliving, Flametongue, Windfury)
         {
             spellID = 382021,

@@ -563,7 +563,7 @@ local SKIP_SPELL_KNOWN_CATEGORIES = { custom = true }
 ---@param enchantID? number For weapon imbues, checks if this enchant is on either weapon
 ---@param requiresSpell? number Only show if player knows this spell
 ---@param excludeSpell? number Hide if player knows this spell
----@param buffIdOverride? number Separate buff ID to check (if different from spellID)
+---@param buffIdOverride? number|number[] Separate buff ID(s) to check (if different from spellID)
 ---@param customCheck? fun(): boolean? Custom check function for complex buff logic
 ---@param requireSpecId? number Only show if player's current spec matches (WoW spec ID)
 ---@param skipSpellKnownCheck? boolean Skip the "player knows spell" check (for custom buffs)
