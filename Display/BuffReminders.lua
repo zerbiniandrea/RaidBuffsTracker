@@ -389,6 +389,7 @@ end
 
 -- Track combat state via events (InCombatLockdown() can lag behind PLAYER_REGEN_DISABLED)
 local inCombat = false
+local inEncounter = false -- boss encounter active (aura API unreliable for other units)
 local isResting = false
 
 -- Category frame system
@@ -1713,7 +1714,9 @@ UpdateDisplay = function()
 
         local isDead = UnitIsDeadOrGhost("player")
         -- Use both our event-tracked flag AND the API (event fires before API updates)
-        local combatCheck = inCombat or InCombatLockdown()
+        -- Include encounter state: aura API returns stale data for units in combat
+        -- when the player hasn't personally entered combat yet
+        local combatCheck = inCombat or inEncounter or InCombatLockdown()
 
         -- Absolute exit: nothing should show when dead or in housing
         if isDead or inHousing then
@@ -2258,6 +2261,8 @@ eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
 eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
+eventFrame:RegisterEvent("ENCOUNTER_START")
+eventFrame:RegisterEvent("ENCOUNTER_END")
 eventFrame:RegisterEvent("PLAYER_DEAD")
 eventFrame:RegisterEvent("PLAYER_UNGHOST")
 eventFrame:RegisterEvent("UNIT_AURA")
@@ -2891,6 +2896,12 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         inCombat = true
         StopTicker()
         UpdateDisplay() -- last update before combat lockdown
+    elseif event == "ENCOUNTER_START" then
+        inEncounter = true
+        SetDirty()
+    elseif event == "ENCOUNTER_END" then
+        inEncounter = false
+        SetDirty()
     elseif event == "PLAYER_DEAD" then
         HideAllDisplayFrames()
     elseif event == "PLAYER_UNGHOST" then
