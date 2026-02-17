@@ -376,6 +376,9 @@ end
 -- Uses screen coordinates (no anchors) so secure frames never taint the buff hierarchy.
 -- Safe to call at any time; skips if in combat lockdown.
 local function HideAllSecureFrames()
+    if InCombatLockdown() then
+        return
+    end
     for _, frame in pairs(BR.Display.frames) do
         if frame.clickOverlay then
             frame.clickOverlay:EnableMouse(false)
