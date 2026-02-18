@@ -1088,7 +1088,7 @@ function BuffState.Refresh()
             )
             if shouldShow then
                 SetEntryMissing(entry, buff.missingText, consGlowMissing)
-            elseif consGlow then
+            elseif consGlow and not buff.noExpirationGlow then
                 TrySetEntryExpiring(entry, remainingTime, consGlowThreshold)
             end
             -- Eating state for food entries (display uses this for icon override)
